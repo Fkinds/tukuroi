@@ -179,3 +179,25 @@ $ ghstack land $PR_URL
 [ghstack]: https://github.com/ezyang/ghstack
 [pipx]: https://pypa.github.io/pipx/
 [uv]: https://docs.astral.sh/uv/
+
+## Supported Python versions
+
+This fork supports only the two newest minor versions of CPython, including
+their free-threaded builds. As of November 2026, these are 3.14 and 3.15
+(and 3.14t and 3.15t).
+
+- Any patch release of a supported minor version is supported. CI tests the
+  latest patch release of each.
+- When a new minor version is released, add it once CI passes on it, and drop
+  the oldest supported minor version in the same change, so that exactly two
+  remain.
+- This applies to the Python that Fixit runs on. The `python-version` setting,
+  which sets the Python version of the code being linted, is not limited.
+- Keep `requires-python` in `pyproject.toml` and the test matrix in
+  `.github/workflows/ci.yml` in line with this list.
+
+The newest version can still have experimental features and bugs, and the
+ecosystem takes time to catch up, so the previous version stays supported.
+Older versions are dropped to keep the set of runtimes we maintain small.
+Under PEP 602, each minor version gets two years of full support, so the two
+newest minor versions are the ones that still receive bug fixes.
