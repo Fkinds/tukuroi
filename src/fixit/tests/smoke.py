@@ -42,6 +42,18 @@ class SmokeTest(TestCase):
         expected = rf"fixit, version {__version__}"
         self.assertIn(expected, result.stdout)
 
+    def test_cli_debug_flag_default(self) -> None:
+        # --debug/--quiet must stay None when neither is given, so that the
+        # default log level is used (click 8.2.2 returned False here).
+        for args, expected in (
+            (["lint"], None),
+            (["--debug", "lint"], True),
+            (["--quiet", "lint"], False),
+        ):
+            with self.subTest(args=args):
+                with main.make_context("fixit", args) as ctx:
+                    self.assertIs(ctx.params["debug"], expected)
+
     def test_file_with_formatting(self) -> None:
         content = dedent(
             """\
