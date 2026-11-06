@@ -106,6 +106,13 @@ If you are using VS Code as your editor, you can use the
 [Ruff extension for VS Code](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff)
 to format, sort imports, and lint while developing.
 
+`.git-blame-ignore-revs` lists commits that only reformat code. GitHub skips
+them in blame views. To skip them in `git blame` locally:
+
+```shell-session
+$ git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
 
 ## VS Code
 
