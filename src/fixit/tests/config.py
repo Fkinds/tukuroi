@@ -3,11 +3,11 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from textwrap import dedent
-from typing import List, Sequence, Tuple, Type
 from unittest import TestCase
 
 from click.testing import CliRunner
@@ -268,7 +268,7 @@ class ConfigTest(TestCase):
         root = self.tdp
         target = root / "a" / "b" / "c" / "foo.py"
 
-        params: Sequence[Tuple[str, List[RawConfig], Config]] = (
+        params: Sequence[tuple[str, list[RawConfig], Config]] = (
             (
                 "empty",
                 [],
@@ -487,7 +487,7 @@ class ConfigTest(TestCase):
         UseTypesFromTyping.TAGS = {"typing"}
         NoNamedTuple.TAGS = {"typing", "tuples"}
 
-        def collect_types(cfg: Config) -> List[Type[LintRule]]:
+        def collect_types(cfg: Config) -> list[type[LintRule]]:
             return sorted([type(rule) for rule in config.collect_rules(cfg)], key=str)
 
         with self.subTest("everything"):
@@ -680,21 +680,20 @@ class ConfigTest(TestCase):
                 )
 
     def test_validate_config(self) -> None:
-        with self.subTest("validate-config valid"):
-            with TemporaryDirectory() as td:
-                tdp = Path(td).resolve()
-                path = tdp / ".fixit.toml"
-                path.write_text(
-                    """
+        with self.subTest("validate-config valid"), TemporaryDirectory() as td:
+            tdp = Path(td).resolve()
+            path = tdp / ".fixit.toml"
+            path.write_text(
+                """
                     [tool.fixit]
                     disable = ["fixit.rules"]
                     root = true
                     """
-                )
+            )
 
-                results = config.validate_config(path)
+            results = config.validate_config(path)
 
-                self.assertEqual(results, [])
+            self.assertEqual(results, [])
 
     def test_validate_config_with_override(self) -> None:
         with self.subTest("validate-config valid with overrides"):

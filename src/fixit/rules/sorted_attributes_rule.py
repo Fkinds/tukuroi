@@ -73,9 +73,7 @@ class SortedAttributes(LintRule):
            """
         )
     ]
-    MESSAGE: str = (
-        "It appears you are using the @sorted-attributes directive and the class variables are unsorted. See the lint autofix suggestion."
-    )
+    MESSAGE: str = "It appears you are using the @sorted-attributes directive and the class variables are unsorted. See the lint autofix suggestion."
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
         doc_string = node.get_docstring()
@@ -105,7 +103,8 @@ class SortedAttributes(LintRule):
                 continue
 
         sorted_assign_lines = sorted(
-            assign_lines, key=lambda line: line.body[0].targets[0].target.value  # type: ignore
+            assign_lines,
+            key=lambda line: line.body[0].targets[0].target.value,  # type: ignore
         )
         if sorted_assign_lines == assign_lines:
             return

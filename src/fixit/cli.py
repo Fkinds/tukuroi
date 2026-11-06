@@ -6,8 +6,8 @@
 import logging
 import sys
 import unittest
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Set, Type
 
 import click
 
@@ -22,7 +22,7 @@ from .util import capture
 
 
 def splash(
-    visited: Set[Path], dirty: Set[Path], autofixes: int = 0, fixed: int = 0
+    visited: set[Path], dirty: set[Path], autofixes: int = 0, fixed: int = 0
 ) -> None:
     def f(v: int) -> str:
         return "file" if v == 1 else "files"
@@ -100,11 +100,11 @@ class _FixitGroup(click.Group):
 @click.option("--print-metrics", is_flag=True, help="Print metrics of this run")
 def main(
     ctx: click.Context,
-    debug: Optional[bool],
-    config_file: Optional[Path],
+    debug: bool | None,
+    config_file: Path | None,
     tags: str,
     rules: str,
-    output_format: Optional[OutputFormat],
+    output_format: OutputFormat | None,
     output_template: str,
     print_metrics: bool,
 ) -> None:
@@ -150,8 +150,8 @@ def lint(
         paths = [Path.cwd()]
 
     exit_code = 0
-    visited: Set[Path] = set()
-    dirty: Set[Path] = set()
+    visited: set[Path] = set()
+    dirty: set[Path] = set()
     autofixes = 0
     config = generate_config(options=options)
     for result in fixit_paths(
@@ -209,8 +209,8 @@ def fix(
     autofix = not interactive
     exit_code = 0
 
-    visited: Set[Path] = set()
-    dirty: Set[Path] = set()
+    visited: set[Path] = set()
+    dirty: set[Path] = set()
     autofixes = 0
     fixed = 0
 
@@ -269,8 +269,8 @@ def fix(
 def lsp(
     ctx: click.Context,
     stdio: bool,
-    tcp: Optional[int],
-    ws: Optional[int],
+    tcp: int | None,
+    ws: int | None,
     debounce_interval: float,
 ) -> None:
     """
@@ -350,7 +350,7 @@ def debug(ctx: click.Context, paths: Sequence[Path]) -> None:
     for path in paths:
         path = path.resolve()
         config = generate_config(path, options=options)
-        disabled: Dict[Type[LintRule], str] = {}
+        disabled: dict[type[LintRule], str] = {}
         enabled = collect_rules(config, debug_reasons=disabled)
 
         pprint(">>> ", path)

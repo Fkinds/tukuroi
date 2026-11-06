@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, cast, Optional, Set
+from typing import Any, cast
 from unittest import TestCase
 
 from .. import ftypes
@@ -43,7 +43,7 @@ class TypesTest(TestCase):
                 )
 
     def test_qualified_rule(self) -> None:
-        valid: Set[ftypes.QualifiedRule] = set()
+        valid: set[ftypes.QualifiedRule] = set()
 
         for value, expected in (
             ("", None),
@@ -106,7 +106,7 @@ class TypesTest(TestCase):
 
     def test_tags_bool(self) -> None:
         Tags = ftypes.Tags
-        tags: Optional[str]
+        tags: str | None
 
         for tags in (
             "hello",

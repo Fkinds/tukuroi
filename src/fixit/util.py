@@ -5,9 +5,10 @@
 
 import os
 import sys
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import cast, Generator, Generic, Optional, TypeVar, Union
+from typing import Generic, TypeVar, cast
 
 Yield = TypeVar("Yield")
 Send = TypeVar("Send")
@@ -36,10 +37,10 @@ class capture(Generic[Yield, Send, Return]):
 
     def __init__(self, generator: Generator[Yield, Send, Return]) -> None:
         self.generator = generator
-        self._send: Optional[Send] = None
-        self._result: Union[Return, object] = Sentinel
+        self._send: Send | None = None
+        self._result: Return | object = Sentinel
 
-    def __iter__(self) -> Generator[Yield, Send, Union[Return, object]]:
+    def __iter__(self) -> Generator[Yield, Send, Return | object]:
         try:
             while True:
                 value = self.generator.send(cast(Send, self._send))
@@ -72,7 +73,7 @@ class capture(Generic[Yield, Send, Return]):
 
 
 @contextmanager
-def append_sys_path(path: Path) -> Generator[None, None, None]:
+def append_sys_path(path: Path) -> Generator[None]:
     """
     Append a path to ``sys.path`` temporarily, and then remove it again when done.
 
@@ -93,7 +94,7 @@ def append_sys_path(path: Path) -> Generator[None, None, None]:
 
 
 @contextmanager
-def chdir(path: Path) -> Generator[None, None, None]:
+def chdir(path: Path) -> Generator[None]:
     cwd = Path.cwd()
     try:
         os.chdir(path)
