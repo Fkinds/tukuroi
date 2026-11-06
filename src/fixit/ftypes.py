@@ -6,21 +6,20 @@
 import platform
 import re
 from collections.abc import Callable, Collection, Container, Iterable, Sequence
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import (
     Any,
-    ContextManager,
     TypedDict,
     TypeVar,
-    Union,
 )
 
 from libcst import CSTNode, CSTNodeT, FlattenSentinel, RemovalSentinel
 from libcst._add_slots import add_slots
-from libcst.metadata import CodePosition as CodePosition
-from libcst.metadata import CodeRange as CodeRange
+from libcst.metadata import CodePosition as CodePosition  # noqa: PLC0414  # re-export
+from libcst.metadata import CodeRange as CodeRange  # noqa: PLC0414  # re-export
 from packaging.version import Version
 
 __all__ = ("Version",)
@@ -29,21 +28,22 @@ T = TypeVar("T")
 
 STDIN = Path("-")
 
-CodeRange
-CodePosition
+# Re-export libcst's position types. #21 replaces them.
+CodeRange  # noqa: B018
+CodePosition  # noqa: B018
 
 FileContent = bytes
 RuleOptionTypes = (str, int, float)
 RuleOptions = dict[str, str | int | float]
 RuleOptionsTable = dict[str, RuleOptions]
 
-NodeReplacement = Union[CSTNodeT, FlattenSentinel[CSTNodeT], RemovalSentinel]
+NodeReplacement = CSTNodeT | FlattenSentinel[CSTNodeT] | RemovalSentinel
 
 Metrics = dict[str, Any]
 MetricsHook = Callable[[Metrics], None]
 
 VisitorMethod = Callable[[CSTNode], None]
-VisitHook = Callable[[str], ContextManager[None]]
+VisitHook = Callable[[str], AbstractContextManager[None]]
 
 
 class OutputFormat(str, Enum):
@@ -166,10 +166,7 @@ class Tags(Container[str]):
         if any(tag in self.exclude for tag in tags):
             return False
 
-        if not self.include or any(tag in self.include for tag in tags):
-            return True
-
-        return False
+        return not self.include or any(tag in self.include for tag in tags)
 
 
 @dataclass

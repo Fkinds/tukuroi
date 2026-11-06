@@ -379,4 +379,4 @@ def validate_config_command(ctx: click.Context, path: Path) -> None:
     if exceptions:
         for e in exceptions:
             pprint(e)
-        exit(-1)
+        sys.exit(-1)

@@ -9,6 +9,7 @@ import logging
 import pkgutil
 import platform
 import sys
+import tomllib
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
@@ -36,11 +37,6 @@ from .ftypes import (
 )
 from .rule import LintRule
 from .util import append_sys_path
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 FIXIT_CONFIG_FILENAMES = ("fixit.toml", ".fixit.toml", "pyproject.toml")
 FIXIT_LOCAL_MODULE = "fixit.local"
@@ -219,7 +215,8 @@ def collect_rules(
                 if qualified_rule.name:
                     named_enables |= rules
                 all_rules |= rules
-            except Exception as e:
+            # Importing a rule runs its code, which can raise any exception.
+            except Exception as e:  # noqa: BLE001
                 log.warning(
                     f"Failed to load rules '{qualified_rule.module}': {e.__class__.__name__}: {e}"
                 )
@@ -234,7 +231,8 @@ def collect_rules(
                     }
                 )
                 all_rules -= set(disabled_rules)
-            except Exception as e:
+            # Importing a rule runs its code, which can raise any exception.
+            except Exception as e:  # noqa: BLE001
                 log.warning(
                     f"Failed to load rules '{qualified_rule.module}': {e.__class__.__name__}: {e}"
                 )
@@ -357,14 +355,14 @@ def get_options(
     rule_configs: RuleOptionsTable = {}
     for rule_name, rule_config in mapping.items():
         rule_configs[rule_name] = {}
-        for key, value in rule_config.items():
+        for option, value in rule_config.items():
             if not isinstance(value, RuleOptionTypes):
                 raise ConfigError(
-                    f"{key!r} must be one of {RuleOptionTypes}, got {type(value)}",
+                    f"{option!r} must be one of {RuleOptionTypes}, got {type(value)}",
                     config=config,
                 )
 
-            rule_configs[rule_name][key] = value
+            rule_configs[rule_name][option] = value
 
     return rule_configs
 
@@ -526,7 +524,7 @@ def merge_configs(
                 formatter=override.pop("formatter", None),
             )
 
-        for key in data.keys():
+        for key in data:
             log.warning("unknown configuration option %r", key)
 
     return Config(
@@ -600,11 +598,13 @@ def validate_config(path: Path) -> list[str]:
                     try:
                         for _ in find_rules(qualified_rule):
                             pass
-                    except Exception as e:
+                    # Importing a rule runs its code, which can raise any exception.
+                    except Exception as e:  # noqa: BLE001
                         exceptions.append(
                             f"Failed to import rule `{rule}` for {context}: {e.__class__.__name__}: {e}"
                         )
-                except Exception as e:
+                # Report any error as a validation result instead of failing.
+                except Exception as e:  # noqa: BLE001
                     exceptions.append(
                         f"Failed to parse rule `{rule}` for {context}: {e.__class__.__name__}: {e}"
                     )
@@ -624,7 +624,8 @@ def validate_config(path: Path) -> list[str]:
                 f"override disable: `{override_path}`",
             )
 
-    except Exception as e:
+    # Report any error as a validation result instead of failing.
+    except Exception as e:  # noqa: BLE001
         exceptions.append(f"Invalid config: {e.__class__.__name__}: {e}")
 
     return exceptions

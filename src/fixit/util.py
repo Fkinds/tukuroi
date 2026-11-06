@@ -8,16 +8,12 @@ import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generic, TypeVar, cast
-
-Yield = TypeVar("Yield")
-Send = TypeVar("Send")
-Return = TypeVar("Return")
+from typing import cast
 
 Sentinel = object()
 
 
-class capture(Generic[Yield, Send, Return]):
+class capture[Yield, Send, Return]:
     """
     Wrap a generator, and capture it's final return value in the :attr:`result` property.
 

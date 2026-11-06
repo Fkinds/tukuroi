@@ -49,9 +49,11 @@ class SmokeTest(TestCase):
             (["--debug", "lint"], True),
             (["--quiet", "lint"], False),
         ):
-            with self.subTest(args=args):
-                with main.make_context("fixit", args) as ctx:
-                    self.assertIs(ctx.params["debug"], expected)
+            with (
+                self.subTest(args=args),
+                main.make_context("fixit", args) as ctx,
+            ):
+                self.assertIs(ctx.params["debug"], expected)
 
     def test_file_with_formatting(self) -> None:
         content = dedent(
