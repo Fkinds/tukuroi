@@ -129,7 +129,8 @@ class RewriteToLiteral(LintRule):
                     elements=[
                         (
                             lambda val: cst.DictElement(
-                                val.elements[0].value, val.elements[1].value  # type: ignore
+                                val.elements[0].value,
+                                val.elements[1].value,  # type: ignore
                             )
                         )(
                             cst.ensure_type(

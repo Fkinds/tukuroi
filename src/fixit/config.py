@@ -9,24 +9,13 @@ import logging
 import pkgutil
 import platform
 import sys
-from contextlib import contextmanager, ExitStack
-
+import tomllib
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import ModuleType
 from typing import (
     Any,
-    Collection,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
-    Union,
 )
 
 from packaging.specifiers import SpecifierSet
@@ -35,8 +24,6 @@ from packaging.version import InvalidVersion, Version
 from .format import FORMAT_STYLES
 from .ftypes import (
     Config,
-    is_collection,
-    is_sequence,
     Options,
     OutputFormat,
     QualifiedRule,
@@ -45,14 +32,11 @@ from .ftypes import (
     RuleOptionsTable,
     RuleOptionTypes,
     T,
+    is_collection,
+    is_sequence,
 )
 from .rule import LintRule
 from .util import append_sys_path
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 FIXIT_CONFIG_FILENAMES = ("fixit.toml", ".fixit.toml", "pyproject.toml")
 FIXIT_LOCAL_MODULE = "fixit.local"
@@ -62,7 +46,7 @@ log = logging.getLogger(__name__)
 
 
 class ConfigError(ValueError):
-    def __init__(self, msg: str, config: Optional[RawConfig] = None):
+    def __init__(self, msg: str, config: RawConfig | None = None):
         super().__init__(msg)
         self.config = config
 
@@ -72,11 +56,11 @@ class CollectionError(RuntimeError):
         super().__init__(msg)
         self.rule = rule
 
-    def __reduce__(self) -> Tuple[Type[RuntimeError], Any]:
+    def __reduce__(self) -> tuple[type[RuntimeError], Any]:
         return type(self), (*self.args, self.rule)
 
 
-def is_rule(obj: Type[T]) -> bool:
+def is_rule(obj: type[T]) -> bool:
     """
     Returns True if class is a concrete subclass of LintRule
     """
@@ -125,7 +109,7 @@ def local_rule_loader(rule: QualifiedRule) -> Iterator[None]:
                 sys.modules.pop(key, None)
 
 
-def find_rules(rule: QualifiedRule) -> Iterable[Type[LintRule]]:
+def find_rules(rule: QualifiedRule) -> Iterable[type[LintRule]]:
     """
     Import the rule's qualified module name and return a list of collected rule classes.
 
@@ -174,7 +158,7 @@ def find_rules(rule: QualifiedRule) -> Iterable[Type[LintRule]]:
             raise CollectionError(f"could not import rule(s) {rule}", rule) from e
 
 
-def walk_module(module: ModuleType) -> Dict[str, Type[LintRule]]:
+def walk_module(module: ModuleType) -> dict[str, type[LintRule]]:
     """
     Given a module object, return a mapping of all rule names to classes.
 
@@ -185,7 +169,7 @@ def walk_module(module: ModuleType) -> Dict[str, Type[LintRule]]:
     modules from that package (ignoring sub-packages), and includes their rules in
     the final results.
     """
-    rules: Dict[str, Type[LintRule]] = {}
+    rules: dict[str, type[LintRule]] = {}
 
     members = inspect.getmembers(module, is_rule)
     rules.update(members)
@@ -203,14 +187,14 @@ def collect_rules(
     config: Config,
     *,
     # out-param to capture reasons when disabling rules for debugging
-    debug_reasons: Optional[Dict[Type[LintRule], str]] = None,
+    debug_reasons: dict[type[LintRule], str] | None = None,
 ) -> Collection[LintRule]:
     """
     Import and return rules specified by `enables` and `disables`.
     """
 
-    all_rules: Set[Type[LintRule]] = set()
-    named_enables: Set[Type[LintRule]] = set()
+    all_rules: set[type[LintRule]] = set()
+    named_enables: set[type[LintRule]] = set()
     if debug_reasons is not None:
         disabled_rules = debug_reasons
     else:
@@ -231,7 +215,8 @@ def collect_rules(
                 if qualified_rule.name:
                     named_enables |= rules
                 all_rules |= rules
-            except Exception as e:
+            # Importing a rule runs its code, which can raise any exception.
+            except Exception as e:  # noqa: BLE001
                 log.warning(
                     f"Failed to load rules '{qualified_rule.module}': {e.__class__.__name__}: {e}"
                 )
@@ -246,7 +231,8 @@ def collect_rules(
                     }
                 )
                 all_rules -= set(disabled_rules)
-            except Exception as e:
+            # Importing a rule runs its code, which can raise any exception.
+            except Exception as e:  # noqa: BLE001
                 log.warning(
                     f"Failed to load rules '{qualified_rule.module}': {e.__class__.__name__}: {e}"
                 )
@@ -274,7 +260,7 @@ def collect_rules(
     return materialized_rules
 
 
-def locate_configs(path: Path, root: Optional[Path] = None) -> List[Path]:
+def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
     """
     Given a file path, locate all relevant config files in priority order.
 
@@ -287,7 +273,7 @@ def locate_configs(path: Path, root: Optional[Path] = None) -> List[Path]:
 
     Returns a list of config paths in priority order, from highest priority to lowest.
     """
-    results: List[Path] = []
+    results: list[Path] = []
 
     if not path.is_dir():
         path = path.parent
@@ -309,7 +295,7 @@ def locate_configs(path: Path, root: Optional[Path] = None) -> List[Path]:
     return results
 
 
-def read_configs(paths: List[Path]) -> List[RawConfig]:
+def read_configs(paths: list[Path]) -> list[RawConfig]:
     """
     Read config data for each path given, and return their raw toml config values.
 
@@ -318,7 +304,7 @@ def read_configs(paths: List[Path]) -> List[RawConfig]:
 
     Maintains the same order as given in paths, minus any skipped files.
     """
-    configs: List[RawConfig] = []
+    configs: list[RawConfig] = []
 
     for path in paths:
         path = path.resolve()
@@ -337,7 +323,7 @@ def read_configs(paths: List[Path]) -> List[RawConfig]:
 
 
 def get_sequence(
-    config: RawConfig, key: str, *, data: Optional[Dict[str, Any]] = None
+    config: RawConfig, key: str, *, data: dict[str, Any] | None = None
 ) -> Sequence[str]:
     value: Sequence[str]
     if data:
@@ -354,7 +340,7 @@ def get_sequence(
 
 
 def get_options(
-    config: RawConfig, key: str, *, data: Optional[Dict[str, Any]] = None
+    config: RawConfig, key: str, *, data: dict[str, Any] | None = None
 ) -> RuleOptionsTable:
     if data:
         mapping = data.pop(key, {})
@@ -369,21 +355,19 @@ def get_options(
     rule_configs: RuleOptionsTable = {}
     for rule_name, rule_config in mapping.items():
         rule_configs[rule_name] = {}
-        for key, value in rule_config.items():
+        for option, value in rule_config.items():
             if not isinstance(value, RuleOptionTypes):
                 raise ConfigError(
-                    f"{key!r} must be one of {RuleOptionTypes}, got {type(value)}",
+                    f"{option!r} must be one of {RuleOptionTypes}, got {type(value)}",
                     config=config,
                 )
 
-            rule_configs[rule_name][key] = value
+            rule_configs[rule_name][option] = value
 
     return rule_configs
 
 
-def parse_rule(
-    rule: str, root: Path, config: Optional[RawConfig] = None
-) -> QualifiedRule:
+def parse_rule(rule: str, root: Path, config: RawConfig | None = None) -> QualifiedRule:
     """
     Given a raw rule string, parse and return a QualifiedRule object
     """
@@ -402,7 +386,7 @@ def parse_rule(
 
 
 def merge_configs(
-    path: Path, raw_configs: List[RawConfig], root: Optional[Path] = None
+    path: Path, raw_configs: list[RawConfig], root: Path | None = None
 ) -> Config:
     """
     Given multiple raw configs, merge them in priority order.
@@ -411,12 +395,12 @@ def merge_configs(
     """
 
     config: RawConfig
-    enable_root_import: Union[bool, Path] = Config.enable_root_import
-    enable_rules: Set[QualifiedRule] = {QualifiedRule("fixit.rules")}
-    disable_rules: Set[QualifiedRule] = set()
+    enable_root_import: bool | Path = Config.enable_root_import
+    enable_rules: set[QualifiedRule] = {QualifiedRule("fixit.rules")}
+    disable_rules: set[QualifiedRule] = set()
     rule_options: RuleOptionsTable = {}
-    target_python_version: Optional[Version] = Version(platform.python_version())
-    target_formatter: Optional[str] = None
+    target_python_version: Version | None = Version(platform.python_version())
+    target_formatter: str | None = None
     output_format: OutputFormat = OutputFormat.fixit
     output_template: str = ""
 
@@ -425,9 +409,9 @@ def merge_configs(
         *,
         enable: Sequence[str] = (),
         disable: Sequence[str] = (),
-        options: Optional[RuleOptionsTable] = None,
+        options: RuleOptionsTable | None = None,
         python_version: Any = None,
-        formatter: Optional[str] = None,
+        formatter: str | None = None,
     ) -> None:
         nonlocal target_python_version
         nonlocal target_formatter
@@ -540,7 +524,7 @@ def merge_configs(
                 formatter=override.pop("formatter", None),
             )
 
-        for key in data.keys():
+        for key in data:
             log.warning("unknown configuration option %r", key)
 
     return Config(
@@ -558,10 +542,10 @@ def merge_configs(
 
 
 def generate_config(
-    path: Optional[Path] = None,
-    root: Optional[Path] = None,
+    path: Path | None = None,
+    root: Path | None = None,
     *,
-    options: Optional[Options] = None,
+    options: Options | None = None,
 ) -> Config:
     """
     Given a file path, walk upwards looking for and applying cascading configs
@@ -596,29 +580,31 @@ def generate_config(
     return config
 
 
-def validate_config(path: Path) -> List[str]:
+def validate_config(path: Path) -> list[str]:
     """
     Validate the config provided. The provided path is expected to be a valid toml
     config file. Any exception found while parsing or importing will be added to a list
     of exceptions that are returned.
     """
-    exceptions: List[str] = []
+    exceptions: list[str] = []
     try:
         root = path.parent
         configs = read_configs([path])[0]
 
-        def validate_rules(rules: List[str], context: str) -> None:
+        def validate_rules(rules: list[str], context: str) -> None:
             for rule in rules:
                 try:
                     qualified_rule = parse_rule(rule, root, configs)
                     try:
                         for _ in find_rules(qualified_rule):
                             pass
-                    except Exception as e:
+                    # Importing a rule runs its code, which can raise any exception.
+                    except Exception as e:  # noqa: BLE001
                         exceptions.append(
                             f"Failed to import rule `{rule}` for {context}: {e.__class__.__name__}: {e}"
                         )
-                except Exception as e:
+                # Report any error as a validation result instead of failing.
+                except Exception as e:  # noqa: BLE001
                     exceptions.append(
                         f"Failed to parse rule `{rule}` for {context}: {e.__class__.__name__}: {e}"
                     )
@@ -638,7 +624,8 @@ def validate_config(path: Path) -> List[str]:
                 f"override disable: `{override_path}`",
             )
 
-    except Exception as e:
+    # Report any error as a validation result instead of failing.
+    except Exception as e:  # noqa: BLE001
         exceptions.append(f"Invalid config: {e.__class__.__name__}: {e}")
 
     return exceptions

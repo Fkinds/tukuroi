@@ -9,11 +9,11 @@ from unittest import TestCase
 
 from libcst import (
     Call,
-    ensure_type,
     Expr,
-    parse_module,
     SimpleStatementLine,
     SimpleString,
+    ensure_type,
+    parse_module,
 )
 from libcst.metadata import CodePosition, CodeRange
 

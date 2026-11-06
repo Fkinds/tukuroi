@@ -40,7 +40,7 @@ $ make test
 $ make lint
 ```
 
-To format code, sort imports, and apply automatic lint fixes:
+To format code and sort imports:
 
 ```shell-session
 $ make format
@@ -86,15 +86,32 @@ $ ghstack submit
 
 ## Code style
 
+Fixit uses [ruff][] to format code, sort imports, and lint, with ruff's default
+rules. The settings are in `pyproject.toml`. `make lint` and CI check them.
+
 You can ensure your changes are well formatted, and imports are sorted:
 
 ```shell-session
 $ make format
 ```
 
+`make format` does not apply other lint fixes. To apply the fixes that ruff
+can make safely:
+
+```shell-session
+$ ruff check --fix src/fixit/ scripts/
+```
+
 If you are using VS Code as your editor, you can use the
-[µfmt plugin for VSCode](https://marketplace.visualstudio.com/items?itemName=omnilib.ufmt)
-to easily enable formatting and import sorting while developing.
+[Ruff extension for VS Code](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff)
+to format, sort imports, and lint while developing.
+
+`.git-blame-ignore-revs` lists commits that only reformat code. GitHub skips
+them in blame views. To skip them in `git blame` locally:
+
+```shell-session
+$ git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
 
 
 ## VS Code
@@ -178,6 +195,7 @@ $ ghstack land $PR_URL
 [gh]: https://cli.github.com/
 [ghstack]: https://github.com/ezyang/ghstack
 [pipx]: https://pypa.github.io/pipx/
+[ruff]: https://docs.astral.sh/ruff/
 [uv]: https://docs.astral.sh/uv/
 
 ## Supported Python versions
@@ -201,3 +219,10 @@ ecosystem takes time to catch up, so the previous version stays supported.
 Older versions are dropped to keep the set of runtimes we maintain small.
 Under PEP 602, each minor version gets two years of full support, so the two
 newest minor versions are the ones that still receive bug fixes.
+
+## Relationship to upstream
+
+This repository is a fork of `Instagram/Fixit`. It stopped merging upstream
+`main` when it moved its development tools to ruff (#33). The reformatted code
+would conflict with almost every upstream change. To use an upstream change,
+review it and port it on its own.

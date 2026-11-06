@@ -29,7 +29,6 @@ dependencies = [
     "libcst >= 0.3.18",
     "moreorless >= 0.4.0",
     "packaging >= 21",
-    "tomli >= 2.0; python_version < '3.11'",
     "trailrunner >= 1.2",
 ]
 
@@ -44,12 +43,11 @@ docs = [
 ]
 dev = [
     "attribution == 1.8.0",
-    "black == 26.3.1",
     "build > 1",
-    "flake8 == 7.3.0",
-    "flake8-bugbear == 24.12.12",
+    "ruff == 0.17.4",
+    # Only for the smoke test of the `formatter` setting. Remove it when #21
+    # removes that setting.
     "ufmt == 2.9.1",
-    "usort == 1.0.8.post1",
     "pyrefly == 0.63.1",
 ]
 lsp = [
@@ -74,13 +72,20 @@ signed_tags = true
 version_file = false
 ignored_authors = ["dependabot"]
 
-[tool.black]
-target-version = ["py39"]
+[tool.ruff.lint.per-file-ignores]
+# #21 deletes or rewrites these files. Remove each entry together with its file.
+"src/fixit/engine.py" = ["ALL"]
+"src/fixit/format.py" = ["ALL"]
+"src/fixit/rule.py" = ["ALL"]
+"src/fixit/rules/**" = ["ALL"]
+"src/fixit/testing.py" = ["ALL"]
+"src/fixit/upgrade/**" = ["ALL"]
+# Package modules re-export names.
+"__init__.py" = ["F401"]
 
 [tool.fixit]
 enable = ["fixit.rules"]
 python-version = "3.10"
-formatter = "ufmt"
 
 [[tool.fixit.overrides]]
 path = "examples"

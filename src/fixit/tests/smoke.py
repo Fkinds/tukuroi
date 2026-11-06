@@ -11,7 +11,6 @@ from textwrap import dedent
 from unittest import TestCase
 
 import pygls.uris as Uri
-
 from click.testing import CliRunner
 
 from fixit import __version__
@@ -50,9 +49,11 @@ class SmokeTest(TestCase):
             (["--debug", "lint"], True),
             (["--quiet", "lint"], False),
         ):
-            with self.subTest(args=args):
-                with main.make_context("fixit", args) as ctx:
-                    self.assertIs(ctx.params["debug"], expected)
+            with (
+                self.subTest(args=args),
+                main.make_context("fixit", args) as ctx,
+            ):
+                self.assertIs(ctx.params["debug"], expected)
 
     def test_file_with_formatting(self) -> None:
         content = dedent(
@@ -322,40 +323,38 @@ class SmokeTest(TestCase):
                     value = f"hello world"
             """
         )
-        with self.subTest("lint"):
-            with TemporaryDirectory() as td:
-                tdp = Path(td).resolve()
-                path = tdp / "file.py"
+        with self.subTest("lint"), TemporaryDirectory() as td:
+            tdp = Path(td).resolve()
+            path = tdp / "file.py"
 
-                (tdp / "pyproject.toml").write_text(
-                    "[tool.fixit]\ndisable=['fixit.rules']\n"
-                )
+            (tdp / "pyproject.toml").write_text(
+                "[tool.fixit]\ndisable=['fixit.rules']\n"
+            )
 
-                path.write_text(content)
-                result = self.runner.invoke(
-                    main,
-                    ["lint", path.as_posix()],
-                    catch_exceptions=False,
-                )
+            path.write_text(content)
+            result = self.runner.invoke(
+                main,
+                ["lint", path.as_posix()],
+                catch_exceptions=False,
+            )
 
-                self.assertEqual(result.stdout, "")
-                self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.exit_code, 0)
 
-        with self.subTest("fix"):
-            with TemporaryDirectory() as td:
-                tdp = Path(td).resolve()
-                path = tdp / "file.py"
+        with self.subTest("fix"), TemporaryDirectory() as td:
+            tdp = Path(td).resolve()
+            path = tdp / "file.py"
 
-                (tdp / "pyproject.toml").write_text(
-                    "[tool.fixit]\ndisable=['fixit.rules']\n"
-                )
+            (tdp / "pyproject.toml").write_text(
+                "[tool.fixit]\ndisable=['fixit.rules']\n"
+            )
 
-                path.write_text(content)
-                result = self.runner.invoke(
-                    main,
-                    ["fix", "--automatic", path.as_posix()],
-                    catch_exceptions=False,
-                )
+            path.write_text(content)
+            result = self.runner.invoke(
+                main,
+                ["fix", "--automatic", path.as_posix()],
+                catch_exceptions=False,
+            )
 
-                self.assertEqual(result.stdout, "")
-                self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.exit_code, 0)

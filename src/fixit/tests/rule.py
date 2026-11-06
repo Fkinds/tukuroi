@@ -198,8 +198,7 @@ class RuleTest(TestCase):
         )
 
     def test_ignore_lint(self) -> None:
-        idx = 0
-        for code, message, position in (
+        cases = (
             ("pass  # random comment\n", "I pass", (1, 0)),
             ("pass\n", "I pass", (1, 0)),
             ("pass  # lint-fixme\n", None, None),
@@ -402,8 +401,8 @@ class RuleTest(TestCase):
                 None,
                 None,
             ),
-        ):
-            idx += 1
+        )
+        for idx, (code, message, position) in enumerate(cases, start=1):
             content = dedent(code).encode("utf-8")
             with self.subTest(f"test ignore {idx}"):
                 runner = LintRunner(Path("fake.py"), content)

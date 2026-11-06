@@ -6,9 +6,9 @@
 import logging
 import sys
 import traceback
+from collections.abc import Generator, Iterable
 from functools import partial
 from pathlib import Path
-from typing import Generator, Iterable, List, Optional
 
 import click
 import trailrunner
@@ -18,6 +18,7 @@ from .config import collect_rules, generate_config
 from .engine import LintRunner
 from .format import format_module
 from .ftypes import (
+    STDIN,
     Config,
     FileContent,
     LintViolation,
@@ -25,7 +26,6 @@ from .ftypes import (
     Options,
     OutputFormat,
     Result,
-    STDIN,
 )
 
 LOG = logging.getLogger(__name__)
@@ -100,8 +100,8 @@ def fixit_bytes(
     *,
     config: Config,
     autofix: bool = False,
-    metrics_hook: Optional[MetricsHook] = None,
-) -> Generator[Result, bool, Optional[FileContent]]:
+    metrics_hook: MetricsHook | None = None,
+) -> Generator[Result, bool, FileContent | None]:
     """
     Lint raw bytes content representing a single path, using the given configuration.
 
@@ -126,7 +126,7 @@ def fixit_bytes(
             return None
 
         runner = LintRunner(path, content)
-        pending_fixes: List[LintViolation] = []
+        pending_fixes: list[LintViolation] = []
 
         clean = True
         for violation in runner.collect_violations(rules, config, metrics_hook):
@@ -154,9 +154,9 @@ def fixit_stdin(
     path: Path,
     *,
     autofix: bool = False,
-    options: Optional[Options] = None,
-    metrics_hook: Optional[MetricsHook] = None,
-) -> Generator[Result, bool, None]:
+    options: Options | None = None,
+    metrics_hook: MetricsHook | None = None,
+) -> Generator[Result, bool]:
     """
     Wrapper around :func:`fixit_bytes` for formatting content from STDIN.
 
@@ -187,9 +187,9 @@ def fixit_file(
     path: Path,
     *,
     autofix: bool = False,
-    options: Optional[Options] = None,
-    metrics_hook: Optional[MetricsHook] = None,
-) -> Generator[Result, bool, None]:
+    options: Options | None = None,
+    metrics_hook: MetricsHook | None = None,
+) -> Generator[Result, bool]:
     """
     Lint a single file on disk, detecting and generating appropriate configuration.
 
@@ -223,9 +223,9 @@ def _fixit_file_wrapper(
     path: Path,
     *,
     autofix: bool = False,
-    options: Optional[Options] = None,
-    metrics_hook: Optional[MetricsHook] = None,
-) -> List[Result]:
+    options: Options | None = None,
+    metrics_hook: MetricsHook | None = None,
+) -> list[Result]:
     """
     Wrapper because generators can't be pickled or used directly via multiprocessing
     TODO: replace this with some sort of queue or whatever
@@ -239,10 +239,10 @@ def fixit_paths(
     paths: Iterable[Path],
     *,
     autofix: bool = False,
-    options: Optional[Options] = None,
+    options: Options | None = None,
     parallel: bool = True,
-    metrics_hook: Optional[MetricsHook] = None,
-) -> Generator[Result, bool, None]:
+    metrics_hook: MetricsHook | None = None,
+) -> Generator[Result, bool]:
     """
     Lint multiple files or directories, recursively expanding each path.
 
@@ -273,7 +273,7 @@ def fixit_paths(
     if not paths:
         return
 
-    expanded_paths: List[Path] = []
+    expanded_paths: list[Path] = []
     is_stdin = False
     stdin_path = Path("stdin")
     for i, path in enumerate(paths):

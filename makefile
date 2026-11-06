@@ -28,9 +28,9 @@ test:
 	pyrefly check -c pyproject.toml
 
 lint:
-	python -m flake8 $(SRC)
+	python -m ruff check $(SRC)
+	python -m ruff format --check $(SRC)
 	python -m fixit lint $(SRC)
-	python -m ufmt check $(SRC)
 	python scripts/check_copyright.py
 
 html: docs/*
@@ -38,7 +38,8 @@ html: docs/*
 	sphinx-build -ab html docs html
 
 format:
-	python -m ufmt format $(SRC)
+	python -m ruff check --select I --fix $(SRC)
+	python -m ruff format $(SRC)
 
 clean:
 	rm -rf .mypy_cache build dist html *.egg-info
