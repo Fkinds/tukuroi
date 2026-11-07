@@ -10,8 +10,9 @@ copied as they are: each source, and the positions of the violations that the
 comments do not suppress. Here a rule is a function that finds the nodes it
 would report, as the rule of the same name does.
 
-The other cases (clauses, joined statements, decorators, multi-line strings)
-were checked against the libcst engine too.
+The other cases (clauses, joined statements, decorators, multi-line strings,
+and the lines after an indented block, which libcst gives to the block as its
+footer) were checked against the libcst engine too.
 """
 
 import ast
@@ -178,6 +179,7 @@ class StatementTest(SuppressionTestCase):
     def test_after_indented_block(self) -> None:
         cases = (
             ("dedented", f"if x:\n    pass\n# lint-ignore\n{CALL}\n", ()),
+            ("indented", f"if x:\n    pass\n    # lint-ignore\n{CALL}\n", ("4:0",)),
             ("dedented, in block", f"if x:\n    pass\n# lint-ignore\n    {CALL}\n", ()),
         )  # fmt: skip
         self.run_cases(assert_true, cases)
@@ -239,3 +241,69 @@ class IsSuppressedTest(TestCase):
             name = node.targets[0].id  # type: ignore[attr-defined]
             with self.subTest(name):
                 self.assertIs(is_suppressed(comments.of(node), "X"), expected[name])
+
+
+class BlockFooterTest(SuppressionTestCase):
+    """
+    The comment lines after an indented block, up to the last one indented as
+    deep as the block, are the block's, not the next statement's (libcst's
+    ``IndentedBlock.footer``).
+    """
+
+    def test_footer(self) -> None:
+        cases = (
+            # (label, comment lines between the block and the call, positions)
+            ("4, then 0", "    # x\n# lint-ignore\n", ()),
+            ("0, then 4", "# lint-ignore\n    # x\n", ("5:0",)),
+            ("4, 0, then 4", "    # x\n# lint-ignore\n    # y\n", ("6:0",)),
+            ("2, less than the block", "  # lint-ignore\n", ()),
+            ("4, as deep as the block", "    # lint-ignore\n", ("4:0",)),
+            ("8, deeper than the block", "        # lint-ignore\n", ("4:0",)),
+            ("4, blank, then 0", "    # x\n\n# lint-ignore\n", ()),
+        )  # fmt: skip
+        for label, lines, positions in cases:
+            with self.subTest(label):
+                text = f"if x:\n    pass\n{lines}{CALL}\n"
+                self.assertEqual(unsuppressed(text, assert_true), positions)
+
+    def test_kinds_of_blocks(self) -> None:
+        cases = (
+            ("nested blocks", f"if x:\n    if y:\n        pass\n        # x\n    # x\n# lint-ignore\n{CALL}\n", ()),
+            ("in a block, after an inner block", f"if x:\n    if y:\n        pass\n        # x\n    # lint-ignore\n    {CALL}\n", ()),
+            ("in a block, after an inner block, deeper", f"if x:\n    if y:\n        pass\n        # lint-ignore\n    {CALL}\n", ("5:4",)),
+            ("after a one-line if", f"if x: pass\n    # lint-ignore\n{CALL}\n", ()),
+            ("after a one-line if, deeper than its body", f"if x: pass\n        # lint-ignore\n{CALL}\n", ()),
+            ("after a simple statement", f"x = 1\n    # lint-ignore\n{CALL}\n", ()),
+            ("after if and elif", f"if x:\n    pass\nelif y:\n    pass\n    # lint-ignore\n{CALL}\n", ("6:0",)),
+            ("after if and elif, 2", f"if x:\n    pass\nelif y:\n    pass\n  # lint-ignore\n{CALL}\n", ()),
+            ("after if and an if in else", f"if x:\n    pass\nelse:\n    if y:\n        pass\n    # lint-ignore\n{CALL}\n", ("7:0",)),
+            ("after else", f"if x:\n    pass\nelse:\n    pass\n# lint-ignore\n{CALL}\n", ()),
+            ("after try and finally", f"try:\n    pass\nfinally:\n    pass\n    # lint-ignore\n{CALL}\n", ("6:0",)),
+            ("after try and except", f"try:\n    pass\nexcept E:\n    pass\n    # lint-ignore\n{CALL}\n", ("6:0",)),
+            ("after for and else", f"for x in y:\n    pass\nelse:\n    pass\n    # lint-ignore\n{CALL}\n", ("6:0",)),
+            ("after an else block deeper than the if block", f"if x:\n    pass\nelse:\n        pass\n      # lint-ignore\n{CALL}\n", ()),
+            ("after a finally block deeper than the try block", f"try:\n    pass\nfinally:\n        pass\n      # lint-ignore\n{CALL}\n", ()),
+            ("after a for else block deeper than the for block", f"for x in y:\n    pass\nelse:\n        pass\n      # lint-ignore\n{CALL}\n", ()),
+            ("after while", f"while x:\n    pass\n    # lint-ignore\n{CALL}\n", ("4:0",)),
+            ("after with", f"with x:\n    pass\n    # lint-ignore\n{CALL}\n", ("4:0",)),
+            ("after a def", f"def f():\n    pass\n    # lint-ignore\n{CALL}\n", ("4:0",)),
+            ("after a class with a def", f"class C:\n    def f(self):\n        pass\n    # lint-ignore\n{CALL}\n", ("5:0",)),
+            ("after match", f"match x:\n    case 1:\n        pass\n    # lint-ignore\n{CALL}\n", ("5:0",)),
+        )  # fmt: skip
+        self.run_cases(assert_true, cases)
+
+    def test_before_a_clause(self) -> None:
+        static = (
+            ("elif, above, as deep as the block", "x = 1\nif x:\n    pass\n    # lint-ignore\nelif True:\n    pass\n", ("5:0",)),
+            ("elif, above, less deep", "x = 1\nif x:\n    pass\n  # lint-ignore\nelif True:\n    pass\n", ()),
+        )  # fmt: skip
+        self.run_cases(static_if, static)
+        calls = (
+            ("except, above, as deep as the block", f"try:\n    pass\n    # lint-ignore\nexcept {CALL}:\n    pass\n", ("4:7",)),
+            ("2nd except, above, as deep", f"try:\n    pass\nexcept E:\n    pass\n    # lint-ignore\nexcept {CALL}:\n    pass\n", ("6:7",)),
+            ("2nd except, after a deeper except block", f"try:\n    pass\nexcept E:\n        pass\n      # lint-ignore\nexcept {CALL}:\n    pass\n", ()),
+            ("2nd except, above, dedented", f"try:\n    pass\nexcept E:\n    pass\n# lint-ignore\nexcept {CALL}:\n    pass\n", ()),
+            ("case, above, as deep as the block", f"match x:\n    case 1:\n        pass\n        # lint-ignore\n    case {{1: y}} if {CALL}:\n        pass\n", ("5:19",)),
+            ("case, above, at the case", f"match x:\n    case 1:\n        pass\n    # lint-ignore\n    case {{1: y}} if {CALL}:\n        pass\n", ()),
+        )  # fmt: skip
+        self.run_cases(assert_true, calls)
