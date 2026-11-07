@@ -11,14 +11,23 @@ from the characterization tests of the libcst engine
 what #21 decided (issuecomment-6706326492), and the others as they are.
 """
 
+import logging
 import sys
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
-from ..core.loader import CollectionError, RuleName, import_rules
+from ..core import loader
+from ..core.loader import (
+    CollectionError,
+    RuleName,
+    collect_rules,
+    import_rules,
+    is_builtin,
+)
 
 HEAD = "import ast\n\nfrom fixit.core.rule import Rule\n"
 
@@ -187,3 +196,158 @@ class ImportRulesTest(TestCase):
                 with self.subTest(text), self.assertRaises(CollectionError) as caught:
                     import_rules(RuleName.parse(text, root))
                 self.assertEqual(str(caught.exception), message)
+
+
+KETTLE = {"src/kettle/__init__.py": "", "src/kettle/rules.py": HEAD + rule("NoBadName")}
+
+
+class CollectRulesTest(TestCase):
+    maxDiff = None
+
+    def setUp(self) -> None:
+        loader._WARNED.clear()
+        loader._ROOT_IMPORTED.clear()
+
+    def tearDown(self) -> None:
+        self.setUp()
+
+    def collect(
+        self,
+        root: Path,
+        enable: Sequence[str],
+        disable: Sequence[str] = (),
+        **options: object,
+    ) -> tuple[list[str], list[str]]:
+        """The names of the rules collected, and the warnings."""
+        parse = lambda text: RuleName.parse(text, root)
+        with self.assertLogs("fixit.config", "WARNING") as logs:
+            logging.getLogger("fixit.config").warning("start")
+            rules = collect_rules(
+                [parse(t) for t in enable],
+                [parse(t) for t in disable],
+                **options,  # type: ignore[arg-type]
+            )
+        warnings = [r.getMessage().replace(str(root), "ROOT") for r in logs.records[1:]]
+        return [r.name() for r in rules], warnings
+
+    def test_enable_and_disable(self) -> None:
+        cases = (
+            # (label, enable, disable, rules)
+            ("module", [".rules"], [], ["NoBadName", "NoUglyName"]),
+            ("1 rule", [".rules:NoBadName"], [], ["NoBadName"]),
+            ("module and 1 rule of it", [".rules", ".rules:NoBadName"], [], ["NoBadName", "NoUglyName"]),
+            ("disable 1 rule", [".rules"], [".rules:NoBadName"], ["NoUglyName"]),
+            ("disable the module", [".rules"], [".rules"], []),
+            ("the rule named survives", [".rules", ".rules:NoBadName"], [".rules"], ["NoBadName"]),
+            ("disable a rule not enabled", [".rules:NoBadName"], [".rules:NoUglyName"], ["NoBadName"]),
+        )  # fmt: skip
+        for label, enable, disable, expected in cases:
+            with self.subTest(label), files({"rules.py": BOTH}) as root:
+                self.assertEqual(self.collect(root, enable, disable), (expected, []))
+
+    def test_warnings(self) -> None:
+        cases = (
+            # (label, files, enable, disable, rules, warnings)
+            ("no module", {"rules.py": BOTH}, [".nope", ".rules:NoBadName"], [], ["NoBadName"], ["Failed to load rules '.nope': CollectionError: could not import rule(s) .nope from ROOT"]),
+            ("raises", {"rules.py": 'raise RuntimeError("boom")\n'}, [".rules"], [], [], ["Failed to load rules '.rules': RuntimeError: boom"]),
+            ("no rules in it", {"rules.py": "x = 1\n"}, [".rules"], [], [], ["No rules in '.rules' from ROOT"]),
+            ("no rules, 1 rule named", {"rules.py": "x = 1\n"}, [".rules:X"], [], [], ["Failed to load rules '.rules': CollectionError: could not find rule .rules:X in ROOT"]),
+            ("disable a module that fails", {"rules.py": BOTH}, [".rules"], [".nope"], ["NoBadName", "NoUglyName"], ["Failed to load rules '.nope': CollectionError: could not import rule(s) .nope from ROOT"]),
+        )  # fmt: skip
+        for label, tree, enable, disable, expected, warnings in cases:
+            with self.subTest(label), files(tree) as root:
+                self.setUp()
+                self.assertEqual(
+                    self.collect(root, enable, disable), (expected, warnings)
+                )
+
+    def test_sorted_by_name(self) -> None:
+        names = [f"Rule{c}" for c in "HGFEDCBA"]
+        module = HEAD + "".join(rule(n) for n in names)
+        with files({"rules.py": module}) as root:
+            self.assertEqual(
+                self.collect(root, [".rules"]),
+                (sorted(n.removesuffix("Rule") or n for n in names), []),
+            )
+
+    def test_installed_package_after_a_root_import(self) -> None:
+        tree = {"cookie/__init__.py": "", "cookie/rules.py": BOTH}
+        with files(tree, on_path=True) as root:
+            rules = ["NoBadName", "NoUglyName"]
+            self.assertEqual(
+                self.collect(root, ["cookie.rules"], root_import=root / "src"),
+                (rules, []),
+            )
+            self.assertEqual(self.collect(root, ["cookie.rules"]), (rules, []))
+
+    def test_a_warning_once(self) -> None:
+        with files({}) as root:
+            first = self.collect(root, [".nope"])
+            again = self.collect(root, [".nope"])
+        self.assertEqual((len(first[1]), again[1]), (1, []))
+
+    def test_custom_rules_turned_off(self) -> None:
+        with files({"rules.py": BOTH} | KETTLE) as root:
+            result = self.collect(
+                root,
+                [".rules", "kettle.rules"],
+                [".rules:NoBadName", ".nope"],
+                root_import=root / "src",
+                custom_rules=False,
+            )
+            skipped = "Skipped rules '{}': custom rules are turned off"
+            warnings = [skipped.format(".rules"), skipped.format("kettle.rules")]
+            self.assertEqual(result, ([], warnings))
+            self.assertNotIn("kettle", sys.modules)
+            with patch.object(loader, "_on_path", wraps=loader._on_path) as on_path:
+                collect_rules([], [], root_import=root / "src", custom_rules=False)
+            on_path.assert_called_once_with(None)
+
+    def test_builtin(self) -> None:
+        cases = (
+            ("fixit.rules", True),
+            ("fixit.rules:NoStaticIfCondition", True),
+            ("fixit.rules.no_static_if_condition", True),
+            ("fixit.rulesx", False),
+            ("fixit.upgrade", False),
+            (".fixit.rules", False),
+            ("cookie.rules", False),
+        )
+        for text, builtin in cases:
+            with self.subTest(text):
+                self.assertIs(is_builtin(RuleName.parse(text, Path("/r"))), builtin)
+
+    def test_enable_root_import(self) -> None:
+        with files(KETTLE) as root:
+            path = list(sys.path)
+            self.assertEqual(
+                self.collect(root, ["kettle.rules"], root_import=root / "src"),
+                (["NoBadName"], []),
+            )
+            self.assertEqual(sys.path, path)
+        with files(KETTLE) as root:
+            self.setUp()
+            warning = "Failed to load rules 'kettle.rules': CollectionError: could not import rule(s) kettle.rules"
+            self.assertEqual(self.collect(root, ["kettle.rules"]), ([], [warning]))
+
+    def test_package_of_another_root(self) -> None:
+        tree = {f"a/{k}": v for k, v in KETTLE.items()} | {
+            f"b/{k}": v for k, v in KETTLE.items()
+        }
+        with files(tree) as root:
+            a, b = root / "a" / "src", root / "b" / "src"
+            self.assertEqual(
+                self.collect(root / "a", ["kettle.rules"], root_import=a),
+                (["NoBadName"], []),
+            )
+            other = f"Failed to load rules 'kettle.rules': CollectionError: could not import rule(s) kettle.rules: imported from another root, {a}"
+            self.assertEqual(
+                self.collect(root / "b", ["kettle.rules"], root_import=b), ([], [other])
+            )
+            self.assertEqual(
+                self.collect(root / "a", ["kettle.rules"], root_import=a),
+                (["NoBadName"], []),
+            )
+            self.setUp()
+            loader._ROOT_IMPORTED["kettle"] = a
+            self.assertEqual(self.collect(root / "b", ["kettle.rules"]), ([], [other]))
