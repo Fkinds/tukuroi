@@ -19,6 +19,17 @@ it, and takes:
   lines up to the last one indented as deep as that block belong to the block,
   not to the statement (libcst's ``IndentedBlock.footer``).
 
+On the way up, the walk also takes, as libcst does:
+
+- after an item of a list of items with commas (an argument, a parameter, an
+  element, an import, a ``with`` item), the comment after its comma;
+- in a ``[...]`` (a list, a list comprehension, a subscript), the comment lines
+  right after the ``[`` line, and the comment after the last item when ``]`` is
+  on a later line;
+- from a decorator, the comment at its end and the comment lines between it and
+  the decorator before it; and at a decorated statement, the comment lines
+  between its decorators and itself.
+
 A statement in a one-line body (``if x: f()``) is not a statement of its own
 for this: the walk goes on to the compound statement. Statements joined with
 ``;`` share the comment lines above the first of them. ``elif``, ``except`` and
@@ -32,10 +43,18 @@ from collections.abc import Iterator, Sequence
 
 from .directives import Directive, parse_directives
 from .source import Comment, Source
-from .text import Position
+from .text import Position, Span
 
 _NOT_CODE = {
     tokenize.COMMENT,
+    tokenize.NL,
+    tokenize.NEWLINE,
+    tokenize.INDENT,
+    tokenize.DEDENT,
+    tokenize.ENDMARKER,
+}
+
+_LAYOUT = {
     tokenize.NL,
     tokenize.NEWLINE,
     tokenize.INDENT,
@@ -83,6 +102,19 @@ class NodeComments:
                     comment = by_offset[lines.offset(Position(*previous.start))]
                 self._end_comments.append(comment)
             previous = token
+        # The tokens other than line ends and indents, with their offsets, and
+        # the index of the matching bracket of each bracket.
+        self._tokens = [t for t in source.tokens if t.type not in _LAYOUT]
+        self._starts = [lines.offset(Position(*t.start)) for t in self._tokens]
+        self._match: dict[int, int] = {}
+        opened: list[int] = []
+        for index, token in enumerate(self._tokens):
+            if token.type == tokenize.OP and token.string in "([{":
+                opened.append(index)
+            elif token.type == tokenize.OP and token.string in ")]}" and opened:
+                start = opened.pop()
+                self._match[start] = index
+                self._match[index] = start
         # The comment of each line that holds only a comment.
         self._line_comments: dict[int, Comment] = {}
         for comment in source.comments:
@@ -95,16 +127,180 @@ class NodeComments:
         found: list[Comment] = []
         current = node
         while not isinstance(current, ast.Module):
+            if isinstance(current, ast.List | ast.ListComp | ast.Subscript):
+                found.extend(self._bracket_comments(current))
             if isinstance(current, _CLAUSES):
                 found.extend(self._end_comment(current))
                 first = self._first_on_line(current)
                 if first is not None:
+                    found.extend(self._after_decorators(current))
                     found.extend(self._leading(first))
                     return _sorted(found)
                 # A one-line body: on to its compound statement.
-            current = self._parent(current)
+            parent = self._parent(current)
+            item = self._item(current, parent)
+            if item is not None and self._owns_comma(current, parent):
+                found.extend(self._comma_comment(item))
+            decorators = getattr(parent, "decorator_list", None) or []
+            if any(d is current for d in decorators):
+                found.extend(self._decorator_comments(current, decorators))
+            current = parent
         found.extend(self._module_header())
         return _sorted(found)
+
+    def _item(self, node: ast.AST, parent: ast.AST) -> Span | None:
+        """
+        The span of the item that ``node`` is in a list of items with commas in
+        ``parent``, if it is one: the argument, the parameter with its default,
+        the element (a key with its value), the import, the ``with`` item.
+        """
+        span = self._source.span
+        lists: list[list[ast.AST]] = []
+        if isinstance(parent, ast.Call):
+            lists = [parent.args, parent.keywords]
+        elif isinstance(parent, ast.ClassDef):
+            lists = [parent.bases, parent.keywords, parent.type_params]
+        elif isinstance(parent, ast.FunctionDef | ast.AsyncFunctionDef):
+            lists = [parent.type_params]
+        elif isinstance(parent, ast.List | ast.Tuple | ast.Set):
+            lists = [parent.elts]
+        elif isinstance(parent, ast.Import | ast.ImportFrom):
+            lists = [parent.names]
+        elif isinstance(parent, ast.Dict):
+            for key, value in zip(parent.keys, parent.values, strict=True):
+                if node is key or node is value:
+                    return Span(span(key or value).start, span(value).end)
+        elif isinstance(parent, ast.arguments):
+            return self._parameter(node, parent)
+        elif isinstance(node, ast.withitem):
+            end = node.optional_vars or node.context_expr
+            return Span(span(node.context_expr).start, span(end).end)
+        if any(item is node for items in lists for item in items):
+            return span(node)
+        return None
+
+    def _owns_comma(self, node: ast.AST, parent: ast.AST) -> bool:
+        """
+        Whether the comma after ``node`` holds the comment after it: not for the
+        last element of a list, set, dict or tuple, whose closing bracket holds
+        it (libcst).
+        """
+        if isinstance(parent, ast.List | ast.Set | ast.Tuple):
+            return parent.elts[-1] is not node
+        if isinstance(parent, ast.Dict):
+            return parent.keys[-1] is not node and parent.values[-1] is not node
+        return True
+
+    def _parameter(self, node: ast.AST, arguments: ast.arguments) -> Span | None:
+        """The span of the parameter that ``node`` is, or is the default of."""
+        span = self._source.span
+        positional = [*arguments.posonlyargs, *arguments.args]
+        defaults = [None] * (len(positional) - len(arguments.defaults))
+        pairs = [
+            *zip(positional, [*defaults, *arguments.defaults], strict=True),
+            *zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True),
+            *((a, None) for a in (arguments.vararg, arguments.kwarg) if a),
+        ]
+        for parameter, default in pairs:
+            if node is parameter or node is default:
+                return Span(span(parameter).start, span(default or parameter).end)
+        return None
+
+    def _comma_comment(self, item: Span) -> Iterator[Comment]:
+        """The comment right after the comma after ``item``, on the same line."""
+        after = self._after(item)
+        tokens = self._tokens
+        if after + 1 < len(tokens) and tokens[after].string == ",":
+            comment = tokens[after + 1]
+            if (
+                comment.type == tokenize.COMMENT
+                and comment.start[0] == tokens[after].end[0]
+            ):
+                yield self._comment(after + 1)
+
+    def _after(self, item: Span) -> int:
+        """The index of the token after ``item``, and after the parentheses around it."""
+        after = bisect.bisect_left(self._starts, item.end)
+        first = bisect.bisect_left(self._starts, item.start)
+        while (
+            first > 0
+            and self._tokens[first - 1].string == "("
+            and self._match.get(first - 1) == after
+        ):
+            first, after = first - 1, after + 1
+        return after
+
+    def _bracket_comments(self, node: ast.AST) -> Iterator[Comment]:
+        """
+        In a ``[...]``: the comment lines after the line of ``[``, before the
+        first item, and the comment after the last item (a comment runs to the end
+        of its line, so ``]`` is on a later line).
+        """
+        span = self._source.span
+        start = (
+            span(node.value).end
+            if isinstance(node, ast.Subscript)
+            else span(node).start
+        )
+        opening = bisect.bisect_left(self._starts, start)
+        while self._tokens[opening].string != "[":
+            opening += 1
+        closing = self._match[opening]
+        tokens = self._tokens
+        first = next(
+            (
+                i
+                for i in range(opening + 1, closing)
+                if tokens[i].type != tokenize.COMMENT
+            ),
+            closing,
+        )
+        first_line = tokens[first].start[0]
+        for line in range(tokens[opening].start[0] + 1, first_line):
+            if line in self._line_comments:
+                yield self._line_comments[line]
+        last = max(
+            (i for i in range(opening, closing) if tokens[i].type != tokenize.COMMENT),
+            default=opening,
+        )
+        comment = tokens[last + 1]
+        if (
+            last > opening
+            and comment.type == tokenize.COMMENT
+            and comment.start[0] == tokens[last].end[0]
+        ):
+            yield self._comment(last + 1)
+
+    def _decorator_comments(
+        self, decorator: ast.AST, decorators: Sequence[ast.AST]
+    ) -> Iterator[Comment]:
+        """The comment at the end of ``decorator``, and the lines above it."""
+        index = _index(decorators, decorator)
+        offset = self._source.span(decorator).end
+        newline = bisect.bisect_left(self._newlines, offset)
+        if newline < len(self._newlines) and (comment := self._end_comments[newline]):
+            yield comment
+        if index:
+            yield from self._lines_between(
+                decorators[index - 1], self._start(decorator).line
+            )
+
+    def _after_decorators(self, node: ast.AST) -> Iterator[Comment]:
+        """The comment lines between the decorators of ``node`` and ``node``."""
+        decorators = getattr(node, "decorator_list", None) or []
+        if decorators:
+            yield from self._lines_between(decorators[-1], self._start(node).line)
+
+    def _lines_between(self, before: ast.AST, line: int) -> Iterator[Comment]:
+        """The comment lines after the end of ``before`` and before ``line``."""
+        end = self._source.lines.position(self._source.span(before).end).line
+        for number in range(end + 1, line):
+            if number in self._line_comments:
+                yield self._line_comments[number]
+
+    def _comment(self, index: int) -> Comment:
+        start = self._starts[index]
+        return next(c for c in self._source.comments if c.span.start == start)
 
     def _parent(self, node: ast.AST) -> ast.AST:
         return self._parents[id(node)]
