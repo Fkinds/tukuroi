@@ -20,16 +20,25 @@ restart of ``fixit lsp``).
 
 The errors keep the name and the words of the libcst engine
 (``CollectionError: could not import rule(s) .rules from <dir>``).
+
+:func:`collect_rules` turns the ``enable`` and ``disable`` of a config into
+rules. A module that cannot be imported is a warning (on the logger
+``fixit.config``, as before), given once in a process. A package imported
+through ``enable-root-import`` is not used for a file of another root: its
+module is the one of the root that imported it first.
 """
 
 import hashlib
 import importlib
 import importlib.machinery
 import inspect
+import logging
 import pkgutil
 import re
 import sys
 import types
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
@@ -149,3 +158,111 @@ def _rules_of(module: types.ModuleType) -> dict[str, type[Rule]]:
 
 def _is_rule(value: object) -> bool:
     return isinstance(value, type) and issubclass(value, Rule) and value is not Rule
+
+
+# The packages of the rules that come with Fixit. With custom rules turned off
+# (#12), the engine imports no other rules.
+BUILTIN_PACKAGES = ("fixit.rules",)
+
+log = logging.getLogger("fixit.config")
+
+# The warnings already given: each one is given once in a process (#21).
+_WARNED: set[str] = set()
+
+# The top-level packages imported through enable-root-import, and the path
+# that they were imported from.
+_ROOT_IMPORTED: dict[str, Path] = {}
+
+
+def is_builtin(name: RuleName) -> bool:
+    """Whether ``name`` names rules that come with Fixit, not custom rules."""
+    return any(
+        name.module == package or name.module.startswith(f"{package}.")
+        for package in BUILTIN_PACKAGES
+    )
+
+
+def collect_rules(
+    enable: Sequence[RuleName],
+    disable: Sequence[RuleName],
+    *,
+    root_import: Path | None = None,
+    custom_rules: bool = True,
+) -> tuple[type[Rule], ...]:
+    """
+    The rules of ``enable`` without those of ``disable``, but for the rules that
+    ``enable`` names one by one, sorted by name. A module that cannot be imported
+    is a warning. ``root_import`` is the path that ``enable-root-import`` adds to
+    ``sys.path``. With ``custom_rules`` false, only the built-in rules are
+    imported: the others in ``enable`` are skipped with a warning, those in
+    ``disable`` and ``root_import`` silently.
+    """
+    if not custom_rules:
+        root_import = None
+    enabled: set[type[Rule]] = set()
+    named: set[type[Rule]] = set()
+    disabled: set[type[Rule]] = set()
+    with _on_path(root_import):
+        for name in enable:
+            if not (custom_rules or is_builtin(name)):
+                _warn(f"Skipped rules '{name}': custom rules are turned off")
+                continue
+            rules = _load(name, root_import)
+            if rules is not None and not rules and name.name is None:
+                _warn(
+                    f"No rules in '{name}'"
+                    + (f" from {name.root}" if name.local else "")
+                )
+            enabled.update(rules or ())
+            if name.name is not None:
+                named.update(rules or ())
+        for name in disable:
+            if custom_rules or is_builtin(name):
+                disabled.update(_load(name, root_import) or ())
+    rules = enabled - (disabled - named)
+    return tuple(sorted(rules, key=lambda r: (r.name(), r.__module__)))
+
+
+def _load(name: RuleName, root_import: Path | None) -> tuple[type[Rule], ...] | None:
+    """The rules of ``name``, or ``None`` after a warning."""
+    top = name.module.partition(".")[0]
+    if not name.local and top in _ROOT_IMPORTED and _ROOT_IMPORTED[top] != root_import:
+        path = _ROOT_IMPORTED[top]
+        message = f"could not import rule(s) {name}: imported from another root, {path}"
+        _warn(f"Failed to load rules '{name.module}': CollectionError: {message}")
+        return None
+    try:
+        rules = import_rules(name)
+    # Importing a rule runs its code, which can raise any exception.
+    except Exception as e:  # noqa: BLE001
+        _warn(f"Failed to load rules '{name.module}': {type(e).__name__}: {e}")
+        return None
+    if root_import is not None and not name.local and _is_under(top, root_import):
+        _ROOT_IMPORTED.setdefault(top, root_import)
+    return rules
+
+
+def _is_under(package: str, path: Path) -> bool:
+    """Whether the module ``package`` was imported from under ``path``."""
+    module = sys.modules.get(package)
+    places = [getattr(module, "__file__", None), *getattr(module, "__path__", [])]
+    return any(p and Path(p).resolve().is_relative_to(path) for p in places)
+
+
+@contextmanager
+def _on_path(path: Path | None) -> Iterator[None]:
+    """``path`` at the end of ``sys.path``, while in the block."""
+    if path is None:
+        yield
+        return
+    sys.path.append(str(path))
+    try:
+        yield
+    finally:
+        sys.path.remove(str(path))
+
+
+def _warn(message: str) -> None:
+    if message not in _WARNED:
+        _WARNED.add(message)
+        log.warning(message)
