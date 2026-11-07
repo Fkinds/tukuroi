@@ -24,7 +24,7 @@ a violation with :meth:`Rule.report`, with a fix or without one::
 
 import ast
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import ClassVar
 
@@ -64,6 +64,8 @@ class Report:
     message: str
     # Empty when the report has no fix.
     edits: tuple[Edit, ...]
+    # The node reported, for the comments that may suppress it.
+    node: ast.AST = field(compare=False, repr=False, default_factory=ast.Module)
 
 
 class Rule:
@@ -125,4 +127,4 @@ class Rule:
         span = self.source.span(node)
         fix = check_fix(edits) if replacement is None else (Edit(span, replacement),)
         position = self.source.lines.position(span.start)
-        self.reports.append(Report(self.name(), span, position, text, fix))
+        self.reports.append(Report(self.name(), span, position, text, fix, node))
