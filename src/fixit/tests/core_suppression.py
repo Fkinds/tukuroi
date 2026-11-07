@@ -52,6 +52,28 @@ def named_tuple(tree: ast.Module) -> Iterator[ast.AST]:
             yield node
 
 
+def sorted_attributes(tree: ast.Module) -> Iterator[ast.AST]:
+    """The classes with a ``@sorted-attributes`` docstring, as SortedAttributes."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and "@sorted-attributes" in (
+            ast.get_docstring(node) or ""
+        ):
+            yield node
+
+
+def callable_ellipsis(tree: ast.Module) -> Iterator[ast.AST]:
+    """``Callable[[...], T]``, as VariadicCallableSyntax reports."""
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "Callable"
+            and isinstance(node.slice, ast.Tuple)
+            and isinstance(node.slice.elts[0], ast.List)
+        ):
+            yield node
+
+
 def unsuppressed(text: str, finder: Finder, rule: str = "X") -> tuple[str, ...]:
     """The ``line:column`` of each node found that the comments do not suppress."""
     source = Source.from_text(text)
@@ -307,3 +329,126 @@ class BlockFooterTest(SuppressionTestCase):
             ("case, above, at the case", f"match x:\n    case 1:\n        pass\n    # lint-ignore\n    case {{1: y}} if {CALL}:\n        pass\n", ()),
         )  # fmt: skip
         self.run_cases(assert_true, calls)
+
+
+NT = "from typing import NamedTuple\n"
+CB = "from typing import Callable\n"
+SORTED = '    """@sorted-attributes"""\n    b = 1\n    a = 2\n'
+
+
+class ItemTest(SuppressionTestCase):
+    def test_call_inside_brackets(self) -> None:
+        cases = (
+            ("arg, comma", f"x = 1\nf(\n    {CALL},  # lint-ignore\n)\n", ()),
+            ("last arg", f"x = 1\nf(\n    c,\n    {CALL}  # lint-ignore\n)\n", ("4:4",)),
+            ("before arg", f"x = 1\nf(\n    # lint-ignore\n    {CALL},\n)\n", ("4:4",)),
+            ("before 1st", f"x = 1\n[\n    # lint-ignore\n    {CALL},\n]\n", ()),
+            ("blank, then before 1st", f"x = 1\n[\n\n    # lint-ignore\n    {CALL},\n]\n", ()),
+            ("before 1st, then blank", f"x = 1\n[\n    # lint-ignore\n\n    {CALL},\n]\n", ()),
+            ("before 2nd", f"x = 1\n[\n    c,\n    # lint-ignore\n    {CALL},\n]\n", ("5:4",)),
+            ("last, no comma", f"x = 1\n[\n    c,\n    {CALL}  # lint-ignore\n]\n", ()),
+            ("end of [", f"x = 1\n[  # lint-ignore\n    {CALL},\n]\n", ("3:4",)),
+            ("tuple", f"x = 1\n(\n    # lint-ignore\n    {CALL},\n)\n", ("4:4",)),
+        )  # fmt: skip
+        self.run_cases(assert_true, cases)
+
+    def test_other_items(self) -> None:
+        cases = (
+            ("last of a list, comma", f"x = [\n    c,\n    {CALL},  # lint-ignore\n]\n", ()),
+            ("1st of a list, after the last", f"x = [\n    {CALL},\n    c  # lint-ignore\n]\n", ()),
+            ("1st of a list, after the last with a comma", f"x = [\n    {CALL},\n    c,  # lint-ignore\n]\n", ()),
+            ("1st of a list, comma", f"x = [\n    {CALL},  # lint-ignore\n    c,\n]\n", ()),
+            ("last of a tuple, comma", f"x = (\n    c,\n    {CALL},  # lint-ignore\n)\n", ("3:4",)),
+            ("1st of a tuple, comma", f"x = (\n    {CALL},  # lint-ignore\n    c,\n)\n", ()),
+            ("1st of a set, comma", f"x = {{\n    {CALL},  # lint-ignore\n    c,\n}}\n", ()),
+            ("1st of a dict, comma", f"x = {{\n    1: {CALL},  # lint-ignore\n    2: c,\n}}\n", ()),
+            ("last arg of 2, comma", f"f(\n    c,\n    {CALL},  # lint-ignore\n)\n", ()),
+            ("1st in a subscript, comma", f"x[\n    {CALL},  # lint-ignore\n    c,\n]\n", ()),
+            ("last in a subscript, comma", f"x[\n    c,\n    {CALL},  # lint-ignore\n]\n", ()),
+            ("last param, comma", f"def f(\n    b,\n    a={CALL},  # lint-ignore\n):\n    pass\n", ()),
+            ("keyword", f"f(\n    k={CALL},  # lint-ignore\n)\n", ()),
+            ("in parentheses", f"f(\n    ({CALL}),  # lint-ignore\n)\n", ()),
+            ("last of a set, comma", f"x = {{\n    {CALL},  # lint-ignore\n}}\n", ("2:4",)),
+            ("last dict key, comma", f"x = {{\n    {CALL}: 1,  # lint-ignore\n}}\n", ("2:4",)),
+            ("last dict value, comma", f"x = {{\n    1: {CALL},  # lint-ignore\n}}\n", ("2:7",)),
+            ("with item", f"with (\n    {CALL} as y,  # lint-ignore\n    z,\n):\n    pass\n", ()),
+            ("class base", f"class C(\n    {CALL},  # lint-ignore\n):\n    pass\n", ()),
+            ("default", f"def f(\n    a={CALL},  # lint-ignore\n):\n    pass\n", ()),
+            ("keyword-only default", f"def f(\n    *,\n    a={CALL},  # lint-ignore\n):\n    pass\n", ()),
+            ("lambda default", f"g = lambda a={CALL},  b=1: a\n", ("1:13",)),
+            ("list comprehension, after [", f"x = [\n    # lint-ignore\n    {CALL} for c in d\n]\n", ()),
+            ("list comprehension, after the for", f"x = [\n    {CALL}\n    for c in d  # lint-ignore\n]\n", ()),
+            ("subscript, after [", f"x[\n    # lint-ignore\n    {CALL}\n]\n", ()),
+            ("call in a set, before 1st", f"x = {{\n    # lint-ignore\n    {CALL},\n}}\n", ("3:4",)),
+        )  # fmt: skip
+        self.run_cases(assert_true, cases)
+
+
+class DecoratorTest(SuppressionTestCase):
+    def test_decorated_class_no_named_tuple(self) -> None:
+        body = "class Foo(NamedTuple):\n    pass\n"
+        cases = (
+            ("between", f"{NT}@deco\n# lint-ignore\n{body}", ()),
+            ("blank, then between", f"{NT}@deco\n\n# lint-ignore\n{body}", ()),
+            ("between, then blank", f"{NT}@deco\n# lint-ignore\n\n{body}", ()),
+            ("end of decorator", f"{NT}@deco  # lint-ignore\n{body}", ("3:0",)),
+            ("between decorators", f"{NT}@d1\n# lint-ignore\n@d2\n{body}", ("5:0",)),
+            ("end of body", f"{NT}@deco\nclass Foo(NamedTuple):\n    pass  # lint-ignore\n", ("3:0",)),
+        )  # fmt: skip
+        self.run_cases(named_tuple, cases)
+
+    def test_decorated_class_sorted_attributes(self) -> None:
+        cases = (
+            ("no comment", f"x = 1\n@deco\nclass C:\n{SORTED}", ("3:0",)),
+            ("above decorator", f"x = 1\n# lint-ignore\n@deco\nclass C:\n{SORTED}", ()),
+            ("between", f"x = 1\n@deco\n# lint-ignore\nclass C:\n{SORTED}", ()),
+            ("end of decorator", f"x = 1\n@deco  # lint-ignore\nclass C:\n{SORTED}", ("3:0",)),
+            ("end of class", f"x = 1\n@deco\nclass C:  # lint-ignore\n{SORTED}", ()),
+        )  # fmt: skip
+        self.run_cases(sorted_attributes, cases)
+
+    def test_call_in_decorator(self) -> None:
+        cls = "class C:\n    pass\n"
+        cases = (
+            ("no comment", f"x = 1\n@deco({CALL})\n{cls}", ("2:6",)),
+            ("end of decorator", f"x = 1\n@deco({CALL})  # lint-ignore\n{cls}", ()),
+            ("above decorator", f"x = 1\n# lint-ignore\n@deco({CALL})\n{cls}", ()),
+            ("between decorators", f"x = 1\n@d1\n# lint-ignore\n@deco({CALL})\n{cls}", ()),
+            ("between", f"x = 1\n@deco({CALL})\n# lint-ignore\n{cls}", ()),
+            ("end of class", f"x = 1\n@deco({CALL})\nclass C:  # lint-ignore\n    pass\n", ()),
+            ("2nd decorator, end of 1st", f"x = 1\n@d1  # lint-ignore\n@deco({CALL})\n{cls}", ("3:6",)),
+            ("1st decorator, between", f"x = 1\n@deco({CALL})\n# lint-ignore\n@d2\n{cls}", ("2:6",)),
+        )  # fmt: skip
+        self.run_cases(assert_true, cases)
+
+
+class AnnotationTest(SuppressionTestCase):
+    def test_parameter_annotation(self) -> None:
+        def_ = (
+            "def f(\n    a: Callable[[...], int],\n    b: int,\n) -> None:\n    pass\n"
+        )
+        last = (
+            "def f(\n    b: int,\n    a: Callable[[...], int]\n) -> None:\n    pass\n"
+        )
+        cases = (
+            ("no comment", f"{CB}{def_}", ("3:7",)),
+            ("after comma", CB + def_.replace("int],", "int],  # lint-ignore"), ()),
+            ("last, no comma", CB + last.replace("int]\n", "int]  # lint-ignore\n"), ("4:7",)),
+            ("above def", f"{CB}# lint-ignore\n{def_}", ()),
+            ("end of `def f(`", CB + def_.replace("(\n", "(  # lint-ignore\n"), ("3:7",)),
+            ("line before param", CB + def_.replace("    a", "    # lint-ignore\n    a"), ("4:7",)),
+            ("end of header", CB + def_.replace("None:", "None:  # lint-ignore"), ()),
+        )  # fmt: skip
+        self.run_cases(callable_ellipsis, cases)
+
+    def test_variable_annotation(self) -> None:
+        sub = "x: Callable[\n    [...],\n    int\n]\n"
+        cases = (
+            ("no comment", f"{CB}{sub}", ("2:3",)),
+            ("end of line", f"{CB}x: Callable[[...], int]  # lint-ignore\n", ()),
+            ("end of [", CB + sub.replace("[\n", "[  # lint-ignore\n", 1), ("2:3",)),
+            ("after [", CB + sub.replace("[\n", "[\n    # lint-ignore\n", 1), ()),
+            ("after 1st", CB + sub.replace("],", "],  # lint-ignore"), ("2:3",)),
+            ("after last", CB + sub.replace("int", "int  # lint-ignore"), ()),
+        )  # fmt: skip
+        self.run_cases(callable_ellipsis, cases)

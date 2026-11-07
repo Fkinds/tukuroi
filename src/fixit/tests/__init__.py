@@ -25,9 +25,12 @@ from .core_source import (
     SourceParseErrorTest,
 )
 from .core_suppression import (
+    AnnotationTest,
     BlockFooterTest,
     ClauseTest,
+    DecoratorTest,
     IsSuppressedTest,
+    ItemTest,
     StatementTest,
 )
 from .core_text import LineIndexTest, PositionTest, SpanTest
