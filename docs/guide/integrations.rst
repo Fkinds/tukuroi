@@ -15,6 +15,10 @@ To get this functionality, install the ``lsp`` extras (e.g.
 the Fixit LSP server. See the :ref:`lsp command <lsp_command>` for command
 usage details.
 
+The server imports the custom rules that the configuration of each opened file
+enables. To open code that you do not trust, start it with
+``fixit --no-custom-rules lsp`` (see :ref:`security`).
+
 Examples of client setup:
 
 - VSCode:
@@ -75,6 +79,10 @@ your repository.
 
 To read more about how you can customize your pre-commit configuration,
 see the `pre-commit docs <https://pre-commit.com/#pre-commit-configyaml---hooks>`__.
+
+The hooks import the custom rules that the repo's configuration enables, and
+pre-commit runs the hooks that the repo defines: only run them on repos that
+you trust (see :ref:`security`).
 
 
 VSCode

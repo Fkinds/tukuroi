@@ -19,6 +19,26 @@ The following options are available for all commands:
     Override the normal hierarchical configuration and use the configuration
     from the specified path, ignoring all other configuration files entirely.
 
+.. attribute:: --custom-rules / --no-custom-rules
+
+    Load custom rules, or turn them off. Custom rules are the rules that do not
+    come with Fixit (anything but :mod:`fixit.rules` and ``fixit.upgrade``),
+    such as local rules in the repo. Fixit loads them by default. See
+    :ref:`security` for when to turn them off, and what Fixit does then.
+
+    The environment variable ``FIXIT_CUSTOM_RULES`` sets the default, and the
+    option wins over it. Fixit reads the variable as
+    `Click <https://click.palletsprojects.com/>`_ reads a boolean, ignoring
+    letter case:
+
+    - ``1``, ``true``, ``t``, ``yes``, ``y``, ``on``: load custom rules.
+    - ``0``, ``false``, ``f``, ``no``, ``n``, ``off``: turn them off.
+    - Unset or empty: the default, load them.
+    - Any other value is a usage error.
+
+    No standard defines how to write a boolean in an environment variable, so
+    these are the values that Click accepts.
+
 .. attribute:: --tags TAGS
 
     Select or filter the set of lint rules to apply based on their tags.

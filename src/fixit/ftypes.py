@@ -110,12 +110,28 @@ def is_collection(value: Any) -> bool:
     return isinstance(value, Iterable) and not isinstance(value, (str, bytes))
 
 
+# The packages of the rules that come with Fixit. With custom rules turned off
+# (`--no-custom-rules`), Fixit imports no other rules.
+BUILTIN_RULE_PACKAGES = ("fixit.rules", "fixit.upgrade")
+
+
 @dataclass(frozen=True)
 class QualifiedRule:
     module: str
     name: str | None = None
     local: str | None = None
     root: Path | None = field(default=None, hash=False, compare=False)
+
+    @property
+    def builtin(self) -> bool:
+        """
+        Whether this names rules that come with Fixit, not custom rules. The
+        module of a local rule starts with ".", so it never matches.
+        """
+        return any(
+            self.module == package or self.module.startswith(f"{package}.")
+            for package in BUILTIN_RULE_PACKAGES
+        )
 
     def __str__(self) -> str:
         return self.module + (f":{self.name}" if self.name else "")
@@ -182,6 +198,8 @@ class Options:
     output_format: OutputFormat | None = None
     output_template: str = ""
     print_metrics: bool = False
+    # False: import only the built-in rules (see BUILTIN_RULE_PACKAGES).
+    custom_rules: bool = True
 
 
 @dataclass
@@ -207,6 +225,8 @@ class Config:
 
     # feature flags
     enable_root_import: bool | Path = False
+    # False: import only the built-in rules, and ignore enable_root_import.
+    custom_rules: bool = True
 
     # rule selection
     enable: list[QualifiedRule] = field(
