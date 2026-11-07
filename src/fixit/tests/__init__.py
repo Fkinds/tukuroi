@@ -21,6 +21,7 @@ from .core_edits import ApplyFixesTest, CheckFixTest, DropsCommentsTest
 from .core_engine import DispatchTest, ReportsTest
 from .core_fix import FixTest, RuffFormatTest
 from .core_imports import AddImportTest
+from .core_loader import ImportRulesTest, LoaderRuleNameTest
 from .core_names import ImportTableTest
 from .core_rule import RuleCasesTest, RuleNameTest, RuleReportTest, RuleVisitsTest
 from .core_source import (
