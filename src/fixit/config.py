@@ -158,6 +158,11 @@ def find_rules(rule: QualifiedRule) -> Iterable[type[LintRule]]:
             raise CollectionError(f"could not import rule(s) {rule}", rule) from e
 
 
+def log_skipped(rule: QualifiedRule) -> None:
+    """Warn that ``rule``, a custom rule, is not imported."""
+    log.warning(f"Skipped rules '{rule}': custom rules are turned off")
+
+
 def walk_module(module: ModuleType) -> dict[str, type[LintRule]]:
     """
     Given a module object, return a mapping of all rule names to classes.
@@ -191,6 +196,10 @@ def collect_rules(
 ) -> Collection[LintRule]:
     """
     Import and return rules specified by `enables` and `disables`.
+
+    With custom rules turned off, imports only the built-in rules: skips the
+    others in `enables` with a warning, and those in `disables` silently, and
+    ignores `enable-root-import`.
     """
 
     all_rules: set[type[LintRule]] = set()
@@ -201,7 +210,7 @@ def collect_rules(
         disabled_rules = {}
 
     with ExitStack() as stack:
-        if config.enable_root_import:
+        if config.enable_root_import and config.custom_rules:
             path = (
                 config.root / config.enable_root_import
                 if isinstance(config.enable_root_import, Path)
@@ -210,6 +219,9 @@ def collect_rules(
             stack.enter_context(append_sys_path(path))
 
         for qualified_rule in config.enable:
+            if not (config.custom_rules or qualified_rule.builtin):
+                log_skipped(qualified_rule)
+                continue
             try:
                 rules = set(find_rules(qualified_rule))
                 if qualified_rule.name:
@@ -222,6 +234,9 @@ def collect_rules(
                 )
 
         for qualified_rule in config.disable:
+            # Custom rules are not imported, so there is nothing to disable.
+            if not (config.custom_rules or qualified_rule.builtin):
+                continue
             try:
                 disabled_rules.update(
                     {
@@ -564,6 +579,8 @@ def generate_config(
     config = merge_configs(path, raw_configs, root=root)
 
     if options:
+        config.custom_rules = options.custom_rules
+
         if options.tags:
             config.tags = options.tags
 
@@ -580,11 +597,14 @@ def generate_config(
     return config
 
 
-def validate_config(path: Path) -> list[str]:
+def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
     """
     Validate the config provided. The provided path is expected to be a valid toml
     config file. Any exception found while parsing or importing will be added to a list
     of exceptions that are returned.
+
+    With ``custom_rules`` false, only the names of custom rules are checked: they
+    are not imported, and each one logs a warning.
     """
     exceptions: list[str] = []
     try:
@@ -595,6 +615,9 @@ def validate_config(path: Path) -> list[str]:
             for rule in rules:
                 try:
                     qualified_rule = parse_rule(rule, root, configs)
+                    if not (custom_rules or qualified_rule.builtin):
+                        log_skipped(qualified_rule)
+                        continue
                     try:
                         for _ in find_rules(qualified_rule):
                             pass

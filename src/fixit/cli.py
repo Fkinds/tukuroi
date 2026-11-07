@@ -47,6 +47,19 @@ def splash(
         click.secho(f"🧼 {len(visited)} {f(len(visited))} clean 🧼", err=True)
 
 
+def require_builtin(ctx: click.Context, rules: Sequence[QualifiedRule]) -> None:
+    """
+    With custom rules turned off, a custom rule named on the command line is a
+    usage error: unlike one in a config, the person running fixit wrote it.
+    """
+    if custom := [str(rule) for rule in rules if not rule.builtin]:
+        names = ", ".join(repr(name) for name in custom)
+        raise click.UsageError(
+            f"Custom rules are turned off: {names}. Pass --custom-rules to load them.",
+            ctx=ctx,
+        )
+
+
 class _FixitGroup(click.Group):
     """Keep the pre-Click 8.2 behavior for an empty command line."""
 
@@ -84,6 +97,13 @@ class _FixitGroup(click.Group):
     help="Override configured rules",
 )
 @click.option(
+    "--custom-rules/--no-custom-rules",
+    default=True,
+    envvar="FIXIT_CUSTOM_RULES",
+    show_envvar=True,
+    help="Load rules other than the built-in ones (default: load)",
+)
+@click.option(
     "--output-format",
     "-o",
     type=click.Choice([o.name for o in OutputFormat], case_sensitive=False),
@@ -104,6 +124,7 @@ def main(
     config_file: Path | None,
     tags: str,
     rules: str,
+    custom_rules: bool,
     output_format: OutputFormat | None,
     output_template: str,
     print_metrics: bool,
@@ -113,20 +134,25 @@ def main(
         level = logging.DEBUG if debug else logging.ERROR
     logging.basicConfig(level=level, stream=sys.stderr)
 
+    qualified_rules = sorted(
+        {
+            parse_rule(r, Path.cwd())
+            for r in (rs.strip() for rs in rules.split(","))
+            if r
+        }
+    )
+    if not custom_rules:
+        require_builtin(ctx, qualified_rules)
+
     ctx.obj = Options(
         debug=debug,
         config_file=config_file,
         tags=Tags.parse(tags),
-        rules=sorted(
-            {
-                parse_rule(r, Path.cwd())
-                for r in (rs.strip() for rs in rules.split(","))
-                if r
-            }
-        ),
+        rules=qualified_rules,
         output_format=output_format,
         output_template=output_template,
         print_metrics=print_metrics,
+        custom_rules=custom_rules,
     )
 
 
@@ -296,9 +322,17 @@ def test(ctx: click.Context, rules: Sequence[str]) -> None:
     """
     test lint rules and their VALID/INVALID cases
     """
+    options: Options = ctx.obj
     qual_rules = [parse_rule(rule, Path.cwd().resolve()) for rule in rules]
+    if not options.custom_rules:
+        require_builtin(ctx, qual_rules)
     lint_rules = collect_rules(
-        Config(enable=qual_rules, disable=[], python_version=None)
+        Config(
+            enable=qual_rules,
+            disable=[],
+            python_version=None,
+            custom_rules=options.custom_rules,
+        )
     )
     test_cases = generate_lint_rule_test_cases(lint_rules)
 
@@ -369,7 +403,8 @@ def validate_config_command(ctx: click.Context, path: Path) -> None:
     """
     validate the config provided
     """
-    exceptions = validate_config(path)
+    options: Options = ctx.obj
+    exceptions = validate_config(path, custom_rules=options.custom_rules)
 
     try:
         from rich import print as pprint
