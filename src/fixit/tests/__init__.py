@@ -25,6 +25,7 @@ from .core_source import (
     SourceParseErrorTest,
 )
 from .core_suppression import (
+    BlockFooterTest,
     ClauseTest,
     IsSuppressedTest,
     StatementTest,

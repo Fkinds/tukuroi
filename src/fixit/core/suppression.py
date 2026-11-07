@@ -15,7 +15,9 @@ it, and takes:
 - the comment at the end of the statement: after a simple statement, or after
   the ``:`` of the header of a compound statement (or after its one-line body);
 - the comment lines above the statement (and its decorators), back to the code
-  before it.
+  before it. When the clause before it ends with an indented block, the comment
+  lines up to the last one indented as deep as that block belong to the block,
+  not to the statement (libcst's ``IndentedBlock.footer``).
 
 A statement in a one-line body (``if x: f()``) is not a statement of its own
 for this: the walk goes on to the compound statement. Statements joined with
@@ -173,7 +175,72 @@ class NodeComments:
                 region.append(self._line_comments[line])
             line -= 1
         region.reverse()
+        indent = self._closing_block_indent(node)
+        if indent is not None:
+            columns = [self._source.lines.position(c.span.start).column for c in region]
+            last = max((i for i, c in enumerate(columns) if c >= indent), default=-1)
+            region = region[last + 1 :]
         yield from region
+
+    def _closing_block_indent(self, node: ast.AST) -> int | None:
+        """
+        The indent of the block that ends right before ``node``, when the clause
+        before ``node`` ends with an indented block.
+        """
+        previous = self._previous_clause(node)
+        block = self._last_block(previous) if previous is not None else []
+        if not block or not self._starts_line(block[0]):
+            return None
+        line = self._line_text(self._start(block[0]).line)
+        return len(line) - len(line.lstrip())
+
+    def _previous_clause(self, node: ast.AST) -> ast.AST | list[ast.stmt] | None:
+        """The clause, or the block, right before ``node``."""
+        parent = self._parent(node)
+        if isinstance(node, ast.If) and self._is_elif_of(node, parent):
+            return parent.body  # type: ignore[attr-defined]
+        if isinstance(node, ast.excepthandler) and isinstance(
+            parent, ast.Try | ast.TryStar
+        ):
+            index = _index(parent.handlers, node)
+            return parent.handlers[index - 1] if index else parent.body
+        if isinstance(node, ast.match_case) and isinstance(parent, ast.Match):
+            index = _index(parent.cases, node)
+            return parent.cases[index - 1] if index else None
+        siblings = self._siblings(node)
+        if siblings is None:
+            return None
+        index = _index(siblings, node)
+        return siblings[index - 1] if index else None
+
+    def _is_elif_of(self, node: ast.If, parent: ast.AST) -> bool:
+        """Whether ``node`` is the ``elif`` of ``parent``, not an ``if`` in an ``else``."""
+        if not (
+            isinstance(parent, ast.If) and parent.orelse and parent.orelse[0] is node
+        ):
+            return False
+        start = self._start(node)
+        return self._line_text(start.line)[start.column :].startswith("elif")
+
+    def _last_block(self, clause: ast.AST | list[ast.stmt]) -> Sequence[ast.AST]:
+        """The statements of the block that ``clause`` ends with."""
+        if isinstance(clause, list):
+            return clause
+        if isinstance(clause, ast.If):
+            orelse = clause.orelse
+            if orelse and self._is_elif_of(orelse[0], clause):
+                return self._last_block(orelse[0])
+            return orelse or clause.body
+        if isinstance(clause, ast.For | ast.AsyncFor | ast.While):
+            return clause.orelse or clause.body
+        if isinstance(clause, ast.Try | ast.TryStar):
+            if clause.finalbody or clause.orelse:
+                return clause.finalbody or clause.orelse
+            return clause.handlers[-1].body if clause.handlers else clause.body
+        if isinstance(clause, ast.Match):
+            return clause.cases  # The block of the cases, not of the last case.
+        body = getattr(clause, "body", None)
+        return body if isinstance(body, list) else []
 
     def _module_header(self) -> Iterator[Comment]:
         """The comment lines before the first statement of the module."""
