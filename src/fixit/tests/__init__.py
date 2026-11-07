@@ -17,6 +17,7 @@ from .characterization_lsp import LspCharacterizationTest
 from .characterization_suppression import SuppressionCharacterizationTest
 from .config import ConfigTest
 from .core_directives import DirectiveCoversTest, ParseDirectivesTest
+from .core_edits import ApplyFixesTest, CheckFixTest, DropsCommentsTest
 from .core_names import ImportTableTest
 from .core_source import (
     SourceContentTest,
