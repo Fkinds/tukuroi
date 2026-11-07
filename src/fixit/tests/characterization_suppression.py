@@ -122,6 +122,7 @@ class SuppressionCharacterizationTest(TestCase):
             ("line above", f"x = 1\n# lint-ignore\n{CALL}\n", ()),
             ("above, 1 blank", f"x = 1\n# lint-ignore\n\n{CALL}\n", ()),
             ("above, 2 blanks", f"x = 1\n# lint-ignore\n\n\n{CALL}\n", ()),
+            ("blank, then above", f"x = 1\n\n# lint-ignore\n{CALL}\n", ()),
             ("above, then other", f"x = 1\n# lint-ignore\n# other\n{CALL}\n", ()),
             ("other, then above", f"x = 1\n# other\n# lint-ignore\n{CALL}\n", ()),
             ("statement between", f"x = 1\n# lint-ignore\ny = 2\n{CALL}\n", ("4:0",)),
@@ -182,6 +183,16 @@ class SuppressionCharacterizationTest(TestCase):
             ),
             ("before arg", f"x = 1\nf(\n    # lint-ignore\n    {CALL},\n)\n", ("4:4",)),
             ("before 1st", f"x = 1\n[\n    # lint-ignore\n    {CALL},\n]\n", ()),
+            (
+                "blank, then before 1st",
+                f"x = 1\n[\n\n    # lint-ignore\n    {CALL},\n]\n",
+                (),
+            ),
+            (
+                "before 1st, then blank",
+                f"x = 1\n[\n    # lint-ignore\n\n    {CALL},\n]\n",
+                (),
+            ),
             # NOTE: unlike the first element, the second one is not covered.
             (
                 "before 2nd",
@@ -284,6 +295,8 @@ class SuppressionCharacterizationTest(TestCase):
             ("no comment", f"{NT}@deco\n{body}", ("3:0",)),
             ("above decorator", f"{NT}# lint-ignore\n@deco\n{body}", ()),
             ("between", f"{NT}@deco\n# lint-ignore\n{body}", ()),
+            ("blank, then between", f"{NT}@deco\n\n# lint-ignore\n{body}", ()),
+            ("between, then blank", f"{NT}@deco\n# lint-ignore\n\n{body}", ()),
             # NOTE: unlike the lines around it, the decorator line is not used.
             ("end of decorator", f"{NT}@deco  # lint-ignore\n{body}", ("3:0",)),
             (
