@@ -214,7 +214,9 @@ class CustomRulesSwitchTest(TestCase):
                 self.assert_lint(result, rules, warning, path)
                 self.assertEqual(imported(result), set())
 
-    def test_warning_for_each_file(self) -> None:
+    def test_21_warning_for_each_file(self) -> None:
+        # #21: the new loader logs the warning once in a process for each rule,
+        # so it is logged once here (issuecomment-6706326492).
         before = {"pyproject.toml": root(".rules"), **RULES, "t.py": SOURCE}
         args = ["--no-custom-rules", "fix", "--automatic", "t.py", "u.py"]
         result = run(before | {"u.py": SOURCE}, args)

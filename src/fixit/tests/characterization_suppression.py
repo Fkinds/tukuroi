@@ -9,7 +9,9 @@ the line and column printed by ``fixit lint``.
 
 They run the CLI only, so that the engine rewrite (#21) can be checked against
 them. The expected values are copied from the output of the libcst engine.
-``NOTE`` marks behavior that looks wrong but is pinned as is.
+``NOTE`` marks behavior that looks wrong but is pinned as is. ``#21`` marks the
+directives whose meaning the new engine changes: it reads them with a new
+grammar, so that a mistyped directive no longer suppresses every rule.
 """
 
 from pathlib import Path
@@ -446,29 +448,53 @@ class SuppressionCharacterizationTest(TestCase):
             "# lint-ignore: NoNamedTuple,UseAssertIn",
             "# lint-ignore: NoNamedTuple,  UseAssertIn",
             "# lint-ignore: UseAssertInRule",
-            "# lint-ignore: useassertin",
-            # NOTE: "Rule" is stripped before the lower-case name is compared.
-            "# lint-ignore: useassertinRule",
             "# lint-ignore:UseAssertIn",
             "# lint-ignore:  UseAssertIn",
-            "# lint-ignore UseAssertIn",
-            "# lint-ignore\tUseAssertIn",
             "#lint-ignore",
             "#\tlint-ignore",
             "# noqa  # lint-ignore",
             "# type: ignore # lint-fixme: UseAssertIn",
+        )
+        for comment in comments:
+            with self.subTest(comment):
+                self.assert_lint("UseAssertIn", f"x = 1\n{CALL}  {comment}\n", ())
+
+    def test_21_directive_that_suppresses(self) -> None:
+        # #21: the new grammar of the directives (issuecomment-6706590667) is
+        # `lint-ignore` or `lint-ignore: <name>, <name>`, read in each part of a
+        # comment split at "#". A part that starts with `lint-ignore` or
+        # `lint-fixme` followed by no letter, digit or "_" is a directive; one
+        # that does not fit the grammar suppresses nothing, with a warning. A
+        # name matches only with the same case, with or without "Rule".
+        comments = (
+            # #21: does not suppress: the name must have the same case.
+            "# lint-ignore: useassertin",
+            # NOTE: "Rule" is stripped before the lower-case name is compared.
+            # #21: does not suppress: the name must have the same case.
+            "# lint-ignore: useassertinRule",
+            # #21: does not suppress, with a warning: the names need ":".
+            "# lint-ignore UseAssertIn",
+            # #21: does not suppress, with a warning: the names need ":".
+            "# lint-ignore\tUseAssertIn",
+            # #21: does not suppress, with a warning: no text after the names.
             "# lint-ignore: UseAssertIn because of x",
             # NOTE: ":" without a rule name suppresses every rule.
+            # #21: does not suppress, with a warning: no name after ":".
             "# lint-ignore:",
             # NOTE: a space before ":" drops the names; every rule is suppressed.
+            # #21: suppresses NoNamedTuple only, so UseAssertIn is reported.
             "# lint-ignore : NoNamedTuple",
             # NOTE: a leading comma drops the names; every rule is suppressed.
+            # #21: does not suppress, with a warning: no name before ",".
             "# lint-ignore: , NoNamedTuple",
             # NOTE: names in parentheses are dropped; every rule is suppressed.
+            # #21: does not suppress, with a warning: "(" is not ":".
             "# lint-ignore(NoNamedTuple)",
             # NOTE: only the prefix is matched; every rule is suppressed.
+            # #21: does not suppress, and no warning: not a directive.
             "# lint-ignored",
             # NOTE: only the prefix is matched; every rule is suppressed.
+            # #21: does not suppress, with a warning: "-later" does not fit.
             "# lint-fixme-later: NoNamedTuple",
         )
         for comment in comments:
@@ -479,10 +505,6 @@ class SuppressionCharacterizationTest(TestCase):
         comments = (
             "# lint-ignore: NoNamedTuple",
             "# lint-fixme: NoNamedTuple",
-            "# lint-ignore: NoNamedTuple,",
-            # NOTE: a space before "," drops the names after it.
-            "# lint-ignore: NoNamedTuple ,UseAssertIn",
-            "# lint-ignore: NoNamedTuple UseAssertIn",
             "# lint-ignore: UseAssertInRuleRule",
             "# lint-ignore: Rule",
             "# lint-ignore: UseAssert",
@@ -491,15 +513,34 @@ class SuppressionCharacterizationTest(TestCase):
             "# lint-ignore: useAssertIn",
             # NOTE: "useassertinRule" suppresses but "useassertinrule" does not.
             "# lint-ignore: useassertinrule",
-            # NOTE: the qualified name used in the config is not accepted.
-            "# lint-ignore: fixit.rules:UseAssertIn",
             "# Lint-Ignore",
             "# LINT-IGNORE",
             "# lint_ignore",
             "# see lint-ignore",
+        )
+        for comment in comments:
+            with self.subTest(comment):
+                source = f"x = 1\n{CALL}  {comment}\n"
+                self.assert_lint("UseAssertIn", source, ("2:0",))
+
+    def test_21_directive_that_does_not_suppress(self) -> None:
+        # #21: see test_21_directive_that_suppresses for the new grammar.
+        comments = (
+            # #21: still does not suppress, but with a warning: no name after ",".
+            "# lint-ignore: NoNamedTuple,",
+            # NOTE: a space before "," drops the names after it.
+            # #21: suppresses: spaces around "," are allowed.
+            "# lint-ignore: NoNamedTuple ,UseAssertIn",
+            # #21: still does not suppress, but with a warning: no "," between.
+            "# lint-ignore: NoNamedTuple UseAssertIn",
+            # NOTE: the qualified name used in the config is not accepted.
+            # #21: still does not suppress, but with a warning: not a rule name.
+            "# lint-ignore: fixit.rules:UseAssertIn",
             # NOTE: only the first directive in a comment is read.
+            # #21: suppresses: each directive in a comment is read.
             "# lint-ignore: NoNamedTuple # lint-ignore: UseAssertIn",
             # NOTE: only the first directive in a comment is read.
+            # #21: suppresses: each directive in a comment is read.
             "# lint-ignore: NoNamedTuple  # lint-ignore",
         )
         for comment in comments:
