@@ -14,8 +14,9 @@ them. The expected values are copied from the output of the libcst engine.
 The new engine runs ``ruff format`` on each file it fixes, so the sources and
 the fixed results here are left as is by ``ruff format``
 (``test_sources_are_stable_under_ruff_format``). The methods marked ``#21`` pin
-fixes whose result ``ruff format`` does change, and fixes that drop a comment
-inside the range they replace, which the new engine does not apply.
+fixes whose result ``ruff format`` does change, fixes that drop a comment
+inside the range they replace, which the new engine does not apply, and fixes
+that overlap, which the new engine applies in order, round by round.
 """
 
 import subprocess
@@ -503,7 +504,12 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files["t.py"], fixed)
 
-    def test_fix_inside_another_fix(self) -> None:
+    def test_21_fix_inside_another_fix(self) -> None:
+        # #21: the new engine applies the fixes in the order of their start, and
+        # skips one that overlaps a fix already applied. Then it lints the result
+        # again and applies the fixes found, until none is left: the inner fix is
+        # applied in the next round if the result still has it. The summary
+        # counts the fixes applied (issuecomment-6706326492).
         for label, rules, source, reported, fixed in NESTED:
             with self.subTest(label):
                 result = fix(rules, source)
@@ -513,7 +519,10 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files["t.py"], fixed)
 
-    def test_fix_two_rules_on_one_class(self) -> None:
+    def test_21_fix_two_rules_on_one_class(self) -> None:
+        # #21: both fixes start at the class, so the new engine applies the one
+        # of the rule whose name comes first, NoNamedTuple, and SortedAttributes
+        # in the next round: the file gets both fixes, in every run.
         source, sorted_, dataclass = ONE_CLASS
         result = fix((NT, SA), source)
         self.assert_violations(result.stdout, in_t(((NT, "4:0"), (SA, "4:0"))))

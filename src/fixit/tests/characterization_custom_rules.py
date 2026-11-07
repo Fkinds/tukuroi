@@ -14,7 +14,8 @@ them. The expected values are copied from the output of the libcst engine.
 ``NOTE`` marks behavior that looks wrong but is pinned as is. ``#21`` marks the
 sources of the custom rules: they use the libcst API, and #21 rewrites them for
 the new rule API. The CLI is expected to load, report and exit as here with the
-rewritten rules.
+rewritten rules, except in the methods marked ``#21``: #21 rebuilds how custom
+rules are loaded, and fixes the behavior they pin (issuecomment-6706326492).
 
 The CLI imports the rules in this process; ``run`` puts ``sys.path`` and
 ``sys.modules`` back after each run.
@@ -119,6 +120,7 @@ FAILING_PY = HEAD + (
 FAILING_RESULTS = (
     # NOTE: passes without an expected replacement, though the rule has an
     # autofix; `validate_patch` in testing.py, which fails it, is not called.
+    # #21: FAIL: a case with a fix needs an expected replacement.
     ("INVALID_0", "ok"),
     ("INVALID_1", "FAIL"),
     ("INVALID_2", "ok"),
@@ -315,7 +317,6 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         enables = root() + override("sub", enable)
         disable = names("disable", f".rules:{BAD}")
         disables = root(f".rules:{BAD}") + override("sub", disable)
-        sub_off = {"sub/pyproject.toml": toml(names("disable", ".rules"))}
         only_root, r, no_sub = (
             {"rules.py": BAD_PY},
             root(".rules"),
@@ -328,13 +329,6 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             ("no sub/rules.py", root(), sub | only_root, "sub/t.py", (), no_sub),
             ("override enables", enables, in_root, "sub/t.py", (BAD,), ""),
             ("override disables", disables, in_root, "sub/t.py", (), ""),
-            # NOTE: the rules of sub/rules.py do not run; ".rules" of the root
-            # is taken for the same rule. The docs (configuration.rst, `enable`)
-            # say the name is relative to the config file that has it.
-            ("root and sub", r, sub | in_root, "sub/t.py", (BAD,), ""),
-            # NOTE: in the sub config, ".rules" stands for sub/rules.py, which
-            # does not exist; yet ".rules" of the root is disabled under sub/.
-            ("sub disables", r, sub_off | only_root, "sub/t.py", (), no_sub),
         )
         for label, config, files, path, rules, warning in cases:
             with self.subTest(label):
@@ -343,8 +337,32 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             result = lint(r, in_root, cwd="sub")
             self.assert_lint(result, (BAD,))
 
+    def test_21_rules_in_the_repo_of_root_and_sub_configs(self) -> None:
+        # #21: the new loader tells ".rules" of each config apart by its
+        # directory, as the docs say: under sub/, the rules of sub/rules.py run
+        # too, and the sub config disables only sub/rules.py.
+        sub = {"sub/pyproject.toml": toml(names("enable", ".rules"))}
+        in_root = {"rules.py": BAD_PY, "sub/rules.py": UGLY_PY}
+        sub_off = {"sub/pyproject.toml": toml(names("disable", ".rules"))}
+        only_root, r = {"rules.py": BAD_PY}, root(".rules")
+        no_sub = no_import(".rules", FROM_SUB)
+        cases = (
+            # (label, config, files, path, rules, warning)
+            # NOTE: the rules of sub/rules.py do not run; ".rules" of the root
+            # is taken for the same rule. The docs (configuration.rst, `enable`)
+            # say the name is relative to the config file that has it.
+            # #21: BAD and UGLY are reported.
+            ("root and sub", r, sub | in_root, "sub/t.py", (BAD,), ""),
+            # NOTE: in the sub config, ".rules" stands for sub/rules.py, which
+            # does not exist; yet ".rules" of the root is disabled under sub/.
+            # #21: BAD is reported, and the warning stays.
+            ("sub disables", r, sub_off | only_root, "sub/t.py", (), no_sub),
+        )
+        for label, config, files, path, rules, warning in cases:
+            with self.subTest(label):
+                self.assert_lint(lint(config, files, path), rules, warning, path)
+
     def test_relative_imports_in_rules_in_the_repo(self) -> None:
-        above = importing(f"from ..rule import LintRule\n\nMESSAGE = {MESSAGE[BAD]!r}")
         package = {
             "rules/__init__.py": "",
             "rules/bad.py": importing("from ..wording import MESSAGE"),
@@ -352,14 +370,20 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         cases = (
             ("same directory", {"rules.py": importing("from .wording import MESSAGE")}),
             ("package to its parent", package),
-            # NOTE: ".." above the config directory reaches the `fixit` package.
-            # quickstart.rst says the imports must stay in the directory tree
-            # of the config file.
-            ("above the config directory", {"rules.py": above}),
         )
         for label, files in cases:
             with self.subTest(label):
                 self.assert_lint(lint(root(".rules"), WORDING | files), (BAD,))
+
+    def test_21_relative_import_above_the_config_directory(self) -> None:
+        # #21: the new loader stops ".." at the config directory: the import
+        # fails, the rules do not load, and a warning tells why.
+        above = importing(f"from ..rule import LintRule\n\nMESSAGE = {MESSAGE[BAD]!r}")
+        # NOTE: ".." above the config directory reaches the `fixit` package.
+        # quickstart.rst says the imports must stay in the directory tree of the
+        # config file.
+        result = lint(root(".rules"), WORDING | {"rules.py": above})
+        self.assert_lint(result, (BAD,))
 
     def test_installed_rules(self) -> None:
         cases = (
@@ -380,7 +404,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             "src/kettle/rules.py": importing("from kettle.wording import MESSAGE"),
         }
         absolute = WORDING | {"rules.py": importing("from wording import MESSAGE")}
-        no_kettle, no_rules = no_import("kettle.rules"), no_import(".rules", FROM_ROOT)
+        no_kettle = no_import("kettle.rules")
         cases = (
             # (label, value, files, enable, rules, warning)
             ("not set", None, KETTLE, "kettle.rules", (), no_kettle),
@@ -389,12 +413,6 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             ("true, package in src", "true", src, "kettle.rules", (), no_kettle),
             ("rule imports its package", '"src"', imports, "kettle.rules", (BAD,), ""),
             ("repo rule imports", "true", absolute, ".rules", (BAD,), ""),
-            # NOTE: the warning does not say which import failed.
-            ("repo rule imports, not set", None, absolute, ".rules", (), no_rules),
-            # NOTE: a value that is not a bool or a string is taken as true.
-            ("integer", "1", KETTLE, "kettle.rules", (BAD,), ""),
-            # NOTE: an empty path is taken as false, not as the root.
-            ("empty string", '""', KETTLE, "kettle.rules", (), no_kettle),
         )
         for label, value, files, enable, rules, warning in cases:
             with self.subTest(label):
@@ -406,6 +424,24 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             config = root(lines=["enable-root-import = true"])
             result = lint(config, KETTLE | sub, "sub/t.py")
             self.assert_lint(result, (BAD,), path="sub/t.py")
+
+    def test_21_enable_root_import_values(self) -> None:
+        # #21: the new loader takes only a bool or a relative path that is not
+        # empty; any other value is a config error.
+        cases = (
+            # (label, value, rules, warning)
+            # NOTE: a value that is not a bool or a string is taken as true.
+            # #21: a config error.
+            ("integer", "1", (BAD,), ""),
+            # NOTE: an empty path is taken as false, not as the root.
+            # #21: a config error.
+            ("empty string", '""', (), no_import("kettle.rules")),
+        )
+        for label, value, rules, warning in cases:
+            with self.subTest(label):
+                lines = [f"enable-root-import = {value}"]
+                result = lint(root("kettle.rules", lines=lines), KETTLE)
+                self.assert_lint(result, rules, warning)
 
     def test_enable_root_import_invalid(self) -> None:
         with self.subTest("not in the root config"):
@@ -429,7 +465,8 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 1)
 
-    def test_enable_root_import_of_another_root(self) -> None:
+    def run_two_roots(self, enable: str) -> Run:
+        """``fix`` a/t.py, which imports kettle.rules, then b/t.py with ``enable``."""
         config = root("kettle.rules", lines=["enable-root-import = true"])
         a = {f"a/{name}": text for name, text in KETTLE.items()} | {
             "a/pyproject.toml": config,
@@ -437,51 +474,81 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             "a/spoon/rules.py": UGLY_PY,
             "a/t.py": SOURCE,
         }
+        b = {"b/pyproject.toml": root(enable), "b/t.py": SOURCE}
+        before = {"pyproject.toml": toml("root = true"), **a, **b}
+        return run(before, ["fix", "--automatic", "a/t.py", "b/t.py"])
+
+    def test_enable_root_import_of_another_root(self) -> None:
+        result = self.run_two_roots("spoon.rules")
+        # a/ is not on sys.path for b/t.py.
+        self.assertEqual(result.stdout, found(BAD, "a/t.py"))
         one = "1 file with errors, 1 auto-fix available, 1 fix applied"
-        cases = (
-            # a/ is not on sys.path for b/t.py.
-            ("spoon.rules", (), no_import("spoon.rules") + TWO.format(one)),
-            # NOTE: b/t.py runs the rules that a/t.py imported first. With the
-            # files in the other order, they fail to load for b/t.py.
-            ("kettle.rules", (BAD,), TWO_FIXED),
-        )
-        for enable, rules, stderr in cases:
-            with self.subTest(enable):
-                b = {"b/pyproject.toml": root(enable), "b/t.py": SOURCE}
-                before = {"pyproject.toml": toml("root = true"), **a, **b}
-                result = run(before, ["fix", "--automatic", "a/t.py", "b/t.py"])
-                expected = [found(BAD, "a/t.py"), *(found(r, "b/t.py") for r in rules)]
-                self.assertEqual(records(result.stdout), sorted(expected))
-                self.assertEqual(result.stderr, stderr)
-                self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.stderr, no_import("spoon.rules") + TWO.format(one))
+        self.assertEqual(result.exit_code, 0)
+
+    def test_21_enable_root_import_of_another_root(self) -> None:
+        # #21: the new loader does not use a module imported for another root:
+        # b/t.py logs a warning and runs no rule, in either order of the files.
+        result = self.run_two_roots("kettle.rules")
+        # NOTE: b/t.py runs the rules that a/t.py imported first. With the files
+        # in the other order, they fail to load for b/t.py.
+        expected = sorted([found(BAD, "a/t.py"), found(BAD, "b/t.py")])
+        self.assertEqual(records(result.stdout), expected)
+        self.assertEqual(result.stderr, TWO_FIXED)
+        self.assertEqual(result.exit_code, 0)
 
     def test_rules_in_the_repo_that_fail_to_load(self) -> None:
         broken, boom = "def f(:\n", 'raise RuntimeError("boom")\n'
-        dependency = "import nope_dependency\n" + BAD_PY
-        nope, without = (
-            no_rule(".rules:Nope", IN_ROOT),
-            no_rule(f".rules:{UGLY}", IN_ROOT),
-        )
-        no_rules = no_import(".rules", FROM_ROOT)
+        nope = no_rule(".rules:Nope", IN_ROOT)
         syntax = failed(".rules", syntax_error(broken, "rules.py"))
         cases = (
             # (label, rules.py, enable, warning)
             ("no module", None, ".nope", no_import(".nope", FROM_ROOT)),
             ("no rule of the name", BOTH_PY, ".rules:Nope", nope),
-            # NOTE: the name that the output shows is not found.
-            ("name without Rule", BOTH_PY, f".rules:{UGLY}", without),
             ("raises", boom, ".rules", failed(".rules", "RuntimeError: boom")),
-            # NOTE: the warning does not say which import failed.
-            ("import in it fails", dependency, ".rules", no_rules),
             ("syntax error", broken, ".rules", syntax),
-            # NOTE: nothing runs, and no warning tells.
-            ("no rules in it", "x = 1\n", ".rules", ""),
         )
         for label, module, enable, warning in cases:
             with self.subTest(label):
                 result = lint(root(enable), {"rules.py": module} if module else {})
                 # NOTE: a rule that fails to load only logs a warning.
                 self.assert_lint(result, (), warning)
+
+    def test_21_rules_in_the_repo_that_fail_to_load(self) -> None:
+        dependency = "import nope_dependency\n" + BAD_PY
+        absolute = WORDING | {"rules.py": importing("from wording import MESSAGE")}
+        no_rules = no_import(".rules", FROM_ROOT)
+        cases = (
+            # (label, config, files, rules, warning)
+            # NOTE: the name that the output shows is not found.
+            # #21: found: the new loader takes a name with or without "Rule".
+            # UGLY is reported, with no warning.
+            (
+                "name without Rule",
+                root(f".rules:{UGLY}"),
+                {"rules.py": BOTH_PY},
+                (),
+                no_rule(f".rules:{UGLY}", IN_ROOT),
+            ),
+            # NOTE: the warning does not say which import failed.
+            # #21: the warning has the error of the import that failed.
+            (
+                "import in it fails",
+                root(".rules"),
+                {"rules.py": dependency},
+                (),
+                no_rules,
+            ),
+            # NOTE: the warning does not say which import failed.
+            # #21: the warning has the error of the import that failed.
+            ("repo rule imports, not set", root(".rules"), absolute, (), no_rules),
+            # NOTE: nothing runs, and no warning tells.
+            # #21: a warning tells that the module has no rules.
+            ("no rules in it", root(".rules"), {"rules.py": "x = 1\n"}, (), ""),
+        )
+        for label, config, files, rules, warning in cases:
+            with self.subTest(label):
+                self.assert_lint(lint(config, files), rules, warning)
 
     def test_invalid_name_of_a_rule_in_the_repo(self) -> None:
         # The name of the parent of the config directory, as in `from .. import`.
@@ -496,26 +563,46 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         result = lint(root(f"fixit.rules:{SI}", f".rules:{BAD}"), {"rules.py": BOTH_PY})
         self.assert_lint(result, (BAD, SI))
 
-    def test_disable_custom_rules(self) -> None:
-        r, rb, c, cb = ".rules", f".rules:{BAD}", "cookie.rules", f"cookie.rules:{BAD}"
-        twice = "🛠️  1 file checked, 1 file with errors, 2 auto-fixes available 🛠️\n"
-        cases = (
-            # (label, enable, disable, rules, stderr)
-            # NOTE: the rule is not disabled: it is imported again, as another class.
-            ("1 rule", (r,), (rb,), (BAD, UGLY), DIRTY_A),
-            ("1 rule, installed", (c,), (cb,), (UGLY,), DIRTY),
-            ("the module", (r,), (r,), (), CLEAN),
-            # NOTE: BAD is reported twice: it is imported twice, as 2 classes.
-            ("enable module and rule", (r, rb), (), (BAD, BAD, UGLY), twice),
-            ("enable module and rule, installed", (c, cb), (), (BAD, UGLY), DIRTY_A),
+    def assert_disable(
+        self, enable: Sequence[str], disable: Sequence[str], rules: Sequence[str]
+    ) -> None:
+        result = lint(
+            root(*enable, disable=disable), {"rules.py": BOTH_PY}, site=COOKIE
         )
-        for label, enable, disable, rules, stderr in cases:
+        self.assertEqual(records(result.stdout), sorted(map(found, rules)))
+        bad = rules.count(BAD)
+        twice = "🛠️  1 file checked, 1 file with errors, 2 auto-fixes available 🛠️\n"
+        self.assertEqual(result.stderr, twice if bad == 2 else summary(rules))
+        self.assertEqual(result.exit_code, 1 if rules else 0)
+
+    def test_disable_custom_rules(self) -> None:
+        r, c, cb = ".rules", "cookie.rules", f"cookie.rules:{BAD}"
+        cases = (
+            # (label, enable, disable, rules)
+            ("1 rule, installed", (c,), (cb,), (UGLY,)),
+            ("the module", (r,), (r,), ()),
+            ("enable module and rule, installed", (c, cb), (), (BAD, UGLY)),
+        )
+        for label, enable, disable, rules in cases:
             with self.subTest(label):
-                config = root(*enable, disable=disable)
-                result = lint(config, {"rules.py": BOTH_PY}, site=COOKIE)
-                self.assertEqual(records(result.stdout), sorted(map(found, rules)))
-                self.assertEqual(result.stderr, stderr)
-                self.assertEqual(result.exit_code, 1 if rules else 0)
+                self.assert_disable(enable, disable, rules)
+
+    def test_21_disable_custom_rules(self) -> None:
+        # #21: the new loader imports a module once, so a rule in the repo is the
+        # same class however it is named, as for an installed package.
+        r, rb = ".rules", f".rules:{BAD}"
+        cases = (
+            # (label, enable, disable, rules)
+            # NOTE: the rule is not disabled: it is imported again, as another class.
+            # #21: disabled: UGLY only is reported.
+            ("1 rule", (r,), (rb,), (BAD, UGLY)),
+            # NOTE: BAD is reported twice: it is imported twice, as 2 classes.
+            # #21: BAD is reported once.
+            ("enable module and rule", (r, rb), (), (BAD, BAD, UGLY)),
+        )
+        for label, enable, disable, rules in cases:
+            with self.subTest(label):
+                self.assert_disable(enable, disable, rules)
 
     def test_lint_ignore_names_a_custom_rule(self) -> None:
         cases = ((BAD, 0, (UGLY,)), (UGLY, 1, (BAD,)), (f"{UGLY}Rule", 1, (BAD,)))
@@ -553,7 +640,9 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
                 before = files | {"sub/rules.py": UGLY_PY, f"{cwd}/t.py": SOURCE}
                 self.assert_lint(run(before, args, cwd=cwd, site=site), rules)
 
-    def test_rules_in_the_repo_are_imported_for_each_file(self) -> None:
+    def test_21_rules_in_the_repo_are_imported_for_each_file(self) -> None:
+        # #21: the new loader imports a module once in a process: "imported" is
+        # printed once.
         files = {"rules.py": 'print("imported")\n' + BAD_PY, "u.py": SOURCE}
         before = {"pyproject.toml": root(".rules"), "t.py": SOURCE, **files}
         result = run(before, ["fix", "--automatic", "t.py", "u.py"])
@@ -583,7 +672,9 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 0)
 
-    def test_fixit_test_with_failing_cases(self) -> None:
+    def test_21_fixit_test_with_failing_cases(self) -> None:
+        # #21: INVALID_0 fails (see FAILING_RESULTS), so the status line is
+        # "FAILED (failures=6, errors=1)".
         result = run({"rules.py": FAILING_PY}, ["test", ".rules"])
         # unittest prints the errors, then the failures, each in the order run.
         failures = sorted((r, t) for t, r in FAILING_RESULTS if r != "ok")
@@ -594,7 +685,10 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.exit_code, 1)
 
-    def test_fixit_test_without_tests(self) -> None:
+    def test_21_fixit_test_without_tests(self) -> None:
+        # #21: `fixit test` exits with 5 when no test ran, as unittest and pytest
+        # do. It reads the config of the current directory, so kettle.rules is
+        # imported with enable-root-import and its tests run.
         config = {"pyproject.toml": toml("root = true", "enable-root-import = true")}
         cases = (
             (".rules:Nope", {"rules.py": BOTH_PY}, no_rule(".rules:Nope", IN_ROOT)),
