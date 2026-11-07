@@ -16,6 +16,7 @@ from .characterization_fix import FixCharacterizationTest
 from .characterization_lsp import LspCharacterizationTest
 from .characterization_suppression import SuppressionCharacterizationTest
 from .config import ConfigTest
+from .core_text import LineIndexTest, PositionTest, SpanTest
 from .custom_rules_switch import CustomRulesSwitchTest
 from .engine import EngineTest
 from .ftypes import TypesTest
