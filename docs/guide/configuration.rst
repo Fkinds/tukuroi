@@ -73,6 +73,10 @@ The main configuration table.
 
     Fixit will enable the built-in :mod:`fixit.rules` lint rules by default.
 
+    Fixit imports the rules that are enabled, which runs their code. See
+    :ref:`security` for the configurations to trust, and for turning off the
+    rules that do not come with Fixit.
+
 .. attribute:: disable
     :type: list[str]
     :value: []
@@ -116,6 +120,8 @@ The main configuration table.
     This option is roughly equivalent to adding the configured path, relative
     to the root configuration, to :attr:`sys.path` when attempting to import
     and materialize any enabled lint rules.
+
+    With custom rules turned off (see :ref:`security`), this option is ignored.
 
 .. attribute:: python-version
     :type: str
@@ -244,3 +250,65 @@ defining the subpath it applies to, along with any values from the tables above:
     [[tool.fixit.overrides]]
     path = "fizz/buzz"
     enable = ["plugin:SomethingNeat"]
+
+
+.. _security:
+
+Security
+^^^^^^^^
+
+Configuration files can run code. Fixit imports the rules that a configuration
+enables, which runs their code with the permissions of the user running Fixit.
+That includes custom rules: local rules in the repo (see :attr:`enable`), the
+modules found through :attr:`enable-root-import`, and rules from any package
+other than Fixit. Rules named in :attr:`disable`, and the rules checked by
+``fixit validate-config``, are imported too.
+
+Fixit looks for configuration files from each linted file up to the root of the
+filesystem (unless a file sets :attr:`root`), so a configuration file in a
+parent directory of the repo can also enable rules.
+
+Only run Fixit with custom rules on code whose configuration you trust. For
+other code, turn custom rules off with ``--no-custom-rules``, or with the
+environment variable ``FIXIT_CUSTOM_RULES=0`` (see :ref:`commands`). Then Fixit
+imports only the built-in rules, in :mod:`fixit.rules` and ``fixit.upgrade``:
+
+- Custom rules in :attr:`enable` are skipped with a warning. The built-in rules
+  still run, and the exit code does not change.
+- Custom rules in :attr:`disable`, and :attr:`enable-root-import`, are ignored.
+- ``fixit validate-config`` checks only the names of custom rules, and warns
+  that it skipped them.
+- A custom rule named with ``--rules``, or given to ``fixit test``, is a usage
+  error.
+
+Turn custom rules off when Fixit runs on code that others can change, such as:
+
+- CI jobs that lint pull requests from forks,
+- repositories that you clone to review or investigate,
+- editors that start ``fixit lsp`` in any folder that you open.
+
+For example, in a CI job:
+
+.. code:: console
+
+    $ FIXIT_CUSTOM_RULES=0 fixit lint src/
+
+To keep custom rules off by default, set ``FIXIT_CUSTOM_RULES=0`` in your
+shell, and pass ``--custom-rules`` in the repos that you trust. The option on
+the command line wins over the variable. So the variable does not keep custom
+rules off when the repo can change the command line, for example with the
+``args`` of a hook in ``.pre-commit-config.yaml``, or with the workspace
+settings of an editor that starts ``fixit lsp``. pre-commit runs the hooks that
+the repo defines, so running it on a repo is beyond what this option can
+protect.
+
+Also:
+
+- Run the ``fixit`` command, or ``python -P -m fixit``. ``python -m fixit``
+  puts the current directory first on :attr:`sys.path`. Fixit takes it off
+  when it starts, so that the modules it imports later (such as a formatter)
+  are not read from there. But a ``fixit`` package in the current directory is
+  imported in place of Fixit before that.
+- To use a configuration that you trust instead of the ones found next to the
+  linted files, pass ``--config-file``. Fixit still imports the custom rules
+  that it enables.
