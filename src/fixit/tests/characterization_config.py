@@ -17,6 +17,7 @@ Each case lints a file with SOURCE and pins which of two rules report it.
 
 from collections.abc import Mapping
 
+from ..config import ConfigError
 from .characterization_cli import (
     CLEAN,
     DIRTY,
@@ -251,17 +252,66 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         )
         self.assert_reported(cases)
 
-    def test_override_without_path(self) -> None:
-        configs = {
-            "pyproject.toml": ONLY_SI + f"[[tool.fixit.overrides]]\nenable = [{NA_}]\n"
-        }
-        result = invoke({**configs, "t.py": SOURCE}, ["lint", "t.py"])
-        # NOTE: the exception is not caught; a traceback is printed.
-        self.assertEqual(
-            str(result.exception), "'overrides' table requires 'path' value"
+    def test_invalid_value(self) -> None:
+        # NOTE: "got <class 'str'>" names the type of the key, not of the value.
+        not_array = "must be array of values, got <class 'str'>"
+        name = "invalid rule name 'fixit rules'"
+        # (one invalid value, the exception, its message)
+        cases = (
+            # Not an array.
+            ("enable = 1", ConfigError, f"'enable' {not_array}"),
+            # A string is a sequence in Python, but not an array.
+            ('enable = "fixit.rules"', ConfigError, f"'enable' {not_array}"),
+            ('disable = "fixit.rules"', ConfigError, f"'disable' {not_array}"),
+            # An element that is not a string. The message comes from `re`.
+            ("enable = [1]", TypeError, None),
+            ("disable = [1]", TypeError, None),
+            # A string that is not a rule name.
+            ('enable = ["fixit rules"]', ConfigError, name),
+            ('disable = ["fixit rules"]', ConfigError, name),
+            # [tool.fixit.overrides], not [[tool.fixit.overrides]].
+            (
+                '[tool.fixit.overrides]\npath = "sub"',
+                ConfigError,
+                f"'overrides' {not_array}",
+            ),
+            (
+                'overrides = ["sub"]',
+                ConfigError,
+                "'overrides' requires array of tables",
+            ),
+            (
+                f"[[tool.fixit.overrides]]\nenable = [{NA_}]",
+                ConfigError,
+                "'overrides' table requires 'path' value",
+            ),
         )
-        self.assertEqual(result.stdout, "")
-        self.assertEqual(result.exit_code, 1)
+        for value, error, message in cases:
+            with self.subTest(value):
+                files = {"pyproject.toml": toml(ROOT, value), "t.py": SOURCE}
+                result = invoke(files, ["lint", "t.py"])
+                # NOTE: the exception is not caught; a traceback is printed.
+                self.assertIs(type(result.exception), error)
+                if message is not None:
+                    self.assertEqual(str(result.exception), message)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.exit_code, 1)
+
+    def test_unknown_key(self) -> None:
+        warning = "WARNING:fixit.config:unknown configuration option 'bogus'\n"
+        cases = (
+            # NOTE: the warning is logged twice.
+            ("in [tool.fixit]", "bogus = 1\n", warning * 2),
+            # NOTE: an unknown key in an override is ignored without a warning.
+            ("in overrides", '[[tool.fixit.overrides]]\npath = "."\nbogus = 1\n', ""),
+        )
+        for label, key, logged in cases:
+            with self.subTest(label):
+                files = {"pyproject.toml": ONLY_SI + key, "t.py": SOURCE}
+                result = invoke(files, ["lint", "t.py"])
+                self.assertEqual(result.stdout, line("t.py", SI, POSITION[SI]))
+                self.assertEqual(result.stderr, logged + DIRTY)
+                self.assertEqual(result.exit_code, 1)
 
     def test_config_file_names(self) -> None:
         cases = (

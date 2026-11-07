@@ -232,6 +232,24 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files, before | changed)
 
+    def test_fix_without_paths(self) -> None:
+        files = {"pyproject.toml": CONFIG, "a.py": FIXABLE, "sub/b.py": FIXABLE}
+        two = (
+            "🛠️  2 files checked, 2 files with errors, 2 auto-fixes available,"
+            " 2 fixes applied 🛠️\n"
+        )
+        cases = (
+            (".", (("a.py", NA), ("sub/b.py", NA)), two, {"a.py", "sub/b.py"}),
+            ("sub", (("b.py", NA),), DIRTY_F, {"sub/b.py"}),
+        )
+        for cwd, reported, stderr, fixed in cases:
+            with self.subTest(cwd=cwd):
+                result = invoke(files, ["fix", "--automatic"], cwd=cwd)
+                self.assert_violations(result.stdout, reported)
+                self.assertEqual(result.stderr, stderr)
+                self.assertEqual(result.exit_code, 0)
+                self.assertEqual(result.files, files | dict.fromkeys(fixed, FIXED))
+
     def test_exit_code_with_syntax_error(self) -> None:
         cases = (
             ("lint", {}, (), DIRTY, 2, {}),
