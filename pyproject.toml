@@ -29,6 +29,7 @@ dependencies = [
     "libcst >= 0.3.18",
     "moreorless >= 0.4.0",
     "packaging >= 21",
+    "ruff >= 0.17.3",
     "trailrunner >= 1.2",
 ]
 
