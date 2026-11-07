@@ -9,6 +9,7 @@ from fixit.testing import add_lint_rule_tests_to_module
 
 from .characterization_cli import CliCharacterizationTest
 from .characterization_config import ConfigCharacterizationTest
+from .characterization_custom_rules import CustomRulesCharacterizationTest
 from .characterization_fix import FixCharacterizationTest
 from .characterization_lsp import LspCharacterizationTest
 from .characterization_suppression import SuppressionCharacterizationTest

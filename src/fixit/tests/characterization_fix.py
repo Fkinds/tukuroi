@@ -14,7 +14,8 @@ them. The expected values are copied from the output of the libcst engine.
 The new engine runs ``ruff format`` on each file it fixes, so the sources and
 the fixed results here are left as is by ``ruff format``
 (``test_sources_are_stable_under_ruff_format``). The methods marked ``#21`` pin
-fixes whose result ``ruff format`` does change.
+fixes whose result ``ruff format`` does change, and fixes that drop a comment
+inside the range they replace, which the new engine does not apply.
 """
 
 import subprocess
@@ -384,6 +385,82 @@ UNFORMATTED_21 = (
     ),
 )
 
+# A comment inside the range that the fix replaces, kept in the result.
+# (rule, source, position reported, the file after `fix --automatic`)
+COMMENTS = (
+    (
+        NA,
+        "self.assertTrue(\n    a,  # c\n    3,\n)\n",
+        "1:0",
+        "self.assertEqual(\n    a,  # c\n    3,\n)\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple):  # c\n    a: int\n",
+        "4:0",
+        f"{IMPORT_NT}{DC}class Foo:  # c\n    a: int\n",
+    ),
+)
+
+# #21: the comment inside the range is not in the result of the fix, so the new
+# engine does not apply it: the line ends without " (has autofix)", the summary
+# counts no auto-fix, and the file is left as is.
+# (rule, source, position reported, the file after `fix --automatic`)
+COMMENTS_21 = (
+    (
+        UI,
+        "self.assertTrue(\n    a in b  # c\n)\n",
+        "1:0",
+        "self.assertIn(\n    a, b)\n",
+    ),
+    (
+        NN,
+        "self.assertTrue(\n    a is not None  # c\n)\n",
+        "1:0",
+        "self.assertIsNotNone(\n    a)\n",
+    ),
+    # The fix drops the argument with the comment.
+    (
+        NA,
+        "self.assertTrue(\n    a,\n    None,  # c\n)\n",
+        "1:0",
+        "self.assertIsNone(\n    a)\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(\n    NamedTuple,  # c\n):\n    a: int\n",
+        "4:0",
+        f"{IMPORT_NT}{DC}class Foo:\n    a: int\n",
+    ),
+    (
+        VC,
+        f"{IMPORT_CB}x: Callable[\n    [...],  # c\n    int,\n]\n",
+        "3:3",
+        f"{IMPORT_CB}x: Callable[\n    ..., int,\n]\n",
+    ),
+)
+
+# #21: the comment after "(" is kept, but the result is not what `ruff format`
+# writes, so the new engine writes the last value instead: ruff format puts ")"
+# on its own line.
+# (rule, source, position reported, the file after, after `ruff format`)
+COMMENTS_UNFORMATTED_21 = (
+    (
+        UI,
+        "self.assertTrue(  # c\n    a in b\n)\n",
+        "1:0",
+        "self.assertIn(  # c\n    a, b)\n",
+        "self.assertIn(  # c\n    a, b\n)\n",
+    ),
+    (
+        NN,
+        "self.assertTrue(  # c\n    a is not None\n)\n",
+        "1:0",
+        "self.assertIsNotNone(  # c\n    a)\n",
+        "self.assertIsNotNone(  # c\n    a\n)\n",
+    ),
+)
+
 
 def fix(rules: tuple[str, ...], source: str, *args: str) -> Run:
     files = {"pyproject.toml": config(*rules), "t.py": source}
@@ -650,18 +727,52 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stdout, fixed)
                 self.assertEqual(result.stderr, line("t.py", UI, "2:0") + DIRTY_F)
 
+    def test_fix_keeps_a_comment_in_its_range(self) -> None:
+        for rule, source, position, fixed in COMMENTS:
+            with self.subTest(rule, source=source):
+                result = fix((rule,), source)
+                self.assertEqual(result.stdout, line("t.py", rule, position))
+                self.assertEqual(result.stderr, DIRTY_F)
+                self.assertEqual(result.exit_code, 0)
+                self.assertEqual(result.files["t.py"], fixed)
+
+    def test_21_fix_drops_a_comment_in_its_range(self) -> None:
+        for rule, source, position, fixed in COMMENTS_21:
+            with self.subTest(rule, source=source):
+                result = fix((rule,), source)
+                # #21: the line ends without " (has autofix)".
+                self.assertEqual(result.stdout, line("t.py", rule, position))
+                # #21: DIRTY, without "auto-fix available" and "fix applied".
+                self.assertEqual(result.stderr, DIRTY_F)
+                self.assertEqual(result.exit_code, 0)
+                # #21: the file is left as is: `source`.
+                self.assertEqual(result.files["t.py"], fixed)
+
+    def test_21_fix_keeps_a_comment_but_is_not_ruff_formatted(self) -> None:
+        for rule, source, position, fixed, _ in COMMENTS_UNFORMATTED_21:
+            with self.subTest(rule, source=source):
+                result = fix((rule,), source)
+                self.assertEqual(result.stdout, line("t.py", rule, position))
+                self.assertEqual(result.stderr, DIRTY_F)
+                self.assertEqual(result.exit_code, 0)
+                self.assertEqual(result.files["t.py"], fixed)
+
     def test_sources_are_stable_under_ruff_format(self) -> None:
         # Not a test of fixit: checks that the cases above fit the new engine.
         pairs = [(source, fixed) for _, source, _, fixed in FIXES]
         pairs += [(row[2], row[4]) for row in MULTI + NESTED + SUPPRESSED]
         pairs += [ONE_CLASS[:2], ONE_CLASS[::2]]
         pairs += [(DIFF_SOURCE, "x = 1\nself.assertIn(a, b)\ny = 2\n")]
+        pairs += [(source, fixed) for _, source, _, fixed in COMMENTS]
         stable = [text for pair in pairs for text in pair]
+        # The new engine leaves these files as is.
+        stable += [source for _, source, _, _ in COMMENTS_21]
         for source, formatted in zip(stable, ruff_format(*stable), strict=True):
             with self.subTest(source=source):
                 self.assertEqual(formatted, source)
         cases = [(s, f, out, True) for _, s, _, f, out in FIXES_21]
         cases += [(s, f, out, False) for s, f, out in UNFORMATTED_21]
+        cases += [(s, f, out, True) for _, s, _, f, out in COMMENTS_UNFORMATTED_21]
         results = ruff_format(*(text for s, f, _, _ in cases for text in (s, f)))
         for i, (source, fixed, formatted, is_formatted) in enumerate(cases):
             with self.subTest("#21", source=source):
