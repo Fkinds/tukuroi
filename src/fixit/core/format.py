@@ -21,10 +21,15 @@ class FormatError(Exception):
     """``ruff format`` failed, for example on a syntax error."""
 
 
-def ruff_format(text: str, path: Path | None) -> str:
-    """``text`` formatted by ``ruff format``, with the settings for ``path``."""
+def ruff_format(text: str, path: Path | None, *, isolated: bool = False) -> str:
+    """
+    ``text`` formatted by ``ruff format``, with the settings for ``path``, or
+    with the default settings of ruff when ``isolated``.
+    """
     filename = str(Path(path).resolve()) if path is not None else "<stdin>.py"
     command = [find_ruff_bin(), "format", "--stdin-filename", filename, "-"]
+    if isolated:
+        command.insert(2, "--isolated")
     result = subprocess.run(
         command, input=text.encode(), capture_output=True, check=False
     )

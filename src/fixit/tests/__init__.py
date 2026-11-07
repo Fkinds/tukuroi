@@ -39,6 +39,7 @@ from .core_suppression import (
     ItemTest,
     StatementTest,
 )
+from .core_testing import GenerateTestCasesTest
 from .core_text import LineIndexTest, PositionTest, SpanTest
 from .custom_rules_switch import CustomRulesSwitchTest
 from .engine import EngineTest

@@ -25,6 +25,7 @@ import ast
 import dataclasses
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from .directives import InvalidDirective, parse_directives
 from .edits import apply_fixes, drops_comments
@@ -126,13 +127,15 @@ def fix(
     *,
     choose: Callable[[Report], bool] | None = None,
     rounds: int = MAX_ROUNDS,
+    formatter: Callable[[str, Path | None], str] = ruff_format,
 ) -> FixResult:
     """
     Apply the fixes of ``rules`` to ``source``, round after round: in each round,
     lint, and apply the fixes by the start of their edits, then by rule, skipping
     those that overlap one applied before. Stop when no fix is left, or when the
     fixes no longer change the text. With ``choose``, apply only the fixes it
-    takes, in one round. Format the text with ``ruff format`` if it changed.
+    takes, in one round. Format the text with ``formatter`` (``ruff format``) if
+    it changed.
     """
     first = lint(source, rules)
     text, applied, converged = source.text, 0, False
@@ -153,5 +156,5 @@ def fix(
     else:
         converged = choose is not None
     if text != source.text:
-        text = ruff_format(text, source.path)
+        text = formatter(text, source.path)
     return FixResult(text, first.reports, applied, converged)
