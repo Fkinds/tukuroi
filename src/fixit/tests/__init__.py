@@ -24,6 +24,11 @@ from .core_source import (
     SourceFromTextTest,
     SourceParseErrorTest,
 )
+from .core_suppression import (
+    ClauseTest,
+    IsSuppressedTest,
+    StatementTest,
+)
 from .core_text import LineIndexTest, PositionTest, SpanTest
 from .custom_rules_switch import CustomRulesSwitchTest
 from .engine import EngineTest
