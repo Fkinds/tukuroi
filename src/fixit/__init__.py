@@ -13,11 +13,8 @@ from .core.edits import Edit
 from .core.rule import Invalid, Rule, Valid
 from .core.text import Position, Range, Span
 from .ftypes import (
-    CodePosition,
-    CodeRange,
     Config,
     FileContent,
-    LintViolation,
     Options,
     QualifiedRule,
     Result,
@@ -25,13 +22,10 @@ from .ftypes import (
 )
 
 __all__ = [
-    "CodePosition",
-    "CodeRange",
     "Config",
     "Edit",
     "FileContent",
     "Invalid",
-    "LintViolation",
     "Options",
     "Position",
     "QualifiedRule",
