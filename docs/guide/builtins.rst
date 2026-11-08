@@ -24,16 +24,13 @@ Built-in Rules
 - :class:`NoInheritFromObject`
 - :class:`NoNamedTuple`
 - :class:`NoRedundantFString`
-- :class:`NoRedundantListComprehension`
 - :class:`NoStaticIfCondition`
 - :class:`ReplaceUnionWithOptional`
 - :class:`RewriteToComprehension`
-- :class:`RewriteToLiteral`
 - :class:`SortedAttributes`
 - :class:`UseAssertIn`
 - :class:`UseAssertIsNotNone`
 - :class:`UseAsyncSleepInAsyncDef`
-- :class:`UseFstring`
 - :class:`VariadicCallableSyntax`
 
 .. class:: ComparePrimitivesByEqual
@@ -316,42 +313,6 @@ Built-in Rules
             # suggested fix
             bad: str = 'bad'
 
-.. class:: NoRedundantListComprehension
-
-    A derivative of flake8-comprehensions's C407 rule.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            any(val for val in iterable)
-        .. code:: python
-
-            all(val for val in iterable)
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            any([val for val in iterable])
-
-            # suggested fix
-            any(val for val in iterable)
-
-        .. code:: python
-
-            all([val for val in iterable])
-
-            # suggested fix
-            all(val for val in iterable)
-
 .. class:: NoStaticIfCondition
 
     Discourages ``if`` conditions which evaluate to a static value (e.g. ``or True``, ``and False``, etc).
@@ -470,44 +431,6 @@ Built-in Rules
 
             # suggested fix
             [val for row in matrix for val in row]
-
-.. class:: RewriteToLiteral
-
-    A derivative of flake8-comprehensions' C405-C406 and C409-C410. It's
-    unnecessary to use a list or tuple literal within a call to tuple, list,
-    set, or dict since there is literal syntax for these types.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            (1, 2)
-        .. code:: python
-
-            ()
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            tuple([1, 2])
-
-            # suggested fix
-            (1, 2)
-
-        .. code:: python
-
-            tuple((1, 2))
-
-            # suggested fix
-            (1, 2)
 
 .. class:: SortedAttributes
 
@@ -701,59 +624,6 @@ Built-in Rules
             from time import sleep
             async def func():
                 sleep(1)
-.. class:: UseFstring
-
-    Encourages the use of f-string instead of %-formatting or .format() for high code quality and efficiency.
-
-    Following two cases not covered:
-
-    1. arguments length greater than 30 characters: for better readibility reason
-        For example:
-
-        1: this is the answer: %d" % (a_long_function_call() + b_another_long_function_call())
-        2: f"this is the answer: {a_long_function_call() + b_another_long_function_call()}"
-        3: result = a_long_function_call() + b_another_long_function_call()
-        f"this is the answer: {result}"
-
-        Line 1 is more readable than line 2. Ideally, we'd like developers to manually fix this case to line 3
-
-    2. only %s placeholders are linted against for now. We leave it as future work to support other placeholders.
-        For example, %d raises TypeError for non-numeric objects, whereas f"{x:d}" raises ValueError.
-        This discrepancy in the type of exception raised could potentially break the logic in the code where the exception is handled
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        Do not use printf style formatting or .format(). Use f-string instead to be more readable and efficient. See https://www.python.org/dev/peps/pep-0498/
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            somebody='you'; f"Hey, {somebody}."
-        .. code:: python
-
-            "hey"
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            "Hey, {somebody}.".format(somebody="you")
-        .. code:: python
-
-            "%s" % "hi"
-
-            # suggested fix
-            f"{'hi'}"
-
 .. class:: VariadicCallableSyntax
 
     Callable types with arbitrary parameters should be written as `Callable[..., T]`
