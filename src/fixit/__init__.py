@@ -12,7 +12,6 @@ from .api import fixit_bytes, fixit_file, fixit_paths, print_result
 from .core.edits import Edit
 from .core.rule import Invalid, Rule, Valid
 from .core.text import Position, Range, Span
-from .format import Formatter
 from .ftypes import (
     CodePosition,
     CodeRange,
@@ -22,7 +21,6 @@ from .ftypes import (
     Options,
     QualifiedRule,
     Result,
-    Tags,
     Violation,
 )
 
@@ -32,7 +30,6 @@ __all__ = [
     "Config",
     "Edit",
     "FileContent",
-    "Formatter",
     "Invalid",
     "LintViolation",
     "Options",
@@ -42,7 +39,6 @@ __all__ = [
     "Result",
     "Rule",
     "Span",
-    "Tags",
     "Valid",
     "Violation",
     "__version__",

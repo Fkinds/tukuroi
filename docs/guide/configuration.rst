@@ -124,40 +124,6 @@ The main configuration table.
 
     With custom rules turned off (see :ref:`security`), this option is ignored.
 
-.. attribute:: python-version
-    :type: str
-
-    Python version to target when selecting lint rules. Rules with
-    :attr:`~fixit.LintRule.PYTHON_VERSION` specifiers that don't match this
-    target version will be automatically disabled during linting.
-
-    To target a minimum Python version of 3.10:
-
-    .. code-block:: toml
-
-        python-version = "3.10"
-
-    Defaults to the currently active version of Python.
-    Set to empty string ``""`` to disable target version checking.
-
-.. attribute:: formatter
-    :type: str
-
-    Code formatting style to apply after fixing source files.
-
-    Supported code styles:
-
-    - ``(unset)``: No style is applied (default).
-
-    - ``"black"``: `Black <https://black.rtfd.io>`_ code formatter.
-
-    - ``"ufmt"``: `µfmt <https://ufmt.omnilib.dev>`_ code style —
-      `µsort <https://usort.rtfd.io>`_ import sorting with
-      `Black <https://black.rtfd.io>`_ code formatting.
-
-    Alternative formatting styles can be added by implementing the
-    :class:`~fixit.Formatter` interface.
-
 .. attribute:: output-format
     :type: str
 
@@ -204,30 +170,6 @@ The main configuration table.
     - ``start_line``: Start line of affected code.
 
 
-.. _rule-options:
-
-``[tool.fixit.options]``
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The ``options`` table allows setting options for individual lint rules,
-by mapping the fully-qualified rule name to a dictionary of key/value pairs:
-
-.. code-block:: toml
-
-    [tool.fixit.options]
-    "fixit.rules:ExampleRule" = {greeting = "hello world"}
-
-Alternatively, for rules with a large number of options, the rule name can
-be included in the table name for easier usage. Note that the quotes in the
-table name are required for correctly specifying options:
-
-.. code-block:: toml
-
-    [tool.fixit.options."fixit.rules:ExampleRule"]
-    greeting = "hello world"
-    answer = 42
-
-
 .. _overrides:
 
 ``[[tool.fixit.overrides]]``
@@ -243,10 +185,6 @@ defining the subpath it applies to, along with any values from the tables above:
     [[tool.fixit.overrides]]
     path = "foo/bar"
     disable = ["fixit.rules:ExampleRule"]
-
-    [[tool.fixit.overrides.options]]
-    # applies to the above override path only
-    "fixit.rules:Story" = {closing = "goodnight moon"}
 
     [[tool.fixit.overrides]]
     path = "fizz/buzz"
