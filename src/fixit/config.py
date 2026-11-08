@@ -3,22 +3,15 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import importlib
-import inspect
 import logging
-import pkgutil
 import platform
-import sys
 import tomllib
-from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
-from contextlib import ExitStack, contextmanager
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from types import ModuleType
 from typing import (
     Any,
 )
 
-from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from .core.loader import RuleName, import_rules
@@ -34,15 +27,10 @@ from .ftypes import (
     RawConfig,
     RuleOptionsTable,
     RuleOptionTypes,
-    T,
-    is_collection,
     is_sequence,
 )
-from .rule import LintRule
-from .util import append_sys_path
 
 FIXIT_CONFIG_FILENAMES = ("fixit.toml", ".fixit.toml", "pyproject.toml")
-FIXIT_LOCAL_MODULE = "fixit.local"
 
 
 log = logging.getLogger(__name__)
@@ -54,236 +42,16 @@ class ConfigError(ValueError):
         self.config = config
 
 
-class CollectionError(RuntimeError):
-    def __init__(self, msg: str, rule: QualifiedRule):
-        super().__init__(msg)
-        self.rule = rule
-
-    def __reduce__(self) -> tuple[type[RuntimeError], Any]:
-        return type(self), (*self.args, self.rule)
-
-
-def is_rule(obj: type[T]) -> bool:
-    """
-    Returns True if class is a concrete subclass of LintRule
-    """
-    return inspect.isclass(obj) and issubclass(obj, LintRule) and obj is not LintRule
-
-
-@contextmanager
-def local_rule_loader(rule: QualifiedRule) -> Iterator[None]:
-    """
-    Allows importing local rules from arbitrary paths as submodules of fixit.local
-
-    Imports ``fixit.local``, a "reserved" package within the fixit namespace, and
-    overrides the module's path and import spec to come from the root of the specified
-    local rule. Relative imports within the local namespace should work correctly,
-    though may cause collisions if parent-relative imports (``..foo``) are used.
-
-    When the context exits, this removes all members of the ``fixit.local`` namespace
-    from the global ``sys.modules`` dictionary, allowing subsequent imports of further
-    local rules.
-
-    This allows importlib to find local names within the fake ``fixit.local`` namespace,
-    even if they come from arbitrary places on disk, or would otherwise have namespace
-    conflicts if loaded normally using a munged ``sys.path``.
-    """
-    try:
-        import fixit.local
-
-        assert hasattr(fixit.local, "__path__")
-        assert fixit.local.__spec__ is not None
-        assert rule.root is not None
-
-        orig_spec = fixit.local.__spec__
-        fixit.local.__path__ = [rule.root.as_posix()]
-        fixit.local.__spec__ = importlib.machinery.ModuleSpec(
-            name=FIXIT_LOCAL_MODULE,
-            loader=orig_spec.loader,
-            origin=(rule.root / "__init__.py").as_posix(),
-            is_package=True,
-        )
-
-        yield
-
-    finally:
-        for key in list(sys.modules):
-            if key.startswith("fixit.local"):
-                sys.modules.pop(key, None)
-
-
-def find_rules(rule: QualifiedRule) -> Iterable[type[LintRule]]:
-    """
-    Import the rule's qualified module name and return a list of collected rule classes.
-
-    Imports the module by qualified name (eg ``foo.bar`` or ``.local.rules``), and
-    then walks that module to find all lint rules.
-
-    If a specific rule name is given, returns only the lint rule matching that name;
-    otherwise returns the entire list of found rules.
-    """
-    try:
-        if rule.local:
-            with local_rule_loader(rule):
-                module = importlib.import_module(rule.module, "fixit.local")
-                module_rules = walk_module(module)
-        else:
-            module = importlib.import_module(rule.module)
-            module_rules = walk_module(module)
-
-        if rule.name:
-            if value := module_rules.get(rule.name, None):
-                if issubclass(value, LintRule):
-                    yield value
-                elif is_collection(value):
-                    for v in value:
-                        if issubclass(v, LintRule):
-                            yield v
-                else:
-                    log.warning("don't know what to do with {value!r}")
-            elif rule.local:
-                raise CollectionError(
-                    f"could not find rule {rule} in {rule.root}", rule
-                )
-            else:
-                raise CollectionError(f"could not find rule {rule}", rule)
-
-        else:
-            for name in sorted(module_rules.keys()):
-                yield module_rules[name]
-
-    except ImportError as e:
-        if rule.local:
-            raise CollectionError(
-                f"could not import rule(s) {rule} from {rule.root}", rule
-            ) from e
-        else:
-            raise CollectionError(f"could not import rule(s) {rule}", rule) from e
-
-
 def log_skipped(rule: QualifiedRule) -> None:
     """Warn that ``rule``, a custom rule, is not imported."""
     log.warning(f"Skipped rules '{rule}': custom rules are turned off")
 
 
-def walk_module(module: ModuleType) -> dict[str, type[LintRule]]:
-    """
-    Given a module object, return a mapping of all rule names to classes.
-
-    Looks at all objects of the module, and collects lint rules that match the
-    :func:`is_rule` predicate.
-
-    If the original module is a package (eg, ``foo.__init__``), also loads all
-    modules from that package (ignoring sub-packages), and includes their rules in
-    the final results.
-    """
-    rules: dict[str, type[LintRule]] = {}
-
-    members = inspect.getmembers(module, is_rule)
-    rules.update(members)
-
-    if hasattr(module, "__path__"):
-        for _, module_name, is_pkg in pkgutil.iter_modules(module.__path__):
-            if not is_pkg:  # do not recurse to sub-packages
-                mod = importlib.import_module(f".{module_name}", module.__name__)
-                rules.update(walk_module(mod))
-
-    return rules
-
-
-def collect_rules(
-    config: Config,
-    *,
-    # out-param to capture reasons when disabling rules for debugging
-    debug_reasons: dict[type[LintRule], str] | None = None,
-) -> Collection[LintRule]:
-    """
-    Import and return rules specified by `enables` and `disables`.
-
-    With custom rules turned off, imports only the built-in rules: skips the
-    others in `enables` with a warning, and those in `disables` silently, and
-    ignores `enable-root-import`.
-    """
-
-    all_rules: set[type[LintRule]] = set()
-    named_enables: set[type[LintRule]] = set()
-    if debug_reasons is not None:
-        disabled_rules = debug_reasons
-    else:
-        disabled_rules = {}
-
-    with ExitStack() as stack:
-        if config.enable_root_import and config.custom_rules:
-            path = (
-                config.root / config.enable_root_import
-                if isinstance(config.enable_root_import, Path)
-                else config.root
-            )
-            stack.enter_context(append_sys_path(path))
-
-        for qualified_rule in config.enable:
-            if not (config.custom_rules or qualified_rule.builtin):
-                log_skipped(qualified_rule)
-                continue
-            try:
-                rules = set(find_rules(qualified_rule))
-                if qualified_rule.name:
-                    named_enables |= rules
-                all_rules |= rules
-            # Importing a rule runs its code, which can raise any exception.
-            except Exception as e:  # noqa: BLE001
-                log.warning(
-                    f"Failed to load rules '{qualified_rule.module}': {e.__class__.__name__}: {e}"
-                )
-
-        for qualified_rule in config.disable:
-            # Custom rules are not imported, so there is nothing to disable.
-            if not (config.custom_rules or qualified_rule.builtin):
-                continue
-            try:
-                disabled_rules.update(
-                    {
-                        r: "disabled"
-                        for r in find_rules(qualified_rule)
-                        if r not in named_enables
-                    }
-                )
-                all_rules -= set(disabled_rules)
-            # Importing a rule runs its code, which can raise any exception.
-            except Exception as e:  # noqa: BLE001
-                log.warning(
-                    f"Failed to load rules '{qualified_rule.module}': {e.__class__.__name__}: {e}"
-                )
-
-        if config.tags:
-            disabled_rules.update(
-                {R: "tags" for R in all_rules if R.TAGS not in config.tags}  # type: ignore[comparison-overlap]
-            )
-            all_rules -= set(disabled_rules)
-
-        if config.python_version is not None:
-            disabled_rules.update(
-                {
-                    R: "python-version"
-                    for R in all_rules
-                    if R.PYTHON_VERSION
-                    and config.python_version
-                    not in SpecifierSet(R.PYTHON_VERSION, prereleases=True)
-                }
-            )
-            all_rules -= set(disabled_rules)
-
-        materialized_rules = [R() for R in all_rules]
-
-    return materialized_rules
-
-
 def load_rules(config: Config) -> tuple[type[Rule], ...]:
     """
-    The rules of the new engine (#21) that ``config`` enables, sorted by name.
-    ``fixit.rules`` names the built-in rules of the new engine; ``tags`` and
-    ``python-version`` do not apply to them. A module that cannot be imported is
-    a warning, as with :func:`collect_rules`.
+    The rules that ``config`` enables, sorted by name: the built-in rules in
+    ``fixit.rules``, and the custom rules. ``tags`` and ``python-version`` do not
+    apply to them. A module that cannot be imported is a warning.
     """
     root_import = None
     if config.enable_root_import:
