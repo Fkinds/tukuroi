@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-The built-in rules of the new engine (#21): the rules that ruff does not
-replace, rewritten for the new rule API. At the end of #21, they move to
-``fixit.rules``, the name that configs use.
+These rules are all part of the :mod:`fixit.rules` package, and are enabled by default
+unless explicitly listed in the :attr:`disable` configuration option.
 """

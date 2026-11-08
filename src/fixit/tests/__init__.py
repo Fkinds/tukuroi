@@ -5,11 +5,8 @@
 
 import os
 
-from fixit.config import collect_rules
 from fixit.core.loader import RuleName, import_rules
 from fixit.core.testing import generate_test_cases
-from fixit.ftypes import Config, QualifiedRule
-from fixit.testing import add_lint_rule_tests_to_module
 
 from .api import CommandTest, FixitBytesTest
 from .characterization_cli import CliCharacterizationTest
@@ -56,18 +53,7 @@ from .smoke import SmokeTest
 # where it needs it. Every test module imports this package first.
 os.environ.pop("FIXIT_CUSTOM_RULES", None)
 
-# The test cases of the rules of the new engine (#21), named after each rule with
-# "Core" in front: the rules of the libcst engine have the same names.
-for _case in generate_test_cases(import_rules(RuleName("fixit.core.rules"))):
-    globals()[f"Core{_case.__name__}"] = _case
+# The test cases of the built-in rules, named after each rule.
+for _case in generate_test_cases(import_rules(RuleName("fixit.rules"))):
+    globals()[_case.__name__] = _case
 del _case
-
-add_lint_rule_tests_to_module(
-    globals(),
-    collect_rules(
-        Config(
-            enable=[QualifiedRule("fixit.rules")],
-            python_version=None,
-        )
-    ),
-)
