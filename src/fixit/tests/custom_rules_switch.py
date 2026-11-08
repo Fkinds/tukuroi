@@ -135,7 +135,7 @@ class CustomRulesSwitchTest(TestCase):
             ("fixit.rules", True),
             (BUILTIN, True),
             ("fixit.rules.no_static_if_condition", True),
-            # Not built in from #21, which removes it.
+            # Not built in: #21 removed it.
             ("fixit.upgrade", False),
             ("fixit.upgrade.deprecated_testcase_keywords", False),
             ("fixit", False),
@@ -206,7 +206,7 @@ class CustomRulesSwitchTest(TestCase):
             ("override", root(BUILTIN) + sub, RULES, None, "sub/t.py", (SI,), skipped(".rules")),
             ("disable a custom rule", root(BUILTIN, disable=[".rules"]), RULES, None, "t.py", (SI,), ""),
             ("built-in rule", root(BUILTIN), RULES, None, "t.py", (SI,), ""),
-            # The new engine has only fixit.rules built in; #21 removes fixit.upgrade.
+            # Only fixit.rules is built in; #21 removed fixit.upgrade.
             ("fixit.upgrade", root("fixit.upgrade"), RULES, None, "t.py", (), skipped("fixit.upgrade")),
         )  # fmt: skip
         for label, config, files, site, path, rules, warning in cases:

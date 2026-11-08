@@ -80,7 +80,6 @@ ignored_authors = ["dependabot"]
 "src/fixit/rule.py" = ["ALL"]
 "src/fixit/rules/**" = ["ALL"]
 "src/fixit/testing.py" = ["ALL"]
-"src/fixit/upgrade/**" = ["ALL"]
 # Package modules re-export names.
 "__init__.py" = ["F401"]
 
