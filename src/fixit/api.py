@@ -4,17 +4,25 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import os
 import sys
+import time
 import traceback
-from collections.abc import Generator, Iterable
+from collections.abc import Generator, Iterable, Sequence
 from functools import partial
 from pathlib import Path
 
 import click
 import trailrunner
+from moreorless import unified_diff
 from moreorless.click import echo_color_precomputed_diff
 
-from .config import collect_rules, generate_config
+from .config import collect_rules, generate_config, load_rules
+from .core.edits import apply_fixes
+from .core.engine import MAX_ROUNDS, fix, lint
+from .core.rule import Report, Rule
+from .core.source import ParseError, Source
+from .core.text import Range
 from .engine import LintRunner
 from .format import format_module
 from .ftypes import (
@@ -22,13 +30,36 @@ from .ftypes import (
     Config,
     FileContent,
     LintViolation,
+    Metrics,
     MetricsHook,
     Options,
     OutputFormat,
     Result,
+    Violation,
 )
 
 LOG = logging.getLogger(__name__)
+
+# Temporary (#21): with this set to "1", fixit_bytes (and so `lint`, `fix` and
+# the LSP) runs the new engine. The characterization tests move to it file by
+# file, and the last PR of the switch takes this out. It is an environment
+# variable because `lint` checks several files in spawned processes.
+CORE_ENGINE = "_FIXIT_CORE_ENGINE"
+
+
+def _shown(path: Path) -> Path:
+    """``path`` relative to the current directory, if it is under it."""
+    try:
+        return path.relative_to(Path.cwd())
+    except ValueError:
+        return path
+
+
+def _describe(error: Exception) -> str:
+    if isinstance(error, ParseError):
+        line, column = error.position.line, error.position.column
+        return f"Syntax Error @ {line}:{column}: {error.message}"
+    return str(error)
 
 
 def print_result(
@@ -47,11 +78,7 @@ def print_result(
 
     Returns ``True`` if the result is "dirty" - either a lint error or exception.
     """
-    path = result.path
-    try:
-        path = path.relative_to(Path.cwd())
-    except ValueError:
-        pass
+    path = _shown(result.path)
 
     if result.violation:
         rule_name = result.violation.rule_name
@@ -85,9 +112,14 @@ def print_result(
     elif result.error:
         # An exception occurred while processing a file
         error, tb = result.error
-        click.secho(f"{path}: EXCEPTION: {error}", fg="red", err=stderr)
-        click.echo(tb.strip(), err=stderr)
+        click.secho(f"{path}: EXCEPTION: {_describe(error)}", fg="red", err=stderr)
+        if tb:
+            click.echo(tb.strip(), err=stderr)
         return True
+
+    elif result.applied:
+        LOG.debug("%s: %d fixes applied", path, result.applied)
+        return False
 
     else:
         LOG.debug("%s: clean", path)
@@ -115,9 +147,17 @@ def fixit_bytes(
     fixes for each violation.
 
     If ``autofix`` is ``True``, all violations with replacements will be applied
-    automatically, even if ``False`` is sent back to the generator.
+    automatically, even if ``False`` is sent back to the generator. After the
+    violations of a file whose fixes were applied, a last :class:`Result` tells
+    how many were (``applied``).
 
     """
+    if os.environ.get(CORE_ENGINE) == "1":
+        return (
+            yield from _fixit_bytes_core(
+                path, content, config=config, autofix=autofix, metrics_hook=metrics_hook
+            )
+        )
     try:
         rules = collect_rules(config)
 
@@ -140,6 +180,8 @@ def fixit_bytes(
 
         if pending_fixes:
             updated = runner.apply_replacements(pending_fixes)
+            if applied := sum(1 for v in pending_fixes if v.autofixable):
+                yield Result(path, violation=None, applied=applied)
             return format_module(updated, path, config)
 
     except Exception as error:
@@ -148,6 +190,91 @@ def fixit_bytes(
         yield Result(path, violation=None, error=(error, traceback.format_exc()))
 
     return None
+
+
+def _fixit_bytes_core(
+    path: Path,
+    content: FileContent,
+    *,
+    config: Config,
+    autofix: bool,
+    metrics_hook: MetricsHook | None,
+) -> Generator[Result, bool, FileContent | None]:
+    """
+    :func:`fixit_bytes` on the new engine (#21). The fixes that ``autofix`` takes
+    are applied round after round; those sent back to the generator, in one
+    round. The fixed text is formatted with ``ruff format``.
+    """
+    try:
+        rules = load_rules(config)
+        if not rules:
+            yield Result(path, violation=None)
+            return None
+        try:
+            source = Source.from_bytes(content, path)
+        except ParseError as error:
+            # The file is wrong, not fixit: no traceback.
+            yield Result(path, violation=None, error=(error, ""))
+            return None
+
+        start = time.perf_counter()
+        linted = lint(source, rules)
+        duration = int(1_000_000 * (time.perf_counter() - start))
+        for bad in linted.bad_directives:
+            kind = "lint-fixme" if bad.text.startswith("lint-fixme") else "lint-ignore"
+            line = bad.position.line
+            LOG.warning("%s:%d: invalid %s directive", _shown(path), line, kind)
+        if metrics_hook:
+            metrics_hook(_metrics(rules, linted.reports, duration))
+
+        chosen: list[Report] = []
+        for report in linted.reports:
+            answer = yield Result(path, _violation(path, source, report))
+            if (answer or autofix) and report.edits:
+                chosen.append(report)
+        if not linted.reports:
+            yield Result(path, violation=None)
+        if not chosen:
+            return None
+
+        fixed = fix(source, rules, choose=None if autofix else chosen.__contains__)
+        if not fixed.converged:
+            rounds = f"{MAX_ROUNDS} rounds"
+            LOG.warning("%s: fixes did not converge after %s", _shown(path), rounds)
+        if fixed.applied:
+            yield Result(path, violation=None, applied=fixed.applied)
+        if fixed.text != source.text:
+            return source.encode(fixed.text)
+
+    except Exception as error:
+        # As fixit_bytes: an exception in a rule is the result of the file.
+        LOG.debug("Exception while linting", exc_info=error)
+        yield Result(path, violation=None, error=(error, traceback.format_exc()))
+
+    return None
+
+
+def _violation(path: Path, source: Source, report: Report) -> Violation:
+    """``report`` as the CLI and the LSP show it, with the diff of its fix."""
+    end = source.lines.position(report.span.end)
+    diff = ""
+    if report.edits:
+        after = apply_fixes(source.text, [report.edits]).text
+        diff = unified_diff(source.text, after, path.name, n=1)
+    where = Range(report.position, end)
+    return Violation(report.rule, where, report.message, bool(report.edits), diff)
+
+
+def _metrics(
+    rules: Sequence[type[Rule]], reports: Sequence[Report], duration: int
+) -> Metrics:
+    """The reports of each rule, those with a fix, and the time to lint (µs)."""
+    metrics: Metrics = {"Count.Total": len(reports), "Duration.Total": duration}
+    for rule in rules:
+        mine = [r for r in reports if r.rule == rule.name()]
+        metrics[f"Count.{rule.name()}"] = len(mine)
+        metrics[f"FixCount.{rule.name()}"] = sum(1 for r in mine if r.edits)
+    return metrics
 
 
 def fixit_stdin(

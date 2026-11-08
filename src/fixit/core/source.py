@@ -33,6 +33,10 @@ class ParseError(Exception):
         self.position = position
         self.message = message
 
+    def __reduce__(self) -> tuple[type[ParseError], tuple[Position, str]]:
+        # For the process pool of `lint`, which pickles the result of a file.
+        return type(self), (self.position, self.message)
+
 
 @dataclass(frozen=True, slots=True)
 class Comment:
