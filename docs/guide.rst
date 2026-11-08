@@ -10,3 +10,4 @@ User Guide
 .. include:: guide/integrations.rst
 
 .. include:: guide/builtins.rst
+.. include:: guide/ruff.rst
