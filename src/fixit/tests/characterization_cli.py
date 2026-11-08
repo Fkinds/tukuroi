@@ -15,6 +15,7 @@ output that the new engine is known to change.
 """
 
 import logging
+import os
 import re
 import warnings
 from collections.abc import Generator, Iterable, Mapping, Sequence
@@ -22,11 +23,15 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import ClassVar
 from unittest import TestCase
+from unittest.mock import patch
 
 from click.testing import CliRunner
 
+from ..api import CORE_ENGINE
 from ..cli import main
+from ..core import loader
 from ..util import chdir
 from .characterization_suppression import MESSAGES
 
@@ -111,6 +116,9 @@ def invoke(
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(text.encode())
+        # As in a new process: the new loader warns once in a process (#21).
+        loader._WARNED.clear()
+        loader._ROOT_IMPORTED.clear()
         with chdir(root / cwd), fresh_logging(), warnings.catch_warnings():
             # As in a real run: unittest shows the deprecation warnings of the
             # libraries, which change with their versions.
@@ -143,6 +151,14 @@ def line(path: str, rule: str, position: str = "1:0", sep: str = "@") -> str:
 class CharacterizationTestCase(TestCase):
     maxDiff = None
 
+    # Temporary (#21): whether the tests of the class run the new engine. The
+    # last PR of the switch takes this out, as the CLI then always runs it.
+    core_engine: ClassVar[bool] = False
+
+    def setUp(self) -> None:
+        if self.core_engine:
+            self.enterContext(patch.dict(os.environ, {CORE_ENGINE: "1"}))
+
     def assert_violations(
         self, stdout: str, reported: Iterable[tuple[str, ...]]
     ) -> None:
@@ -161,6 +177,8 @@ class CharacterizationTestCase(TestCase):
 
 
 class CliCharacterizationTest(CharacterizationTestCase):
+    core_engine = True
+
     def test_lint_exit_code_and_summary(self) -> None:
         cases = (
             ("no file", {}, (), NONE, 0),
@@ -296,38 +314,22 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, exit_code)
                 self.assertEqual(result.files, before | changed)
 
-    def test_21_syntax_error_message(self) -> None:
-        # #21: libcst writes this text after "b.py: EXCEPTION: "; the new engine
-        # does not. The traceback after it is not pinned.
+    def test_syntax_error_message(self) -> None:
+        # The position of the error, as a violation's: the column counts
+        # characters from 0. No traceback: the file is wrong, not fixit (#21).
         cases = (
-            # NOTE: the column is 1, not the column of ")".
-            (
-                "print)\n",
-                "Syntax Error @ 1:1.\ntokenizer error: unmatched ')'\n\nprint)\n^\n",
-            ),
-            (
-                "def f(:\n    pass\n",
-                (
-                    "Syntax Error @ 2:1.\nparser error: error at 2:4: expected one of"
-                    " ), *, **, NAME\n\n    pass\n^\n"
-                ),
-            ),
-            (
-                "if True\n    pass\n",
-                (
-                    "Syntax Error @ 2:1.\nparser error: error at 2:4: expected one of"
-                    " !=, %, &, (, *, **, +, -, ., /, //, :, <, <<, <=, ==, >, >=, >>,"
-                    " @, [, ^, and, if, in, is, not, or, |\n\n    pass\n^\n"
-                ),
-            ),
+            ("print)\n", "Syntax Error @ 1:5: unmatched ')'"),
+            ("def f(:\n    pass\n", "Syntax Error @ 1:6: invalid syntax"),
+            ("if True\n    pass\n", "Syntax Error @ 1:7: expected ':'"),
+            ('x = "\u00e9" + )\n', "Syntax Error @ 1:10: unmatched ')'"),
         )
         for source, message in cases:
             with self.subTest(source=source):
                 files = {"pyproject.toml": CONFIG, "b.py": source}
                 result = invoke(files, ["lint", "b.py"])
-                tb = "Traceback (most recent call last):\n"
-                text = result.stdout.partition(tb)[0]
-                self.assertEqual(text, f"b.py: EXCEPTION: {message}")
+                self.assertEqual(result.stdout, f"b.py: EXCEPTION: {message}\n")
+                self.assertEqual(result.stderr, DIRTY)
+                self.assertEqual(result.exit_code, 2)
 
     def test_lint_stdin(self) -> None:
         sub = {"sub/pyproject.toml": f'[tool.fixit]\ndisable = ["fixit.rules:{SI}"]\n'}
