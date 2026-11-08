@@ -18,7 +18,6 @@ Built-in Rules
 
 .. automodule:: fixit.rules
 
-- :class:`CollapseIsinstanceChecks`
 - :class:`ComparePrimitivesByEqual`
 - :class:`CompareSingletonPrimitivesByIs`
 - :class:`NoAssertTrueForComparisons`
@@ -34,54 +33,8 @@ Built-in Rules
 - :class:`UseAssertIn`
 - :class:`UseAssertIsNotNone`
 - :class:`UseAsyncSleepInAsyncDef`
-- :class:`UseClsInClassmethod`
 - :class:`UseFstring`
 - :class:`VariadicCallableSyntax`
-
-.. class:: CollapseIsinstanceChecks
-
-    The built-in ``isinstance`` function, instead of a single type,
-    can take a tuple of types and check whether given target suits
-    any of them. Rather than chaining multiple ``isinstance`` calls
-    with a boolean-or operation, a single ``isinstance`` call where
-    the second argument is a tuple of all types can be used.
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        Multiple isinstance calls with the same target but different types can be collapsed into a single call with a tuple of types.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            foo() or foo()
-        .. code:: python
-
-            foo(x, y) or foo(x, z)
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            isinstance(x, y) or isinstance(x, z)
-
-            # suggested fix
-            isinstance(x, (y, z))
-
-        .. code:: python
-
-            isinstance(x, y) or isinstance(x, z) or isinstance(x, q)
-
-            # suggested fix
-            isinstance(x, (y, z, q))
 
 .. class:: ComparePrimitivesByEqual
 
@@ -748,70 +701,6 @@ Built-in Rules
             from time import sleep
             async def func():
                 sleep(1)
-.. class:: UseClsInClassmethod
-
-    Enforces using ``cls`` as the first argument in a ``@classmethod``.
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        When using @classmethod, the first argument must be `cls`.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            class foo:
-                # classmethod with cls first arg.
-                @classmethod
-                def cm(cls, a, b, c):
-                    pass
-        .. code:: python
-
-            class foo:
-                # non-classmethod with non-cls first arg.
-                def nm(self, a, b, c):
-                    pass
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            class foo:
-                # No args at all.
-                @classmethod
-                def cm():
-                    pass
-
-            # suggested fix
-            class foo:
-                # No args at all.
-                @classmethod
-                def cm(cls):
-                    pass
-
-        .. code:: python
-
-            class foo:
-                # Single arg + reference.
-                @classmethod
-                def cm(a):
-                    return a
-
-            # suggested fix
-            class foo:
-                # Single arg + reference.
-                @classmethod
-                def cm(cls):
-                    return cls
-
 .. class:: UseFstring
 
     Encourages the use of f-string instead of %-formatting or .format() for high code quality and efficiency.
