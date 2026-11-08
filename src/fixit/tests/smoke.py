@@ -56,13 +56,15 @@ class SmokeTest(TestCase):
                 self.assertIs(ctx.params["debug"], expected)
 
     def test_file_with_formatting(self) -> None:
+        # Uses the rules of the new engine (#21), which formats a fixed file
+        # with ruff format: the blank lines before `def`.
         content = dedent(
             """\
                 import foo
                 import bar
 
                 def func():
-                    value = f"hello world"
+                    self.assertTrue(a in b)
             """
         )
         expected_fix = dedent(
@@ -70,20 +72,13 @@ class SmokeTest(TestCase):
                 import foo
                 import bar
 
-                def func():
-                    value = "hello world"
-            """
-        )
-        expected_format = dedent(
-            """\
-                import bar
-                import foo
-
 
                 def func():
-                    value = "hello world"
+                    self.assertIn(a, b)
             """
         )
+        # The message has a line break.
+        reported = r"(?s)file\.py@\d+:\d+ UseAssertIn: .+ \(has autofix\)"
         with TemporaryDirectory() as td:
             tdp = Path(td).resolve()
             path = tdp / "file.py"
@@ -96,10 +91,7 @@ class SmokeTest(TestCase):
 
                 self.assertNotEqual(result.stdout, "")
                 self.assertNotEqual(result.exit_code, 0)
-                self.assertRegex(
-                    result.stdout,
-                    r"file\.py@\d+:\d+ NoRedundantFString: .+ \(has autofix\)",
-                )
+                self.assertRegex(result.stdout, reported)
                 self.assertEqual(content, path.read_text(), "file unexpectedly changed")
 
             with self.subTest("fixing"):
@@ -112,32 +104,9 @@ class SmokeTest(TestCase):
 
                 self.assertNotEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 0)
-                self.assertRegex(
-                    result.stdout,
-                    r"file\.py@\d+:\d+ NoRedundantFString: .+ \(has autofix\)",
-                )
+                self.assertRegex(result.stdout, reported)
                 self.assertEqual(
                     expected_fix, path.read_text(), "unexpected file output"
-                )
-
-            with self.subTest("fixing with formatting"):
-                (tdp / "pyproject.toml").write_text("[tool.fixit]\nformatter='ufmt'\n")
-
-                path.write_text(content)
-                result = self.runner.invoke(
-                    main,
-                    ["fix", "--automatic", path.as_posix()],
-                    catch_exceptions=False,
-                )
-
-                self.assertNotEqual(result.stdout, "")
-                self.assertEqual(result.exit_code, 0)
-                self.assertRegex(
-                    result.stdout,
-                    r"file\.py@\d+:\d+ NoRedundantFString: .+ \(has autofix\)",
-                )
-                self.assertEqual(
-                    expected_format, path.read_text(), "unexpected file output"
                 )
 
             with self.subTest("linting via stdin"):
@@ -150,12 +119,9 @@ class SmokeTest(TestCase):
 
                 self.assertNotEqual(result.stdout, "")
                 self.assertNotEqual(result.exit_code, 0)
-                self.assertRegex(
-                    result.stdout,
-                    r"file\.py@\d+:\d+ NoRedundantFString: .+ \(has autofix\)",
-                )
+                self.assertRegex(result.stdout, reported)
 
-            with self.subTest("fixing with formatting via stdin"):
+            with self.subTest("fixing via stdin"):
                 result = self.runner.invoke(
                     main,
                     ["fix", "-", path.as_posix()],
@@ -164,7 +130,7 @@ class SmokeTest(TestCase):
                 )
 
                 self.assertEqual(result.exit_code, 0)
-                self.assertEqual(expected_format, result.stdout, "unexpected stdout")
+                self.assertEqual(expected_fix, result.stdout, "unexpected stdout")
 
             with self.subTest("LSP"):
                 path.write_text(content)
@@ -190,7 +156,7 @@ class SmokeTest(TestCase):
                 self.assertEqual(result.exit_code, 0)
                 self.assertRegex(
                     result.stdout,
-                    r"file\.py\".+\"range\".+\"start\".+\"end\".+\"severity\": 2, \"code\": \"NoRedundantFString\", \"source\": \"fixit\"",
+                    r"file\.py\".+\"range\".+\"start\".+\"end\".+\"severity\": 2, \"code\": \"UseAssertIn\", \"source\": \"fixit\"",
                 )
 
     def test_this_file_is_clean(self) -> None:
@@ -209,10 +175,10 @@ class SmokeTest(TestCase):
         with TemporaryDirectory() as td:
             tdp = Path(td).resolve()
             (tdp / "clean.py").write_text("name = 'Kirby'\nprint(f'hello {name}')")
-            (tdp / "dirty.py").write_text("name = 'Kirby'\nprint('hello %s' % name)\n")
+            (tdp / "dirty.py").write_text("name = 'Kirby'\nif True:\n    pass\n")
 
             result = self.runner.invoke(main, ["lint", td])
-            self.assertIn("dirty.py@2:6 UseFstring:", result.stdout)
+            self.assertIn("dirty.py@2:0 NoStaticIfCondition:", result.stdout)
             self.assertEqual(result.exit_code, 1)
 
     def test_directory_with_errors(self) -> None:
@@ -229,54 +195,38 @@ class SmokeTest(TestCase):
         with TemporaryDirectory() as td:
             tdp = Path(td).resolve()
             (tdp / "clean.py").write_text("name = 'Kirby'\nprint(f'hello {name}')")
-            (tdp / "dirty.py").write_text("name = 'Kirby'\nprint('hello %s' % name)\n")
+            (tdp / "dirty.py").write_text("name = 'Kirby'\nif True:\n    pass\n")
             (tdp / "broken.py").write_text("print)\n")
 
             result = self.runner.invoke(main, ["lint", td])
-            self.assertIn("dirty.py@2:6 UseFstring:", result.stdout)
+            self.assertIn("dirty.py@2:0 NoStaticIfCondition:", result.stdout)
             self.assertIn("broken.py: EXCEPTION: Syntax Error @ 1:", result.stdout)
             self.assertEqual(result.exit_code, 3)
 
     def test_directory_with_autofixes(self) -> None:
+        # The fixed files are formatted with ruff format (#21), as clean.py is.
+        clean_source = dedent(
+            """\
+            GLOBAL = "hello"
+
+
+            def foo():
+                self.assertIn(a, b)
+                self.assertEqual(x, 3)
+            """
+        )
         with TemporaryDirectory() as td:
             tdp = Path(td).resolve()
             clean = tdp / "clean.py"
-            clean.write_text(
-                dedent(
-                    """
-                    GLOBAL = 'hello'
-
-                    def foo():
-                        value = 'test'
-                        if value is False:
-                            pass
-                    """
-                )
-            )
+            clean.write_text(clean_source)
             single = tdp / "single.py"
             single.write_text(
-                dedent(
-                    """
-                    GLOBAL = f'hello'
-
-                    def foo():
-                        value = 'test'
-                        if value is False:
-                            pass
-                    """
-                )
+                clean_source.replace("assertIn(a, b)", "assertTrue(a in b)")
             )
             multi = tdp / "multi.py"
             multi.write_text(
-                dedent(
-                    """
-                    GLOBAL = f'hello'
-
-                    def foo():
-                        value = f'test'
-                        if value == False:
-                            pass
-                    """
+                clean_source.replace("assertIn(a, b)", "assertTrue(a in b)").replace(
+                    "assertEqual(x, 3)", "assertTrue(x, 3)"
                 )
             )
 
@@ -294,21 +244,12 @@ class SmokeTest(TestCase):
                 self.assertEqual(expected, clean.read_text())
 
             with self.subTest("single fix"):
-                self.assertListEqual(
-                    [
-                        "2:9 NoRedundantFString",
-                    ],
-                    sorted(errors[single]),
-                )
+                self.assertListEqual(["5:4 UseAssertIn"], sorted(errors[single]))
                 self.assertEqual(expected, single.read_text())
 
             with self.subTest("multiple fixes"):
                 self.assertListEqual(
-                    [
-                        "2:9 NoRedundantFString",
-                        "5:12 NoRedundantFString",
-                        "6:7 CompareSingletonPrimitivesByIs",
-                    ],
+                    ["5:4 UseAssertIn", "6:4 NoAssertTrueForComparisons"],
                     sorted(errors[multi]),
                 )
                 self.assertEqual(expected, multi.read_text())

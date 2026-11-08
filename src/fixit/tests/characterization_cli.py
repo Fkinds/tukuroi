@@ -15,7 +15,6 @@ output that the new engine is known to change.
 """
 
 import logging
-import os
 import re
 import warnings
 from collections.abc import Generator, Iterable, Mapping, Sequence
@@ -23,13 +22,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import ClassVar
 from unittest import TestCase
-from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from ..api import CORE_ENGINE
 from ..cli import main
 from ..core import loader
 from ..util import chdir
@@ -151,14 +147,6 @@ def line(path: str, rule: str, position: str = "1:0", sep: str = "@") -> str:
 class CharacterizationTestCase(TestCase):
     maxDiff = None
 
-    # Temporary (#21): whether the tests of the class run the new engine. The
-    # last PR of the switch takes this out, as the CLI then always runs it.
-    core_engine: ClassVar[bool] = False
-
-    def setUp(self) -> None:
-        if self.core_engine:
-            self.enterContext(patch.dict(os.environ, {CORE_ENGINE: "1"}))
-
     def assert_violations(
         self, stdout: str, reported: Iterable[tuple[str, ...]]
     ) -> None:
@@ -177,8 +165,6 @@ class CharacterizationTestCase(TestCase):
 
 
 class CliCharacterizationTest(CharacterizationTestCase):
-    core_engine = True
-
     def test_lint_exit_code_and_summary(self) -> None:
         cases = (
             ("no file", {}, (), NONE, 0),

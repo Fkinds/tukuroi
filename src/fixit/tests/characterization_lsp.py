@@ -288,8 +288,6 @@ FORMATTING_UNFORMATTED = (
 
 
 class LspCharacterizationTest(CharacterizationTestCase):
-    core_engine = True
-
     def assert_published(self, served: Served, *expected: Json) -> None:
         self.assertEqual(in_order(served.published), in_order(expected))
         # The server shows no error to the user.

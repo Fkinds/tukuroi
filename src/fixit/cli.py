@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-import os
 import sys
 import unittest
 from collections.abc import Sequence
@@ -14,18 +13,10 @@ import click
 
 from fixit import __version__
 
-from .api import CORE_ENGINE, fixit_paths, print_result
-from .config import (
-    collect_rules,
-    generate_config,
-    load_rules,
-    parse_rule,
-    validate_config,
-)
+from .api import fixit_paths, print_result
+from .config import generate_config, load_rules, parse_rule, validate_config
 from .core.testing import generate_test_cases
-from .ftypes import Config, LSPOptions, Options, OutputFormat, QualifiedRule, Tags
-from .rule import LintRule
-from .testing import generate_lint_rule_test_cases
+from .ftypes import LSPOptions, Options, OutputFormat, QualifiedRule, Tags
 from .util import capture
 
 
@@ -334,37 +325,17 @@ def test(ctx: click.Context, rules: Sequence[str]) -> None:
     qual_rules = [parse_rule(rule, Path.cwd().resolve()) for rule in rules]
     if not options.custom_rules:
         require_builtin(ctx, qual_rules)
-    if os.environ.get(CORE_ENGINE) == "1":
-        run_rule_tests(ctx, options, qual_rules)
-        return
-    lint_rules = collect_rules(
-        Config(
-            enable=qual_rules,
-            disable=[],
-            python_version=None,
-            custom_rules=options.custom_rules,
-        )
-    )
-    test_cases = generate_lint_rule_test_cases(lint_rules)
-
-    test_suite = unittest.TestSuite()
-    loader = unittest.TestLoader()
-    for test_case in test_cases:
-        test_suite.addTest(loader.loadTestsFromTestCase(test_case))
-
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(test_suite)
-    if not result.wasSuccessful():
-        ctx.exit(1)
+    run_rule_tests(ctx, options, qual_rules)
 
 
 def run_rule_tests(
     ctx: click.Context, options: Options, rules: Sequence[QualifiedRule]
 ) -> None:
     """
-    ``fixit test`` on the new engine (#21). The config of the current directory
-    applies (``enable-root-import``, the switch for custom rules). Exits with 5
-    when no test ran, as unittest and pytest do: no standard defines it.
+    Run the tests of ``rules`` on the new engine (#21). The config of the current
+    directory applies (``enable-root-import``, the switch for custom rules).
+    Exits with 5 when no test ran, as unittest and pytest do: no standard
+    defines it.
     """
     config = generate_config(options=options)
     config.enable, config.disable = list(rules), []
@@ -394,23 +365,20 @@ def debug(ctx: click.Context, paths: Sequence[Path]) -> None:
     try:
         from rich import print as pprint
     except ImportError:
-        from pprint import pprint  # type: ignore
+        # Not pprint.pprint, which takes the second argument as the stream.
+        pprint = print  # type: ignore[assignment]
 
     pprint(options)
 
     for path in paths:
         path = path.resolve()
         config = generate_config(path, options=options)
-        disabled: dict[type[LintRule], str] = {}
-        enabled = collect_rules(config, debug_reasons=disabled)
+        # The new loader (#21) tells no reason for a rule it does not enable.
+        enabled = load_rules(config)
 
         pprint(">>> ", path)
         pprint(config)
-        pprint("enabled:", sorted(str(rule) for rule in enabled))
-        pprint(
-            "disabled:",
-            sorted(f"{rule()} ({reason})" for rule, reason in disabled.items()),
-        )
+        pprint("enabled:", [f"{rule.__module__}:{rule.__name__}" for rule in enabled])
 
 
 @main.command(name="validate-config")

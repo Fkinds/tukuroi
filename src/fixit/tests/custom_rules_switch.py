@@ -23,7 +23,6 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from ..api import CORE_ENGINE
 from ..config import collect_rules, parse_rule
 from ..ftypes import Config
 from .characterization_cli import Run, records
@@ -116,10 +115,6 @@ def lint(
 
 class CustomRulesSwitchTest(TestCase):
     maxDiff = None
-
-    def setUp(self) -> None:
-        # Temporary (#21): the tests run the new engine (see CharacterizationTestCase).
-        self.enterContext(patch.dict(os.environ, {CORE_ENGINE: "1"}))
 
     def assert_lint(
         self, result: Run, rules: Sequence[str], warning: str = "", path: str = "t.py"

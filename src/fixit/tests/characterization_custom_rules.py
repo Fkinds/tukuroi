@@ -278,8 +278,6 @@ def footer(count: int, status: str, *failures: str) -> str:
 
 
 class CustomRulesCharacterizationTest(CharacterizationTestCase):
-    core_engine = True
-
     def assert_lint(
         self, result: Run, rules: Sequence[str], warning: str = "", path: str = "t.py"
     ) -> None:
