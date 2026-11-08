@@ -381,21 +381,6 @@ def run_rule_tests(
 
 @main.command()
 @click.pass_context
-@click.argument("paths", nargs=-1, type=click.Path(path_type=Path))
-def upgrade(ctx: click.Context, paths: Sequence[Path]) -> None:
-    """
-    upgrade lint rules and apply deprecation fixes
-
-    roughly equivalent to `fixit --rules fixit.upgrade fix --automatic`
-    """
-    options: Options = ctx.obj
-    options.rules = (QualifiedRule("fixit.upgrade"),)
-
-    ctx.invoke(fix, paths=paths, interactive=False)
-
-
-@main.command()
-@click.pass_context
 @click.argument("paths", nargs=-1, type=click.Path(exists=True, path_type=Path))
 def debug(ctx: click.Context, paths: Sequence[Path]) -> None:
     """

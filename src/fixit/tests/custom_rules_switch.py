@@ -8,7 +8,7 @@ Tests of the switch that turns custom rules off (#12): ``--custom-rules`` /
 ``--no-custom-rules`` and the environment variable ``FIXIT_CUSTOM_RULES``.
 
 With custom rules turned off, fixit imports only the rules that come with it
-(``fixit.rules`` and ``fixit.upgrade``). The custom rules here create a file
+(``fixit.rules``). The custom rules here create a file
 named ``<module>.imported`` in the current directory when imported, so each run
 shows which of them fixit imported.
 """
@@ -140,8 +140,9 @@ class CustomRulesSwitchTest(TestCase):
             ("fixit.rules", True),
             (BUILTIN, True),
             ("fixit.rules.no_static_if_condition", True),
-            ("fixit.upgrade", True),
-            ("fixit.upgrade.deprecated_testcase_keywords", True),
+            # Not built in from #21, which removes it.
+            ("fixit.upgrade", False),
+            ("fixit.upgrade.deprecated_testcase_keywords", False),
             ("fixit", False),
             ("fixit.rulesx", False),
             ("fixit.upgrades", False),

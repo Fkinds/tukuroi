@@ -28,11 +28,6 @@ class FixitDeprecatedTestCaseKeywords(LintRule):
     .. important::
        The use of ``fixit.ValidTestCase`` and ``fixit.InvalidTestCase`` have been
        deprecated. This rule provides upgrades only to the temporary aliases.
-
-       Use ``fixit upgrade`` to replace the aliases with :class:`fixit.Valid` and
-       :class:`fixit.Invalid`.
-
-       See the :ref:`Version 2 API Changes <v2-api-changes>` for more details.
     """
 
     MESSAGE = "Fix deprecated ValidTestCase/InvalidTestCase keyword arguments"

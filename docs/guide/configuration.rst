@@ -272,7 +272,7 @@ parent directory of the repo can also enable rules.
 Only run Fixit with custom rules on code whose configuration you trust. For
 other code, turn custom rules off with ``--no-custom-rules``, or with the
 environment variable ``FIXIT_CUSTOM_RULES=0`` (see :ref:`commands`). Then Fixit
-imports only the built-in rules, in :mod:`fixit.rules` and ``fixit.upgrade``:
+imports only the built-in rules, in :mod:`fixit.rules`:
 
 - Custom rules in :attr:`enable` are skipped with a warning. The built-in rules
   still run, and the exit code does not change.
