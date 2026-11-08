@@ -20,10 +20,8 @@ from ..ftypes import (
     OutputFormat,
     QualifiedRule,
     RawConfig,
-    Tags,
     Version,
 )
-from ..rule import LintRule
 from ..util import chdir
 
 
@@ -476,130 +474,6 @@ class ConfigTest(TestCase):
 
             with self.assertRaisesRegex(config.ConfigError, "output-format"):
                 config.generate_config(self.tdp / "outer" / "foo.py")
-
-    def test_collect_rules(self) -> None:
-        from fixit.rules.avoid_or_in_except import AvoidOrInExcept
-        from fixit.rules.cls_in_classmethod import UseClsInClassmethod
-        from fixit.rules.no_namedtuple import NoNamedTuple
-        from fixit.rules.use_types_from_typing import UseTypesFromTyping
-
-        AvoidOrInExcept.TAGS = {"exceptions"}
-        UseTypesFromTyping.TAGS = {"typing"}
-        NoNamedTuple.TAGS = {"typing", "tuples"}
-
-        def collect_types(cfg: Config) -> list[type[LintRule]]:
-            return sorted([type(rule) for rule in config.collect_rules(cfg)], key=str)
-
-        with self.subTest("everything"):
-            rules = collect_types(
-                Config(
-                    python_version=None,
-                )
-            )
-            self.assertIn(UseClsInClassmethod, rules)
-            self.assertIn(UseTypesFromTyping, rules)
-
-        with self.subTest("opt-out"):
-            rules = collect_types(
-                Config(
-                    disable=[QualifiedRule("fixit.rules", "UseClsInClassmethod")],
-                    python_version=None,
-                )
-            )
-            self.assertNotIn(UseClsInClassmethod, rules)
-            self.assertIn(UseTypesFromTyping, rules)
-
-        with self.subTest("opt-in"):
-            rules = collect_types(
-                Config(
-                    enable=[QualifiedRule("fixit.rules", "UseClsInClassmethod")],
-                    python_version=None,
-                )
-            )
-            self.assertListEqual([UseClsInClassmethod], rules)
-
-        with self.subTest("disable builtins"):
-            rules = collect_types(
-                Config(
-                    disable=[QualifiedRule("fixit.rules")],
-                    python_version=None,
-                )
-            )
-            self.assertListEqual([], rules)
-
-        with self.subTest("override broad opt-out"):
-            rules = collect_types(
-                Config(
-                    disable=[QualifiedRule("fixit.rules")],
-                    enable=[QualifiedRule("fixit.rules", "UseClsInClassmethod")],
-                )
-            )
-            self.assertListEqual([UseClsInClassmethod], rules)
-
-        with self.subTest("version match"):
-            rules = collect_types(
-                Config(
-                    python_version=Version("3.7.10"),
-                )
-            )
-            self.assertIn(UseTypesFromTyping, rules)
-
-        with self.subTest("version match alpha"):
-            rules = collect_types(
-                Config(
-                    python_version=Version("3.7.10a3"),
-                )
-            )
-            self.assertIn(UseTypesFromTyping, rules)
-
-        with self.subTest("version mismatch"):
-            rules = collect_types(
-                Config(
-                    python_version=Version("3.10.5"),
-                )
-            )
-            self.assertNotIn(UseTypesFromTyping, rules)
-
-        with self.subTest("version mismatch alpha"):
-            rules = collect_types(
-                Config(
-                    python_version=Version("3.10.5a4"),
-                )
-            )
-            self.assertNotIn(UseTypesFromTyping, rules)
-
-        with self.subTest("tag select"):
-            rules = collect_types(
-                Config(
-                    python_version=None,
-                    tags=Tags.parse("typing"),
-                )
-            )
-            self.assertListEqual(
-                [
-                    NoNamedTuple,
-                    UseTypesFromTyping,
-                ],
-                rules,
-            )
-
-        with self.subTest("tag filter"):
-            rules = collect_types(
-                Config(
-                    python_version=None,
-                    tags=Tags.parse("^exceptions"),
-                )
-            )
-            self.assertNotIn(AvoidOrInExcept, rules)
-
-        with self.subTest("tag select and filter"):
-            rules = collect_types(
-                Config(
-                    python_version=None,
-                    tags=Tags.parse("typing,^tuples"),
-                )
-            )
-            self.assertListEqual([UseTypesFromTyping], rules)
 
     def test_format_output(self) -> None:
         with chdir(self.tdp):

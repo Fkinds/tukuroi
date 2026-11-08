@@ -18,7 +18,6 @@ Built-in Rules
 
 .. automodule:: fixit.rules
 
-- :class:`AvoidOrInExcept`
 - :class:`CollapseIsinstanceChecks`
 - :class:`ComparePrimitivesByEqual`
 - :class:`CompareSingletonPrimitivesByIs`
@@ -29,7 +28,6 @@ Built-in Rules
 - :class:`NoNamedTuple`
 - :class:`NoRedundantArgumentsSuper`
 - :class:`NoRedundantFString`
-- :class:`NoRedundantLambda`
 - :class:`NoRedundantListComprehension`
 - :class:`NoStaticIfCondition`
 - :class:`NoStringTypeAnnotation`
@@ -42,91 +40,8 @@ Built-in Rules
 - :class:`UseAsyncSleepInAsyncDef`
 - :class:`UseClsInClassmethod`
 - :class:`UseFstring`
-- :class:`UseTypesFromTyping`
 - :class:`VariadicCallableSyntax`
 
-.. class:: AvoidOrInExcept
-
-    Discourages use of ``or`` in except clauses. If an except clause needs to catch multiple exceptions,
-    they must be expressed as a parenthesized tuple, for example:
-    ``except (ValueError, TypeError)``
-    (https://docs.python.org/3/tutorial/errors.html#handling-exceptions)
-
-    When ``or`` is used, only the first operand exception type of the conditional statement will be caught.
-    For example::
-
-        In [1]: class Exc1(Exception):
-            ...:     pass
-            ...:
-
-        In [2]: class Exc2(Exception):
-            ...:     pass
-            ...:
-
-        In [3]: try:
-            ...:     raise Exception()
-            ...: except Exc1 or Exc2:
-            ...:     print("caught!")
-            ...:
-        ---------------------------------------------------------------------------
-        Exception                                 Traceback (most recent call last)
-        <ipython-input-3-3340d66a006c> in <module>
-            1 try:
-        ----> 2     raise Exception()
-            3 except Exc1 or Exc2:
-            4     print("caught!")
-            5
-
-        Exception:
-
-        In [4]: try:
-            ...:     raise Exc1()
-            ...: except Exc1 or Exc2:
-            ...:     print("caught!")
-            ...:
-            caught!
-
-        In [5]: try:
-            ...:     raise Exc2()
-            ...: except Exc1 or Exc2:
-            ...:     print("caught!")
-            ...:
-        ---------------------------------------------------------------------------
-        Exc2                                      Traceback (most recent call last)
-        <ipython-input-5-5d29c1589cc0> in <module>
-            1 try:
-        ----> 2     raise Exc2()
-            3 except Exc1 or Exc2:
-            4     print("caught!")
-            5
-
-        Exc2:
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        Avoid using 'or' in an except block. For example:'except ValueError or TypeError' only catches 'ValueError'. Instead, use parentheses, 'except (ValueError, TypeError)'
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            try:
-                print()
-            except (ValueError, TypeError) as err:
-                pass
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            try:
-                print()
-            except ValueError or TypeError:
-                pass
 .. class:: CollapseIsinstanceChecks
 
     The built-in ``isinstance`` function, instead of a single type,
@@ -595,44 +510,6 @@ Built-in Rules
 
             # suggested fix
             bad: str = 'bad'
-
-.. class:: NoRedundantLambda
-
-    A lamba function which has a single objective of
-    passing all it is arguments to another callable can
-    be safely replaced by that callable.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            lambda x: foo(y)
-        .. code:: python
-
-            lambda x: foo(x, y)
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            lambda: self.func()
-
-            # suggested fix
-            self.func
-
-        .. code:: python
-
-            lambda x: foo(x)
-
-            # suggested fix
-            foo
 
 .. class:: NoRedundantListComprehension
 
@@ -1207,50 +1084,6 @@ Built-in Rules
             # suggested fix
             f"{'hi'}"
 
-.. class:: UseTypesFromTyping
-
-    Enforces the use of types from the ``typing`` module in type annotations in place
-    of ``builtins.{builtin_type}`` since the type system doesn't recognize the latter
-    as a valid type before Python ``3.10``.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-    .. attribute:: PYTHON_VERSION
-        :no-index:
-        :type: '< 3.10'
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            def fuction(list: List[str]) -> None:
-                pass
-        .. code:: python
-
-            def function() -> None:
-                thing: Dict[str, str] = {}
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            from typing import List
-            def whatever(list: list[str]) -> None:
-                pass
-
-            # suggested fix
-            from typing import List
-            def whatever(list: List[str]) -> None:
-                pass
-
-        .. code:: python
-
-            def function(list: list[str]) -> None:
-                pass
 .. class:: VariadicCallableSyntax
 
     Callable types with arbitrary parameters should be written as `Callable[..., T]`
