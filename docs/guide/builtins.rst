@@ -14,7 +14,7 @@ Built-in Rules
 ``fixit.rules``
 ^^^^^^^^^^^^^^^
 
-.. automodule:: fixit.core.rules
+.. automodule:: fixit.rules
 
 - :class:`NoAssertTrueForComparisons`
 - :class:`NoNamedTuple`

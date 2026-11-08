@@ -197,21 +197,20 @@ class ImportRulesTest(TestCase):
                     import_rules(RuleName.parse(text, root))
                 self.assertEqual(str(caught.exception), message)
 
-    def test_fixit_rules_imports_the_rules_of_the_new_engine(self) -> None:
-        # Until the last stage of #21 moves them to fixit/rules.
-        core = import_rules(RuleName("fixit.core.rules"))
-        self.assertEqual(len(core), 7)
+    def test_builtin_rules(self) -> None:
+        builtin = import_rules(RuleName("fixit.rules"))
+        self.assertEqual(len(builtin), 7)
+        use_assert_in = tuple(r for r in builtin if r.name() == "UseAssertIn")
         cases = (
             # (name, rules)
-            ("fixit.rules", core),
-            ("fixit.rules:UseAssertIn", tuple(r for r in core if r.name() == "UseAssertIn")),
-            ("fixit.rules.use_assert_in", tuple(r for r in core if r.name() == "UseAssertIn")),
-        )  # fmt: skip
+            ("fixit.rules:UseAssertIn", use_assert_in),
+            ("fixit.rules.use_assert_in", use_assert_in),
+        )
         for text, rules in cases:
             with self.subTest(text):
                 self.assertEqual(import_rules(RuleName.parse(text, Path("/r"))), rules)
         errors = (
-            # (name, message): the name given, not fixit.core.rules.
+            # (name, message)
             ("fixit.rules:NoRedundantFString", "could not find rule fixit.rules:NoRedundantFString"),
             ("fixit.rules.nope", "could not import rule(s) fixit.rules.nope"),
             ("fixit.rulesx", "could not import rule(s) fixit.rulesx"),
