@@ -291,3 +291,16 @@ class CommandTest(TestCase):
                 after, last = self.fix(two, answers, UI)
                 self.assertEqual(after, fixed)
                 self.assertEqual(last, summary.format(counts))
+
+
+class PublicNamesTest(TestCase):
+    def test_rule_api(self) -> None:
+        # The names to write a rule with come from the new engine (#21).
+        import fixit
+        from fixit.core import edits, rule, text
+
+        found = (fixit.Rule, fixit.Valid, fixit.Invalid, fixit.Edit, fixit.Position)
+        self.assertEqual(
+            found, (rule.Rule, rule.Valid, rule.Invalid, edits.Edit, text.Position)
+        )
+        self.assertTrue(all(hasattr(fixit, name) for name in fixit.__all__))

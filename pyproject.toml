@@ -76,7 +76,6 @@ ignored_authors = ["dependabot"]
 [tool.ruff.lint.per-file-ignores]
 # #21 deletes or rewrites these files. Remove each entry together with its file.
 "src/fixit/format.py" = ["ALL"]
-"src/fixit/rule.py" = ["ALL"]
 # Package modules re-export names.
 "__init__.py" = ["F401"]
 

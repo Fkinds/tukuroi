@@ -9,9 +9,15 @@ API Reference
 Lint Rules
 ----------
 
-.. autoclass:: LintRule
+.. autoclass:: Rule
+    :members: report, name
+
 .. autoclass:: Valid
 .. autoclass:: Invalid
+.. autoclass:: Edit
+.. autoclass:: Position
+.. autoclass:: Span
+.. autoclass:: Range
 
 
 Frontends
@@ -24,7 +30,7 @@ Simple API
 .. autofunction:: fixit_file
 .. autofunction:: print_result
 
-.. autoclass:: LintViolation
+.. autoclass:: Violation
 .. autoclass:: Result
 
 
