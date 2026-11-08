@@ -55,19 +55,6 @@ class OutputFormat(str, Enum):
     vscode = "vscode"
 
 
-@dataclass(frozen=True)
-class Invalid:
-    code: str
-    range: CodeRange | None = None
-    expected_message: str | None = None
-    expected_replacement: str | None = None
-
-
-@dataclass(frozen=True)
-class Valid:
-    code: str
-
-
 LintIgnoreRegex = re.compile(
     r"""
     \#\s*                   # leading hash and whitespace

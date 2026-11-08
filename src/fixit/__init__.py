@@ -4,52 +4,47 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-Linting framework built on LibCST, with automatic fixes
+Linting framework built on ``ast``, with automatic fixes
 """
 
 from .__version__ import __version__
 from .api import fixit_bytes, fixit_file, fixit_paths, print_result
+from .core.edits import Edit
+from .core.rule import Invalid, Rule, Valid
+from .core.text import Position, Range, Span
 from .format import Formatter
 from .ftypes import (
     CodePosition,
     CodeRange,
     Config,
     FileContent,
-    Invalid,
     LintViolation,
     Options,
     QualifiedRule,
     Result,
     Tags,
-    Valid,
+    Violation,
 )
-from .rule import LintRule
-
-# DEPRECATED: aliases to 0.x names
-# TODO: create lint rules to fix references
-CstLintRule = LintRule
-CSTLintRule = LintRule
-InvalidTestCase = Invalid
-ValidTestCase = Valid
 
 __all__ = [
-    "CSTLintRule",
     "CodePosition",
     "CodeRange",
     "Config",
-    "CstLintRule",
+    "Edit",
     "FileContent",
     "Formatter",
     "Invalid",
-    "InvalidTestCase",
-    "LintRule",
     "LintViolation",
     "Options",
+    "Position",
     "QualifiedRule",
+    "Range",
     "Result",
+    "Rule",
+    "Span",
     "Tags",
     "Valid",
-    "ValidTestCase",
+    "Violation",
     "__version__",
     "fixit_bytes",
     "fixit_file",

@@ -150,8 +150,8 @@ for more details.
 ``test``
 ^^^^^^^^
 
-Test one or more lint rules using their :attr:`~fixit.LintRule.VALID` and
-:attr:`~fixit.LintRule.INVALID` test cases.
+Test one or more lint rules using their :attr:`~fixit.Rule.VALID` and
+:attr:`~fixit.Rule.INVALID` test cases.
 
 Expects qualified lint rule packages or names, with the same form as when
 configuring :attr:`enable` and :attr:`disable`.
