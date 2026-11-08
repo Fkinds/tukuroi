@@ -115,7 +115,8 @@ The main configuration table.
     This option may only be specified in the root config file. Specifying the
     option in any other config file is treated as a configuration error.
     Absolute paths, or paths containing ``..`` parent-relative components,
-    are not allowed.
+    are not allowed. Any value other than ``true``, ``false``, or a relative
+    path that is not empty is a configuration error.
 
     This option is roughly equivalent to adding the configured path, relative
     to the root configuration, to :attr:`sys.path` when attempting to import

@@ -425,24 +425,6 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             result = lint(config, KETTLE | sub, "sub/t.py")
             self.assert_lint(result, (BAD,), path="sub/t.py")
 
-    def test_21_enable_root_import_values(self) -> None:
-        # #21: the new loader takes only a bool or a relative path that is not
-        # empty; any other value is a config error.
-        cases = (
-            # (label, value, rules, warning)
-            # NOTE: a value that is not a bool or a string is taken as true.
-            # #21: a config error.
-            ("integer", "1", (BAD,), ""),
-            # NOTE: an empty path is taken as false, not as the root.
-            # #21: a config error.
-            ("empty string", '""', (), no_import("kettle.rules")),
-        )
-        for label, value, rules, warning in cases:
-            with self.subTest(label):
-                lines = [f"enable-root-import = {value}"]
-                result = lint(root("kettle.rules", lines=lines), KETTLE)
-                self.assert_lint(result, rules, warning)
-
     def test_enable_root_import_invalid(self) -> None:
         with self.subTest("not in the root config"):
             sub = {"sub/pyproject.toml": toml("enable-root-import = true")}
@@ -455,6 +437,9 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         cases = (
             ('"/src"', "enable-root-import: absolute paths not allowed"),
             ('"../src"', "enable-root-import: '..' components not allowed"),
+            # Only a bool or a relative path that is not empty (#21).
+            ("1", "enable-root-import: 1 is not a bool or a relative path"),
+            ('""', "enable-root-import: '' is not a bool or a relative path"),
         )
         for value, message in cases:
             with self.subTest(value):

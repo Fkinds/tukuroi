@@ -21,6 +21,9 @@ from typing import (
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
+from .core.loader import RuleName
+from .core.loader import collect_rules as collect_core_rules
+from .core.rule import Rule
 from .format import FORMAT_STYLES
 from .ftypes import (
     Config,
@@ -275,6 +278,31 @@ def collect_rules(
     return materialized_rules
 
 
+def load_rules(config: Config) -> tuple[type[Rule], ...]:
+    """
+    The rules of the new engine (#21) that ``config`` enables, sorted by name.
+    ``fixit.rules`` names the built-in rules of the new engine; ``tags`` and
+    ``python-version`` do not apply to them. A module that cannot be imported is
+    a warning, as with :func:`collect_rules`.
+    """
+    root_import = None
+    if config.enable_root_import:
+        root_import = config.root
+        if isinstance(config.enable_root_import, Path):
+            root_import = config.root / config.enable_root_import
+    return collect_core_rules(
+        [rule_name(rule) for rule in config.enable],
+        [rule_name(rule) for rule in config.disable],
+        root_import=root_import,
+        custom_rules=config.custom_rules,
+    )
+
+
+def rule_name(rule: QualifiedRule) -> RuleName:
+    """``rule`` as the new engine names it: the directory only for a local rule."""
+    return RuleName(rule.module, rule.name, rule.root if rule.local else None)
+
+
 def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
     """
     Given a file path, locate all relevant config files in priority order.
@@ -480,7 +508,14 @@ def merge_configs(
         if data.pop("root", False):
             root = config.path.parent
 
-        if value := data.pop("enable-root-import", False):
+        value = data.pop("enable-root-import", False)
+        # A bool, or a relative path that is not empty (#21).
+        if not isinstance(value, (bool, str)) or value == "":
+            raise ConfigError(
+                f"enable-root-import: {value!r} is not a bool or a relative path",
+                config=config,
+            )
+        if value:
             if root != config.path.parent:
                 raise ConfigError(
                     "enable-root-import not allowed in non-root configs", config=config
