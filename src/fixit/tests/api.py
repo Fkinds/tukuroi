@@ -23,6 +23,7 @@ from ..core.text import Position, Range
 from ..ftypes import Config, Metrics, QualifiedRule, Result, Violation
 from ..util import capture, chdir
 from .characterization_cli import invoke
+from .characterization_custom_rules import run as run_cli
 from .characterization_suppression import MESSAGES
 from .core_loader import HEAD, files
 
@@ -251,6 +252,22 @@ class CommandTest(TestCase):
             result.stdout, "b.py: EXCEPTION: Syntax Error @ 1:5: unmatched ')'\n"
         )
         self.assertEqual(result.exit_code, 2)
+
+    def test_validate_config(self) -> None:
+        pyproject = (
+            '[tool.fixit]\nroot = true\nenable = [".rules:Bad", ".rules:Nope"]\n'
+        )
+        rules = HEAD + "\n\nclass Bad(Rule):\n    MESSAGE = 'm'\n"
+        files_ = {"pyproject.toml": pyproject, "rules.py": rules}
+        # `run` writes no .pyc, and forgets the modules imported.
+        result = run_cli(files_, ["validate-config", "pyproject.toml"])
+        # Printed with pprint, or rich when installed: compare without the breaks.
+        printed = " ".join(result.stdout.replace("'", "").split())
+        error = "CollectionError: could not find rule .rules:Nope in"
+        expected = f"Failed to import rule `.rules:Nope` for global enable: {error}"
+        self.assertIn(expected, printed)
+        self.assertNotIn(".rules:Bad", printed)
+        self.assertEqual(result.exit_code, -1)
 
     def test_answers(self) -> None:
         two = "self.assertTrue(a in b)\nself.assertTrue(c in d)\n"

@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import os
 import sys
 import unittest
 from collections.abc import Sequence
@@ -13,8 +14,15 @@ import click
 
 from fixit import __version__
 
-from .api import fixit_paths, print_result
-from .config import collect_rules, generate_config, parse_rule, validate_config
+from .api import CORE_ENGINE, fixit_paths, print_result
+from .config import (
+    collect_rules,
+    generate_config,
+    load_rules,
+    parse_rule,
+    validate_config,
+)
+from .core.testing import generate_test_cases
 from .ftypes import Config, LSPOptions, Options, OutputFormat, QualifiedRule, Tags
 from .rule import LintRule
 from .testing import generate_lint_rule_test_cases
@@ -326,6 +334,9 @@ def test(ctx: click.Context, rules: Sequence[str]) -> None:
     qual_rules = [parse_rule(rule, Path.cwd().resolve()) for rule in rules]
     if not options.custom_rules:
         require_builtin(ctx, qual_rules)
+    if os.environ.get(CORE_ENGINE) == "1":
+        run_rule_tests(ctx, options, qual_rules)
+        return
     lint_rules = collect_rules(
         Config(
             enable=qual_rules,
@@ -343,6 +354,27 @@ def test(ctx: click.Context, rules: Sequence[str]) -> None:
 
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(test_suite)
+    if not result.wasSuccessful():
+        ctx.exit(1)
+
+
+def run_rule_tests(
+    ctx: click.Context, options: Options, rules: Sequence[QualifiedRule]
+) -> None:
+    """
+    ``fixit test`` on the new engine (#21). The config of the current directory
+    applies (``enable-root-import``, the switch for custom rules). Exits with 5
+    when no test ran, as unittest and pytest do: no standard defines it.
+    """
+    config = generate_config(options=options)
+    config.enable, config.disable = list(rules), []
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    for case in generate_test_cases(load_rules(config)):
+        suite.addTest(loader.loadTestsFromTestCase(case))
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    if not result.testsRun:
+        ctx.exit(5)
     if not result.wasSuccessful():
         ctx.exit(1)
 

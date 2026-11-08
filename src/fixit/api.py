@@ -26,6 +26,7 @@ from .core.text import Range
 from .engine import LintRunner
 from .format import format_module
 from .ftypes import (
+    CORE_ENGINE,
     STDIN,
     Config,
     FileContent,
@@ -39,12 +40,6 @@ from .ftypes import (
 )
 
 LOG = logging.getLogger(__name__)
-
-# Temporary (#21): with this set to "1", fixit_bytes (and so `lint`, `fix` and
-# the LSP) runs the new engine. The characterization tests move to it file by
-# file, and the last PR of the switch takes this out. It is an environment
-# variable because `lint` checks several files in spawned processes.
-CORE_ENGINE = "_FIXIT_CORE_ENGINE"
 
 
 def _shown(path: Path) -> Path:

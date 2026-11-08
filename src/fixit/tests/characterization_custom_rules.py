@@ -11,11 +11,10 @@ warnings when rules fail to load, custom rules with the other settings, and
 
 They run the CLI only, so that the engine rewrite (#21) can be checked against
 them. The expected values are copied from the output of the libcst engine.
-``NOTE`` marks behavior that looks wrong but is pinned as is. ``#21`` marks the
-sources of the custom rules: they use the libcst API, and #21 rewrites them for
-the new rule API. The CLI is expected to load, report and exit as here with the
-rewritten rules, except in the methods marked ``#21``: #21 rebuilds how custom
-rules are loaded, and fixes the behavior they pin (issuecomment-6706326492).
+``NOTE`` marks behavior that looks wrong but is pinned as is. The CLI runs the
+new engine (#21), and the custom rules use its API. #21 rebuilt how custom rules
+are loaded, and fixed the behavior that the libcst engine had there
+(issuecomment-6706326492); the comments of those cases tell what changed.
 
 The CLI imports the rules in this process; ``run`` puts ``sys.path`` and
 ``sys.modules`` back after each run.
@@ -52,76 +51,66 @@ SOURCE = "bad = 1\nugly = 2\nif True:\n    pass\n"
 POSITION = {BAD: "1:0", UGLY: "2:0", SI: "3:0"}
 PRINTED = {BAD: f"{MESSAGE[BAD]} (has autofix)", UGLY: MESSAGE[UGLY], SI: MESSAGES[SI]}
 
-# #21: rewritten for the new rule API
-HEAD = "import libcst as cst\n\nfrom fixit import Invalid, LintRule, Valid\n"
+# The rules use the API of the new engine (#21).
+HEAD = "import ast\n\nfrom fixit.core.rule import Invalid, Rule, Valid\n"
 
 
-# #21: rewritten for the new rule API
 def rule(cls: str, name: str, message: str, fix: str = "") -> str:
     """A rule ``cls`` that reports ``name`` with ``message`` (an expression)."""
     expected = f', expected_replacement="{fix} = 1\\n"' if fix else ""
-    replacement = f', replacement=node.with_changes(value="{fix}")' if fix else ""
+    replacement = f', replacement="{fix}"' if fix else ""
     return (
-        f"\n\nclass {cls}(LintRule):\n"
+        f"\n\nclass {cls}(Rule):\n"
         f"    MESSAGE = {message}\n"
-        '    VALID = [Valid("good = 1\\n")]\n'
-        f'    INVALID = [Invalid("{name} = 1\\n"{expected})]\n\n'
-        "    def visit_Name(self, node: cst.Name) -> None:\n"
-        f'        if node.value == "{name}":\n'
+        '    VALID = (Valid("good = 1\\n"),)\n'
+        f'    INVALID = (Invalid("{name} = 1\\n"{expected}),)\n\n'
+        "    def visit_Name(self, node: ast.Name) -> None:\n"
+        f'        if node.id == "{name}":\n'
         f"            self.report(node{replacement})\n"
     )
 
 
-# #21: rewritten for the new rule API
 BAD_PY = HEAD + rule(BAD, "bad", repr(MESSAGE[BAD]), "good")
-# #21: rewritten for the new rule API
 UGLY_PY = HEAD + rule(f"{UGLY}Rule", "ugly", repr(MESSAGE[UGLY]))
-# #21: rewritten for the new rule API
 BOTH_PY = BAD_PY + rule(f"{UGLY}Rule", "ugly", repr(MESSAGE[UGLY]))
-# #21: rewritten for the new rule API
 EXTRA_PY = HEAD + rule("NoExtraName", "ugly", "'In a sub-package.'")
 
 
-# #21: rewritten for the new rule API
 def importing(statement: str) -> str:
     """BAD, with its message imported by ``statement``."""
     return HEAD + statement + "\n" + rule(BAD, "bad", "MESSAGE", "good")
 
 
-# #21: rewritten for the new rule API
 FAILING_PY = HEAD + (
-    "from libcst.metadata import CodePosition, CodeRange\n\n"
-    "A, B = CodePosition(1, 0), CodePosition(1, 3)\n\n\n"
-    f"class {BAD}(LintRule):\n"
+    "from fixit.core.text import Position\n\n\n"
+    f"class {BAD}(Rule):\n"
     f"    MESSAGE = {MESSAGE[BAD]!r}\n"
-    "    VALID = [\n"
+    "    VALID = (\n"
     '        "good = 1\\n",\n'
     '        Valid("bad = 1\\n"),  # reported\n'
-    "    ]\n"
-    "    INVALID = [\n"
+    "    )\n"
+    "    INVALID = (\n"
     '        "bad = 1\\n",\n'
     '        Invalid("good = 1\\n"),  # not reported\n'
     '        Invalid("bad = 1\\n", expected_replacement="good = 1\\n"),\n'
     '        Invalid("bad = 1\\n", expected_replacement="best = 1\\n"),\n'
-    f'        Invalid("bad = 1\\n", expected_message={MESSAGE[BAD]!r}),\n'
-    '        Invalid("bad = 1\\n", expected_message="Other."),\n'
-    '        Invalid("bad = 1\\n", range=CodeRange(A, B)),\n'
-    '        Invalid("bad = 1\\n", range=CodeRange(A, A)),\n'
+    f'        Invalid("bad = 1\\n", {MESSAGE[BAD]!r}, "good = 1\\n"),\n'
+    '        Invalid("bad = 1\\n", "Other.", "good = 1\\n"),\n'
+    '        Invalid("bad = 1\\n", None, "good = 1\\n", Position(1, 0)),\n'
+    '        Invalid("bad = 1\\n", None, "good = 1\\n", Position(1, 3)),\n'
     '        Invalid("boom = 1\\n"),  # raises\n'
     '        Invalid("bad = bad\\n", expected_replacement="good = good\\n"),\n'
-    "    ]\n\n"
-    "    def visit_Name(self, node: cst.Name) -> None:\n"
-    '        if node.value == "boom":\n'
+    "    )\n\n"
+    "    def visit_Name(self, node: ast.Name) -> None:\n"
+    '        if node.id == "boom":\n'
     '            raise RuntimeError("boom")\n'
-    '        if node.value == "bad":\n'
-    '            self.report(node, replacement=node.with_changes(value="good"))\n'
+    '        if node.id == "bad":\n'
+    '            self.report(node, replacement="good")\n'
 )
 # (test of FAILING_PY, its result), in the order that unittest runs them.
 FAILING_RESULTS = (
-    # NOTE: passes without an expected replacement, though the rule has an
-    # autofix; `validate_patch` in testing.py, which fails it, is not called.
-    # #21: FAIL: a case with a fix needs an expected replacement.
-    ("INVALID_0", "ok"),
+    # A case with a fix needs an expected replacement (#21).
+    ("INVALID_0", "FAIL"),
     ("INVALID_1", "FAIL"),
     ("INVALID_2", "ok"),
     ("INVALID_3", "FAIL"),
@@ -229,13 +218,17 @@ def forget(before: Collection[str], dirs: tuple[str, ...]) -> None:
     def within(place: str) -> bool:
         return any(place == d or place.startswith(f"{d}/") for d in dirs)
 
-    for name in sys.modules.keys() - before:
+    def places(name: str) -> list[str]:
         spec = getattr(sys.modules[name], "__spec__", None)
         if spec is None:
-            continue
-        places = [spec.origin or "", *(spec.submodule_search_locations or ())]
-        if any(map(within, places)):
-            del sys.modules[name]
+            return []
+        return [spec.origin or "", *(spec.submodule_search_locations or ())]
+
+    # Find them all first: the path of a namespace package is read from its
+    # parent, which may be among them (the package of the new loader, #21).
+    doomed = [n for n in sys.modules.keys() - before if any(map(within, places(n)))]
+    for name in doomed:
+        del sys.modules[name]
     for key in [k for k in sys.path_importer_cache if within(k)]:
         del sys.path_importer_cache[key]
 
@@ -285,6 +278,8 @@ def footer(count: int, status: str, *failures: str) -> str:
 
 
 class CustomRulesCharacterizationTest(CharacterizationTestCase):
+    core_engine = True
+
     def assert_lint(
         self, result: Run, rules: Sequence[str], warning: str = "", path: str = "t.py"
     ) -> None:
@@ -337,10 +332,10 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             result = lint(r, in_root, cwd="sub")
             self.assert_lint(result, (BAD,))
 
-    def test_21_rules_in_the_repo_of_root_and_sub_configs(self) -> None:
-        # #21: the new loader tells ".rules" of each config apart by its
-        # directory, as the docs say: under sub/, the rules of sub/rules.py run
-        # too, and the sub config disables only sub/rules.py.
+    def test_rules_in_the_repo_of_root_and_sub_configs(self) -> None:
+        # The new loader tells ".rules" of each config apart by its directory
+        # (#21), as the docs say: under sub/, the rules of sub/rules.py run too,
+        # and the sub config disables only sub/rules.py.
         sub = {"sub/pyproject.toml": toml(names("enable", ".rules"))}
         in_root = {"rules.py": BAD_PY, "sub/rules.py": UGLY_PY}
         sub_off = {"sub/pyproject.toml": toml(names("disable", ".rules"))}
@@ -348,15 +343,10 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         no_sub = no_import(".rules", FROM_SUB)
         cases = (
             # (label, config, files, path, rules, warning)
-            # NOTE: the rules of sub/rules.py do not run; ".rules" of the root
-            # is taken for the same rule. The docs (configuration.rst, `enable`)
-            # say the name is relative to the config file that has it.
-            # #21: BAD and UGLY are reported.
-            ("root and sub", r, sub | in_root, "sub/t.py", (BAD,), ""),
-            # NOTE: in the sub config, ".rules" stands for sub/rules.py, which
-            # does not exist; yet ".rules" of the root is disabled under sub/.
-            # #21: BAD is reported, and the warning stays.
-            ("sub disables", r, sub_off | only_root, "sub/t.py", (), no_sub),
+            ("root and sub", r, sub | in_root, "sub/t.py", (BAD, UGLY), ""),
+            # In the sub config, ".rules" stands for sub/rules.py, which does not
+            # exist.
+            ("sub disables", r, sub_off | only_root, "sub/t.py", (BAD,), no_sub),
         )
         for label, config, files, path, rules, warning in cases:
             with self.subTest(label):
@@ -375,15 +365,14 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             with self.subTest(label):
                 self.assert_lint(lint(root(".rules"), WORDING | files), (BAD,))
 
-    def test_21_relative_import_above_the_config_directory(self) -> None:
-        # #21: the new loader stops ".." at the config directory: the import
-        # fails, the rules do not load, and a warning tells why.
-        above = importing(f"from ..rule import LintRule\n\nMESSAGE = {MESSAGE[BAD]!r}")
-        # NOTE: ".." above the config directory reaches the `fixit` package.
-        # quickstart.rst says the imports must stay in the directory tree of the
-        # config file.
+    def test_relative_import_above_the_config_directory(self) -> None:
+        # The new loader stops ".." at the config directory (#21): the import
+        # fails, the rules do not load, and a warning tells why. The libcst
+        # engine let ".." reach the `fixit` package.
+        above = importing(f"from ..core import rule\n\nMESSAGE = {MESSAGE[BAD]!r}")
         result = lint(root(".rules"), WORDING | {"rules.py": above})
-        self.assert_lint(result, (BAD,))
+        error = "ImportError: attempted relative import beyond top-level package"
+        self.assert_lint(result, (), failed(".rules", error))
 
     def test_installed_rules(self) -> None:
         cases = (
@@ -471,15 +460,19 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(result.stderr, no_import("spoon.rules") + TWO.format(one))
         self.assertEqual(result.exit_code, 0)
 
-    def test_21_enable_root_import_of_another_root(self) -> None:
-        # #21: the new loader does not use a module imported for another root:
-        # b/t.py logs a warning and runs no rule, in either order of the files.
+    def test_module_imported_for_another_root(self) -> None:
+        # The new loader does not use a module imported for another root (#21):
+        # b/t.py logs a warning and runs no rule. The libcst engine ran, for
+        # b/t.py, the rules that a/t.py imported first.
         result = self.run_two_roots("kettle.rules")
-        # NOTE: b/t.py runs the rules that a/t.py imported first. With the files
-        # in the other order, they fail to load for b/t.py.
-        expected = sorted([found(BAD, "a/t.py"), found(BAD, "b/t.py")])
-        self.assertEqual(records(result.stdout), expected)
-        self.assertEqual(result.stderr, TWO_FIXED)
+        self.assertEqual(result.stdout, found(BAD, "a/t.py"))
+        other = f"imported from another root, {result.root}/a"
+        one = "1 file with errors, 1 auto-fix available, 1 fix applied"
+        warning = failed(
+            "kettle.rules",
+            f"CollectionError: could not import rule(s) kettle.rules: {other}",
+        )
+        self.assertEqual(result.stderr, warning + TWO.format(one))
         self.assertEqual(result.exit_code, 0)
 
     def test_rules_in_the_repo_that_fail_to_load(self) -> None:
@@ -499,38 +492,27 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
                 # NOTE: a rule that fails to load only logs a warning.
                 self.assert_lint(result, (), warning)
 
-    def test_21_rules_in_the_repo_that_fail_to_load(self) -> None:
+    def test_why_rules_in_the_repo_fail_to_load(self) -> None:
         dependency = "import nope_dependency\n" + BAD_PY
         absolute = WORDING | {"rules.py": importing("from wording import MESSAGE")}
-        no_rules = no_import(".rules", FROM_ROOT)
+
+        def missing(module: str) -> str:
+            error = f"ModuleNotFoundError: No module named {module!r}"
+            return no_import(".rules", f"{FROM_ROOT}: {error}")
+
+        no_rules = "WARNING:fixit.config:No rules in '.rules'" + FROM_ROOT + "\n"
+        # The libcst engine did not find the name that its output shows, gave
+        # no error of the import that failed, and nothing for a module without
+        # rules (#21).
         cases = (
             # (label, config, files, rules, warning)
-            # NOTE: the name that the output shows is not found.
-            # #21: found: the new loader takes a name with or without "Rule".
-            # UGLY is reported, with no warning.
-            (
-                "name without Rule",
-                root(f".rules:{UGLY}"),
-                {"rules.py": BOTH_PY},
-                (),
-                no_rule(f".rules:{UGLY}", IN_ROOT),
-            ),
-            # NOTE: the warning does not say which import failed.
-            # #21: the warning has the error of the import that failed.
-            (
-                "import in it fails",
-                root(".rules"),
-                {"rules.py": dependency},
-                (),
-                no_rules,
-            ),
-            # NOTE: the warning does not say which import failed.
-            # #21: the warning has the error of the import that failed.
-            ("repo rule imports, not set", root(".rules"), absolute, (), no_rules),
-            # NOTE: nothing runs, and no warning tells.
-            # #21: a warning tells that the module has no rules.
-            ("no rules in it", root(".rules"), {"rules.py": "x = 1\n"}, (), ""),
-        )
+            # A name with or without "Rule".
+            ("name without Rule", root(f".rules:{UGLY}"), {"rules.py": BOTH_PY}, (UGLY,), ""),
+            # The error of the import that failed.
+            ("import in it fails", root(".rules"), {"rules.py": dependency}, (), missing("nope_dependency")),
+            ("repo rule imports, not set", root(".rules"), absolute, (), missing("wording")),
+            ("no rules in it", root(".rules"), {"rules.py": "x = 1\n"}, (), no_rules),
+        )  # fmt: skip
         for label, config, files, rules, warning in cases:
             with self.subTest(label):
                 self.assert_lint(lint(config, files), rules, warning)
@@ -572,18 +554,15 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             with self.subTest(label):
                 self.assert_disable(enable, disable, rules)
 
-    def test_21_disable_custom_rules(self) -> None:
-        # #21: the new loader imports a module once, so a rule in the repo is the
-        # same class however it is named, as for an installed package.
+    def test_disable_custom_rules_in_the_repo(self) -> None:
+        # The new loader imports a module once (#21), so a rule in the repo is
+        # the same class however it is named, as for an installed package. The
+        # libcst engine imported it again for each name, as another class.
         r, rb = ".rules", f".rules:{BAD}"
         cases = (
             # (label, enable, disable, rules)
-            # NOTE: the rule is not disabled: it is imported again, as another class.
-            # #21: disabled: UGLY only is reported.
-            ("1 rule", (r,), (rb,), (BAD, UGLY)),
-            # NOTE: BAD is reported twice: it is imported twice, as 2 classes.
-            # #21: BAD is reported once.
-            ("enable module and rule", (r, rb), (), (BAD, BAD, UGLY)),
+            ("1 rule", (r,), (rb,), (UGLY,)),
+            ("enable module and rule", (r, rb), (), (BAD, UGLY)),
         )
         for label, enable, disable, rules in cases:
             with self.subTest(label):
@@ -625,14 +604,13 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
                 before = files | {"sub/rules.py": UGLY_PY, f"{cwd}/t.py": SOURCE}
                 self.assert_lint(run(before, args, cwd=cwd, site=site), rules)
 
-    def test_21_rules_in_the_repo_are_imported_for_each_file(self) -> None:
-        # #21: the new loader imports a module once in a process: "imported" is
-        # printed once.
+    def test_rules_in_the_repo_are_imported_once(self) -> None:
+        # The new loader imports a module once in a process (#21): "imported" is
+        # printed once. The libcst engine ran the module again for each file.
         files = {"rules.py": 'print("imported")\n' + BAD_PY, "u.py": SOURCE}
         before = {"pyproject.toml": root(".rules"), "t.py": SOURCE, **files}
         result = run(before, ["fix", "--automatic", "t.py", "u.py"])
-        # NOTE: the module runs again for each file.
-        expected = f"imported\n{found(BAD)}imported\n{found(BAD, 'u.py')}"
+        expected = f"imported\n{found(BAD)}{found(BAD, 'u.py')}"
         self.assertEqual(result.stdout, expected)
         self.assertEqual(result.stderr, TWO_FIXED)
         self.assertEqual(result.exit_code, 0)
@@ -657,33 +635,36 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 0)
 
-    def test_21_fixit_test_with_failing_cases(self) -> None:
-        # #21: INVALID_0 fails (see FAILING_RESULTS), so the status line is
-        # "FAILED (failures=6, errors=1)".
+    def test_fixit_test_with_failing_cases(self) -> None:
         result = run({"rules.py": FAILING_PY}, ["test", ".rules"])
         # unittest prints the errors, then the failures, each in the order run.
         failures = sorted((r, t) for t, r in FAILING_RESULTS if r != "ok")
         blocks = [f"{r}: test_{t} (fixit.testing.{BAD}.test_{t})" for r, t in failures]
-        status = "FAILED (failures=5, errors=1)"
+        status = "FAILED (failures=6, errors=1)"
         output = (ran(BAD, *FAILING_RESULTS), footer(12, status, *blocks))
         self.assertEqual(outcome(result.stderr), output)
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.exit_code, 1)
 
-    def test_21_fixit_test_without_tests(self) -> None:
-        # #21: `fixit test` exits with 5 when no test ran, as unittest and pytest
-        # do. It reads the config of the current directory, so kettle.rules is
-        # imported with enable-root-import and its tests run.
-        config = {"pyproject.toml": toml("root = true", "enable-root-import = true")}
-        cases = (
-            (".rules:Nope", {"rules.py": BOTH_PY}, no_rule(".rules:Nope", IN_ROOT)),
-            # NOTE: `fixit test` reads no config, so enable-root-import is not used.
-            ("kettle.rules", KETTLE | config, no_import("kettle.rules")),
+    def test_fixit_test_without_tests(self) -> None:
+        # `fixit test` exits with 5 when no test ran, as unittest and pytest do
+        # (#21). The libcst engine exited with 0.
+        result = run({"rules.py": BOTH_PY}, ["test", ".rules:Nope"])
+        warning = no_rule(".rules:Nope", IN_ROOT).format(root=result.root)
+        self.assertEqual(outcome(result.stderr), ([warning], footer(0, "NO TESTS RAN")))
+        self.assertEqual(result.exit_code, 5)
+
+    def test_fixit_test_reads_the_config(self) -> None:
+        # `fixit test` reads the config of the current directory (#21), so
+        # kettle.rules is imported with enable-root-import, and its tests run.
+        # The libcst engine read no config, and found no rule. The rules named
+        # run, though the config disables them.
+        lines = (
+            "root = true",
+            "enable-root-import = true",
+            names("disable", "kettle.rules"),
         )
-        for rules, files, warning in cases:
-            with self.subTest(rules):
-                result = run(files, ["test", rules])
-                output = ([warning.format(root=result.root)], footer(0, "NO TESTS RAN"))
-                self.assertEqual(outcome(result.stderr), output)
-                # NOTE: exits with 0, though no test ran.
-                self.assertEqual(result.exit_code, 0)
+        config = {"pyproject.toml": toml(*lines)}
+        result = run(KETTLE | config, ["test", "kettle.rules"])
+        self.assertEqual(outcome(result.stderr), (ran(BAD, *PASSED), footer(2, "OK")))
+        self.assertEqual(result.exit_code, 0)
