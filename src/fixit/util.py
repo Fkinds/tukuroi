@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
-import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -66,27 +65,6 @@ class capture[Yield, Send, Return]:
         if self._result is Sentinel:
             raise ValueError("Generator hasn't completed")
         return cast(Return, self._result)
-
-
-@contextmanager
-def append_sys_path(path: Path) -> Generator[None]:
-    """
-    Append a path to ``sys.path`` temporarily, and then remove it again when done.
-
-    If the given path is already in ``sys.path``, it will not be added a second time,
-    and it will not be removed when leaving the context.
-    """
-    path_str = path.as_posix()
-
-    # not there: append to path, and remove it when leaving the context
-    if path_str not in sys.path:
-        sys.path.append(path_str)
-        yield
-        sys.path.remove(path_str)
-
-    # already there: do nothing, and don't remove it later
-    else:
-        yield
 
 
 @contextmanager
