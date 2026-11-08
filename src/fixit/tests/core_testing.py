@@ -143,3 +143,17 @@ class GenerateTestCasesTest(TestCase):
         no_package: dict[str, object] = {}
         add_rule_tests_to_module(no_package, [NoUglyNameRule])
         self.assertEqual(no_package["NoUglyNameRule"].__module__, "fixit.testing")  # type: ignore[attr-defined]
+
+    def test_public_module(self) -> None:
+        # The test cases say they are in fixit.testing: it has the same names.
+        from .. import testing
+
+        names = (RuleTestCase, add_rule_tests_to_module, generate_test_cases)
+        self.assertEqual(
+            (
+                testing.RuleTestCase,
+                testing.add_rule_tests_to_module,
+                testing.generate_test_cases,
+            ),
+            names,
+        )
