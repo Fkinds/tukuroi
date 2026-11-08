@@ -4,20 +4,16 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-import platform
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import (
     Any,
 )
 
-from packaging.version import InvalidVersion, Version
-
 from .core.loader import RuleName, import_rules
 from .core.loader import collect_rules as collect_core_rules
 from .core.rule import Rule
-from .format import FORMAT_STYLES
 from .ftypes import (
     Config,
     Options,
@@ -25,8 +21,6 @@ from .ftypes import (
     QualifiedRule,
     QualifiedRuleRegex,
     RawConfig,
-    RuleOptionsTable,
-    RuleOptionTypes,
     is_sequence,
 )
 
@@ -50,8 +44,8 @@ def log_skipped(rule: QualifiedRule) -> None:
 def load_rules(config: Config) -> tuple[type[Rule], ...]:
     """
     The rules that ``config`` enables, sorted by name: the built-in rules in
-    ``fixit.rules``, and the custom rules. ``tags`` and ``python-version`` do not
-    apply to them. A module that cannot be imported is a warning.
+    ``fixit.rules``, and the custom rules. A module that cannot be imported is a
+    warning.
     """
     root_import = None
     if config.enable_root_import:
@@ -154,34 +148,6 @@ def get_sequence(
     return value
 
 
-def get_options(
-    config: RawConfig, key: str, *, data: dict[str, Any] | None = None
-) -> RuleOptionsTable:
-    if data:
-        mapping = data.pop(key, {})
-    else:
-        mapping = config.data.pop(key, {})
-
-    if not isinstance(mapping, Mapping):
-        raise ConfigError(
-            f"{key!r} must be mapping of values, got {type(key)}", config=config
-        )
-
-    rule_configs: RuleOptionsTable = {}
-    for rule_name, rule_config in mapping.items():
-        rule_configs[rule_name] = {}
-        for option, value in rule_config.items():
-            if not isinstance(value, RuleOptionTypes):
-                raise ConfigError(
-                    f"{option!r} must be one of {RuleOptionTypes}, got {type(value)}",
-                    config=config,
-                )
-
-            rule_configs[rule_name][option] = value
-
-    return rule_configs
-
-
 def parse_rule(rule: str, root: Path, config: RawConfig | None = None) -> QualifiedRule:
     """
     Given a raw rule string, parse and return a QualifiedRule object
@@ -213,9 +179,6 @@ def merge_configs(
     enable_root_import: bool | Path = Config.enable_root_import
     enable_rules: set[QualifiedRule] = {QualifiedRule("fixit.rules")}
     disable_rules: set[QualifiedRule] = set()
-    rule_options: RuleOptionsTable = {}
-    target_python_version: Version | None = Version(platform.python_version())
-    target_formatter: str | None = None
     output_format: OutputFormat = OutputFormat.fixit
     output_template: str = ""
 
@@ -224,13 +187,7 @@ def merge_configs(
         *,
         enable: Sequence[str] = (),
         disable: Sequence[str] = (),
-        options: RuleOptionsTable | None = None,
-        python_version: Any = None,
-        formatter: str | None = None,
     ) -> None:
-        nonlocal target_python_version
-        nonlocal target_formatter
-
         subpath = subpath.resolve()
         try:
             path.relative_to(subpath)
@@ -247,30 +204,6 @@ def merge_configs(
             qual_rule = parse_rule(rule, config_dir, config)
             enable_rules.discard(qual_rule)
             disable_rules.add(qual_rule)
-
-        if options:
-            rule_options.update(options)
-
-        if python_version is not None:
-            if python_version:
-                try:
-                    target_python_version = Version(python_version)
-                except InvalidVersion:
-                    raise ConfigError(
-                        f"'python-version' {python_version!r} is not valid",
-                        config=config,
-                    )
-
-            else:  # disable versioning, aka python-version = ""
-                target_python_version = None
-
-        if formatter:
-            if formatter not in FORMAT_STYLES:
-                raise ConfigError(
-                    f"'formatter' {formatter!r} not supported", config=config
-                )
-
-            target_formatter = formatter
 
     for config in reversed(raw_configs):
         if root is None:
@@ -321,9 +254,6 @@ def merge_configs(
             config.path.parent,
             enable=get_sequence(config, "enable"),
             disable=get_sequence(config, "disable"),
-            options=get_options(config, "options"),
-            python_version=config.data.pop("python-version", None),
-            formatter=config.data.pop("formatter", None),
         )
 
         for override in get_sequence(config, "overrides"):
@@ -341,9 +271,6 @@ def merge_configs(
                 subpath,
                 enable=get_sequence(config, "enable", data=override),
                 disable=get_sequence(config, "disable", data=override),
-                options=get_options(config, "options", data=override),
-                python_version=override.pop("python-version", None),
-                formatter=override.pop("formatter", None),
             )
 
         for key in data:
@@ -355,9 +282,6 @@ def merge_configs(
         enable_root_import=enable_root_import,
         enable=sorted(enable_rules),
         disable=sorted(disable_rules),
-        options=rule_options,
-        python_version=target_python_version,
-        formatter=target_formatter,
         output_format=output_format,
         output_template=output_template,
     )
@@ -387,9 +311,6 @@ def generate_config(
 
     if options:
         config.custom_rules = options.custom_rules
-
-        if options.tags:
-            config.tags = options.tags
 
         if options.rules:
             config.enable = list(options.rules)

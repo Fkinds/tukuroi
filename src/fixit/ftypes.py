@@ -3,9 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import platform
 import re
-from collections.abc import Callable, Collection, Container, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -20,11 +19,8 @@ from libcst import CSTNode, CSTNodeT, FlattenSentinel, RemovalSentinel
 from libcst._add_slots import add_slots
 from libcst.metadata import CodePosition as CodePosition  # noqa: PLC0414  # re-export
 from libcst.metadata import CodeRange as CodeRange  # noqa: PLC0414  # re-export
-from packaging.version import Version
 
 from .core.text import Range
-
-__all__ = ("Version",)
 
 T = TypeVar("T")
 
@@ -35,9 +31,6 @@ CodeRange  # noqa: B018
 CodePosition  # noqa: B018
 
 FileContent = bytes
-RuleOptionTypes = (str, int, float)
-RuleOptions = dict[str, str | int | float]
-RuleOptionsTable = dict[str, RuleOptions]
 
 NodeReplacement = CSTNodeT | FlattenSentinel[CSTNodeT] | RemovalSentinel
 
@@ -132,49 +125,6 @@ class QualifiedRule:
         return NotImplemented
 
 
-@dataclass(frozen=True)
-class Tags(Container[str]):
-    include: tuple[str, ...] = ()
-    exclude: tuple[str, ...] = ()
-
-    @staticmethod
-    def parse(value: str | None) -> Tags:
-        if not value:
-            return Tags()
-
-        include = set()
-        exclude = set()
-        tokens = {value.strip() for value in value.lower().split(",")}
-        for token in tokens:
-            if token[0] in "!^-":
-                exclude.add(token[1:])
-            else:
-                include.add(token)
-
-        return Tags(
-            include=tuple(sorted(include)),
-            exclude=tuple(sorted(exclude)),
-        )
-
-    def __bool__(self) -> bool:
-        return bool(self.include) or bool(self.exclude)
-
-    def __contains__(self, value: object) -> bool:
-        tags: Collection[str]
-
-        if isinstance(value, str):
-            tags = (value,)
-        elif isinstance(value, Collection):
-            tags = value
-        else:
-            return False
-
-        if any(tag in self.exclude for tag in tags):
-            return False
-
-        return not self.include or any(tag in self.include for tag in tags)
-
-
 @dataclass
 class Options:
     """
@@ -183,7 +133,6 @@ class Options:
 
     debug: bool | None = None
     config_file: Path | None = None
-    tags: Tags | None = None
     rules: Sequence[QualifiedRule] = ()
     output_format: OutputFormat | None = None
     output_template: str = ""
@@ -223,16 +172,6 @@ class Config:
         default_factory=lambda: [QualifiedRule("fixit.rules")]
     )
     disable: list[QualifiedRule] = field(default_factory=list)
-    options: RuleOptionsTable = field(default_factory=dict)
-
-    # filtering criteria
-    python_version: Version | None = field(
-        default_factory=lambda: Version(platform.python_version())
-    )
-    tags: Tags = field(default_factory=Tags)
-
-    # post-run processing
-    formatter: str | None = None
 
     # output formatting options
     output_format: OutputFormat = OutputFormat.fixit

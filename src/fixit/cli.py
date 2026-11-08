@@ -16,7 +16,7 @@ from fixit import __version__
 from .api import fixit_paths, print_result
 from .config import generate_config, load_rules, parse_rule, validate_config
 from .core.testing import generate_test_cases
-from .ftypes import LSPOptions, Options, OutputFormat, QualifiedRule, Tags
+from .ftypes import LSPOptions, Options, OutputFormat, QualifiedRule
 from .util import capture
 
 
@@ -84,12 +84,6 @@ class _FixitGroup(click.Group):
     help="Override default config file search behavior",
 )
 @click.option(
-    "--tags",
-    type=str,
-    default="",
-    help="Select or filter rules by tags",
-)
-@click.option(
     "--rules",
     type=str,
     default="",
@@ -121,7 +115,6 @@ def main(
     ctx: click.Context,
     debug: bool | None,
     config_file: Path | None,
-    tags: str,
     rules: str,
     custom_rules: bool,
     output_format: OutputFormat | None,
@@ -146,7 +139,6 @@ def main(
     ctx.obj = Options(
         debug=debug,
         config_file=config_file,
-        tags=Tags.parse(tags),
         rules=qualified_rules,
         output_format=output_format,
         output_template=output_template,

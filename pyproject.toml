@@ -28,7 +28,6 @@ dependencies = [
     "click >= 8.3.3, < 9",
     "libcst >= 0.3.18",
     "moreorless >= 0.4.0",
-    "packaging >= 21",
     "ruff >= 0.17.3",
     "trailrunner >= 1.2",
 ]
@@ -46,9 +45,6 @@ dev = [
     "attribution == 1.8.0",
     "build > 1",
     "ruff == 0.17.4",
-    # Only for the smoke test of the `formatter` setting. Remove it when #21
-    # removes that setting.
-    "ufmt == 2.9.1",
     "pyrefly == 0.63.1",
 ]
 lsp = [
@@ -75,13 +71,11 @@ ignored_authors = ["dependabot"]
 
 [tool.ruff.lint.per-file-ignores]
 # #21 deletes or rewrites these files. Remove each entry together with its file.
-"src/fixit/format.py" = ["ALL"]
 # Package modules re-export names.
 "__init__.py" = ["F401"]
 
 [tool.fixit]
 enable = ["fixit.rules"]
-python-version = "3.10"
 
 [[tool.fixit.overrides]]
 path = "examples"

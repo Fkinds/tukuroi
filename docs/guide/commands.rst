@@ -39,30 +39,6 @@ The following options are available for all commands:
     No standard defines how to write a boolean in an environment variable, so
     these are the values that Click accepts.
 
-.. attribute:: --tags TAGS
-
-    Select or filter the set of lint rules to apply based on their tags.
-
-    Takes a comma-separated list of tag names, optionally prefixed with ``!``,
-    ``^``, or ``-``. Tags without one of those prefixes will be considered
-    "include" tags, while tags with one of those prefixes will be considered
-    "exclude" tags.
-
-    Lint rules will be enabled if and only if they have at least one tag that
-    in the "include" list, and no tags in the "exclude" list.
-
-    For example:
-
-    .. code:: console
-
-        $ fixit --tags "hello, world, ^cats" ...
-
-    The command above will filter the set of enabled lint rules to ones that
-    have either the "hello" or "world" tags, and exclude any rules with the
-    "cats" tag, even if they would have otherwise been selected by the other
-    two tags.
-
-
 .. attribute:: --output-format / -o FORMAT_TYPE
 
     Override how Fixit prints violations to the terminal.

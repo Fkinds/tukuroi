@@ -12,12 +12,10 @@ import logging
 from pathlib import Path
 from unittest import TestCase
 
-from packaging.version import Version
-
 from ..config import load_rules, rule_name
 from ..core import loader
 from ..core.loader import RuleName
-from ..ftypes import Config, QualifiedRule, Tags
+from ..ftypes import Config, QualifiedRule
 from .core_loader import BOTH, HEAD, KETTLE, files, rule
 
 CORE = [
@@ -66,9 +64,6 @@ class LoadRulesTest(TestCase):
                 [r for r in CORE if r != "UseAssertIn"],
             ),
             ("none", Config(disable=[QualifiedRule("fixit.rules")]), []),
-            # Tags and python-version go at the end of #21; they do not apply.
-            ("tags", Config(tags=Tags.parse("nope")), CORE),
-            ("python-version", Config(python_version=Version("3.0")), CORE),
         )
         for label, config, rules in cases:
             with self.subTest(label):

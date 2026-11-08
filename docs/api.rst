@@ -45,10 +45,3 @@ Advanced API
 .. autoclass:: Config
 .. autoclass:: Options
 .. autoclass:: QualifiedRule
-.. autoclass:: Tags
-
-
-Formatters
-----------
-
-.. autoclass:: Formatter

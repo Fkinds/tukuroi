@@ -20,7 +20,6 @@ from ..ftypes import (
     OutputFormat,
     QualifiedRule,
     RawConfig,
-    Version,
 )
 from ..util import chdir
 
@@ -318,7 +317,6 @@ class ConfigTest(TestCase):
                         QualifiedRule("fixit.rules"),
                         QualifiedRule("foo"),
                     ],
-                    python_version=Version("3.10"),
                 ),
             ),
             (
@@ -384,7 +382,6 @@ class ConfigTest(TestCase):
                         QualifiedRule("fixit.rules"),
                         QualifiedRule("fixit.rules.SomethingSpecific"),
                     ],
-                    python_version=Version("3.8"),
                 ),
             ),
             (
@@ -417,8 +414,6 @@ class ConfigTest(TestCase):
                         QualifiedRule("fixit.rules"),
                         QualifiedRule("fixit.rules.SomethingSpecific"),
                     ],
-                    options={"other.stuff.Whatever": {"key": "value"}},
-                    python_version=Version("3.10"),
                 ),
             ),
             (
@@ -432,7 +427,6 @@ class ConfigTest(TestCase):
                     enable_root_import=True,
                     enable=[QualifiedRule("fixit.rules"), QualifiedRule("more.rules")],
                     disable=[QualifiedRule("fixit.rules.SomethingSpecific")],
-                    python_version=Version("3.8"),
                 ),
             ),
             (
@@ -446,7 +440,6 @@ class ConfigTest(TestCase):
                     enable_root_import=True,
                     enable=[QualifiedRule("fixit.rules"), QualifiedRule("more.rules")],
                     disable=[QualifiedRule("fixit.rules.SomethingSpecific")],
-                    python_version=Version("3.8"),
                     output_format=OutputFormat.custom,
                     output_template="foo-bar",
                 ),
@@ -474,6 +467,18 @@ class ConfigTest(TestCase):
 
             with self.assertRaisesRegex(config.ConfigError, "output-format"):
                 config.generate_config(self.tdp / "outer" / "foo.py")
+
+    def test_removed_keys(self) -> None:
+        # #21 removed these settings: they warn as any unknown key does.
+        (self.tdp / "pyproject.toml").write_text(
+            "[tool.fixit]\nroot = true\npython-version = '3.10'\n"
+            "formatter = 'ufmt'\ntags = 'x'\n\n[tool.fixit.options]\nX = {a = 1}\n"
+        )
+        with self.assertLogs("fixit.config", "WARNING") as logs:
+            config.generate_config(self.tdp / "foo.py")
+        keys = ["python-version", "formatter", "tags", "options"]
+        expected = [f"unknown configuration option {key!r}" for key in keys]
+        self.assertEqual([r.getMessage() for r in logs.records], expected)
 
     def test_format_output(self) -> None:
         with chdir(self.tdp):

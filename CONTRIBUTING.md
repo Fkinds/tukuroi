@@ -209,8 +209,6 @@ their free-threaded builds. As of November 2026, these are 3.14 and 3.15
 - When a new minor version is released, add it once CI passes on it, and drop
   the oldest supported minor version in the same change, so that exactly two
   remain.
-- This applies to the Python that Fixit runs on. The `python-version` setting,
-  which sets the Python version of the code being linted, is not limited.
 - Keep `requires-python` in `pyproject.toml` and the test matrix in
   `.github/workflows/ci.yml` in line with this list.
 
