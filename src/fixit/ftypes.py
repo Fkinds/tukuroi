@@ -22,6 +22,8 @@ from libcst.metadata import CodePosition as CodePosition  # noqa: PLC0414  # re-
 from libcst.metadata import CodeRange as CodeRange  # noqa: PLC0414  # re-export
 from packaging.version import Version
 
+from .core.text import Range
+
 __all__ = ("Version",)
 
 T = TypeVar("T")
@@ -284,12 +286,29 @@ class LintViolation:
         return bool(self.replacement)
 
 
+@dataclass(frozen=True, slots=True)
+class Violation:
+    """
+    A violation that the new engine (#21) reports: the rule, where it is (lines
+    from 1, columns in characters from 0), the message, whether the engine can
+    fix it, and the diff of its fix alone.
+    """
+
+    rule_name: str
+    range: Range
+    message: str
+    autofixable: bool
+    diff: str = ""
+
+
 @dataclass
 class Result:
     """
-    A single lint result for a given file and lint rule.
+    A single lint result for a given file and lint rule. A file whose fixes
+    were applied ends with a result that has only ``applied``: how many.
     """
 
     path: Path
-    violation: LintViolation | None
+    violation: LintViolation | Violation | None
     error: tuple[Exception, str] | None = None
+    applied: int = 0

@@ -265,7 +265,8 @@ def fix(
             dirty.add(result.path)
             if autofix and result.violation and result.violation.autofixable:
                 autofixes += 1
-                fixed += 1
+        # The fixes applied to a file, after its violations.
+        fixed += result.applied
         if interactive and result.violation and result.violation.autofixable:
             autofixes += 1
             answer = click.prompt(
@@ -273,7 +274,6 @@ def fix(
             )
             if answer == "y":
                 generator.respond(True)  # noqa: B038
-                fixed += 1
             elif answer == "q":
                 break
 

@@ -5,12 +5,14 @@
 
 import os
 
+from fixit.api import CORE_ENGINE
 from fixit.config import collect_rules
 from fixit.core.loader import RuleName, import_rules
 from fixit.core.testing import generate_test_cases
 from fixit.ftypes import Config, QualifiedRule
 from fixit.testing import add_lint_rule_tests_to_module
 
+from .api import CommandTest, FixitBytesTest
 from .characterization_cli import CliCharacterizationTest
 from .characterization_config import ConfigCharacterizationTest
 from .characterization_custom_rules import CustomRulesCharacterizationTest
@@ -43,7 +45,7 @@ from .core_suppression import (
     StatementTest,
 )
 from .core_testing import GenerateTestCasesTest
-from .core_text import LineIndexTest, PositionTest, SpanTest
+from .core_text import LineIndexTest, PositionTest, RangeTest, SpanTest
 from .custom_rules_switch import CustomRulesSwitchTest
 from .engine import EngineTest
 from .ftypes import TypesTest
@@ -54,6 +56,8 @@ from .smoke import SmokeTest
 # FIXIT_CUSTOM_RULES (see "Security" in the docs). custom_rules_switch sets it
 # where it needs it. Every test module imports this package first.
 os.environ.pop("FIXIT_CUSTOM_RULES", None)
+# Temporary (#21): the libcst engine, but in the tests that set it.
+os.environ.pop(CORE_ENGINE, None)
 
 # The test cases of the rules of the new engine (#21), named after each rule with
 # "Core" in front: the rules of the libcst engine have the same names.

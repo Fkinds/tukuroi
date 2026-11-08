@@ -7,7 +7,8 @@
 Positions in source text, counted in characters: the indexes of a Python ``str``.
 
 The engine keeps a range of text as a :class:`Span` of offsets into the whole
-text, and turns an offset into a line and a column only to show it.
+text, and turns an offset into a line and a column (a :class:`Range` for a
+span) only to show it.
 :class:`LineIndex` converts between them, and from the columns of ``ast``,
 which count UTF-8 bytes.
 
@@ -51,6 +52,18 @@ class Span:
     def __post_init__(self) -> None:
         if not 0 <= self.start <= self.end:
             raise ValueError(f"invalid span: [{self.start}, {self.end})")
+
+
+@dataclass(frozen=True, slots=True, order=True)
+class Range:
+    """From ``start`` to ``end``: the positions of a span, to show it."""
+
+    start: Position
+    end: Position
+
+    def __post_init__(self) -> None:
+        if self.end < self.start:
+            raise ValueError(f"invalid range: {self.start} to {self.end}")
 
 
 class LineIndex:

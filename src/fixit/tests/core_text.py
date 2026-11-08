@@ -14,7 +14,7 @@ import ast
 from dataclasses import FrozenInstanceError
 from unittest import TestCase
 
-from ..core.text import LineIndex, Position, Span
+from ..core.text import LineIndex, Position, Range, Span
 
 # Code whose names ast finds after line ends of each kind and after characters
 # of 1 to 4 UTF-8 bytes; "\f" and U+2028 do not end a line.
@@ -83,6 +83,26 @@ class SpanTest(TestCase):
     def test_frozen(self) -> None:
         with self.assertRaises(FrozenInstanceError):
             Span(0, 1).end = 2  # type: ignore[misc]
+
+
+class RangeTest(TestCase):
+    def test_valid(self) -> None:
+        cases = ((1, 0, 1, 0), (1, 0, 1, 5), (1, 9, 2, 0), (2, 3, 4, 1))
+        for line, column, end_line, end_column in cases:
+            with self.subTest((line, column, end_line, end_column)):
+                start, end = Position(line, column), Position(end_line, end_column)
+                self.assertEqual(
+                    (Range(start, end).start, Range(start, end).end), (start, end)
+                )
+
+    def test_invalid(self) -> None:
+        for start, end in (((1, 1), (1, 0)), ((2, 0), (1, 9))):
+            with self.subTest(start=start, end=end), self.assertRaises(ValueError):
+                Range(Position(*start), Position(*end))
+
+    def test_frozen(self) -> None:
+        with self.assertRaises(FrozenInstanceError):
+            Range(Position(1, 0), Position(1, 1)).end = Position(1, 2)  # type: ignore[misc]
 
 
 class LineIndexTest(TestCase):
