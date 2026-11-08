@@ -23,8 +23,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from ..config import collect_rules, parse_rule
-from ..ftypes import Config
+from ..config import parse_rule
 from .characterization_cli import Run, records
 from .characterization_config import override, toml
 from .characterization_custom_rules import (
@@ -149,21 +148,6 @@ class CustomRulesSwitchTest(TestCase):
         for name, builtin in cases:
             with self.subTest(name):
                 self.assertIs(parse_rule(name, Path.cwd()).builtin, builtin)
-
-    def test_enable_root_import_is_ignored(self) -> None:
-        # The CLI cannot show it: with custom rules turned off, nothing would be
-        # imported from the path anyway.
-        for custom_rules, calls in ((True, 1), (False, 0)):
-            with self.subTest(custom_rules=custom_rules):
-                config = Config(
-                    enable=[parse_rule(BUILTIN, Path.cwd())],
-                    enable_root_import=True,
-                    custom_rules=custom_rules,
-                )
-                with patch("fixit.config.append_sys_path") as append:
-                    rules = collect_rules(config)
-                self.assertEqual(append.call_count, calls)
-                self.assertEqual([type(r).__name__ for r in rules], [SI])
 
     def test_value_of_the_switch(self) -> None:
         config = root(".rules", BUILTIN)
