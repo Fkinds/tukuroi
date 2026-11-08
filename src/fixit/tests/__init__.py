@@ -43,7 +43,6 @@ from .core_suppression import (
 from .core_testing import GenerateTestCasesTest
 from .core_text import LineIndexTest, PositionTest, RangeTest, SpanTest
 from .custom_rules_switch import CustomRulesSwitchTest
-from .engine import EngineTest
 from .ftypes import TypesTest
 from .smoke import SmokeTest
 
