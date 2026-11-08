@@ -129,19 +129,10 @@ def _package(root: Path) -> str:
     return package
 
 
-# Until the last stage of #21, the built-in rules of the new engine are in
-# fixit.core.rules, and fixit.rules has those of the libcst engine: the name
-# fixit.rules imports fixit.core.rules. The last stage moves the rules to
-# fixit/rules, and takes this out.
-_ALIAS, _ALIASED = "fixit.rules", "fixit.core.rules"
-
-
 def _absolute(name: RuleName) -> str:
     """The name under which the module of ``name`` is imported."""
     if name.local and name.root is not None:
         return _package(name.root) + name.module
-    if name.module == _ALIAS or name.module.startswith(f"{_ALIAS}."):
-        return _ALIASED + name.module.removeprefix(_ALIAS)
     return name.module
 
 

@@ -5,8 +5,8 @@
 
 import ast
 
-from ..edits import Edit
-from ..rule import Invalid, Rule, Valid
+from ..core.edits import Edit
+from ..core.rule import Invalid, Rule, Valid
 
 # ruff's UP035 replaces typing.Callable with collections.abc.Callable, so the
 # rule takes both (#21).

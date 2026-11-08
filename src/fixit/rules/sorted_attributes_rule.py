@@ -6,9 +6,9 @@
 import ast
 import re
 
-from ..edits import Edit
-from ..rule import Invalid, Rule, Valid
-from ..text import Position, Span
+from ..core.edits import Edit
+from ..core.rule import Invalid, Rule, Valid
+from ..core.text import Position, Span
 
 _LINE_END = re.compile(r"\r\n|\r|\n")
 _LINES = re.compile(r"[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+$")

@@ -12,8 +12,8 @@ the call (its parentheses, line ends and comments) as it is.
 import ast
 from collections.abc import Collection
 
-from ..source import Source
-from ..text import Span
+from ..core.source import Source
+from ..core.text import Span
 
 
 def assertion(call: ast.Call, methods: Collection[str]) -> str | None:

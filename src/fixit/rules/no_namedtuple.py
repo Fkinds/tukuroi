@@ -7,10 +7,10 @@ import ast
 import re
 import tokenize
 
-from ..edits import Edit
-from ..imports import add_import
-from ..rule import Invalid, Rule, Valid
-from ..text import Position, Span
+from ..core.edits import Edit
+from ..core.imports import add_import
+from ..core.rule import Invalid, Rule, Valid
+from ..core.text import Position, Span
 
 _LINE_END = re.compile(r"\r\n|\r|\n")
 

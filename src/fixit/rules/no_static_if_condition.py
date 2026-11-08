@@ -5,8 +5,8 @@
 
 import ast
 
-from ..rule import Invalid, Rule, Valid
-from ..text import Position
+from ..core.rule import Invalid, Rule, Valid
+from ..core.text import Position
 
 
 def _static_bool(node: ast.expr) -> bool | None:

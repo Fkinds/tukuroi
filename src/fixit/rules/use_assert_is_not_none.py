@@ -5,8 +5,8 @@
 
 import ast
 
-from ..edits import Edit
-from ..rule import Invalid, Rule, Valid
+from ..core.edits import Edit
+from ..core.rule import Invalid, Rule, Valid
 from ._asserts import argument_span, arguments, assertion, method_span, text, value
 
 

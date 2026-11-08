@@ -5,9 +5,9 @@
 
 import ast
 
-from ..edits import Edit
-from ..rule import Invalid, Rule, Valid
-from ..text import Span
+from ..core.edits import Edit
+from ..core.rule import Invalid, Rule, Valid
+from ..core.text import Span
 from ._asserts import argument_span, arguments, assertion, method_span, value
 
 # The method to call instead of comparing with True, False or None, with the

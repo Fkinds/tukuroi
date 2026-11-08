@@ -272,7 +272,7 @@ class CommandTest(TestCase):
             with self.subTest(label), patch.dict(sys.modules, modules):
                 result = invoke(files_, ["debug", "t.py"])
                 self.assertEqual(result.exit_code, 0, result.exception)
-                rule = "fixit.core.rules.use_assert_in:UseAssertIn"
+                rule = "fixit.rules.use_assert_in:UseAssertIn"
                 self.assertIn(rule, result.stdout)
 
     def test_answers(self) -> None:
