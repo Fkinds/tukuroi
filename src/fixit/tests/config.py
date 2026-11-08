@@ -613,10 +613,11 @@ class ConfigTest(TestCase):
             )
 
             runner = CliRunner()
-            content = "name = '{name}'.format(name='Jane Doe')"
-            filepath = self.tdp / "f_string.py"
+            # A rule of the new engine (#21).
+            content = "self.assertTrue(a in b)\n"
+            filepath = self.tdp / "assert_in.py"
             filepath.write_text(content)
-            output_format_regex = r".*f_string\.py:\d+:\d+ UseFstring: .+"
+            output_format_regex = r".*assert_in\.py:\d+:\d+ UseAssertIn: .+"
 
             with self.subTest("linting vscode"):
                 result = runner.invoke(
@@ -630,7 +631,7 @@ class ConfigTest(TestCase):
                 )
                 self.assertRegex(result.stdout, output_format_regex)
 
-            custom_output_format_regex = r".*f_string\.py|\d+|\d+ UseFstring: .+"
+            custom_output_format_regex = r".*assert_in\.py|\d+|\d+ UseAssertIn: .+"
             custom_output_format = (
                 "{path}|{start_line}|{start_col} {rule_name}: {message}"
             )
@@ -676,7 +677,7 @@ class ConfigTest(TestCase):
                     catch_exceptions=True,
                 )
                 self.assertRegex(
-                    result.stdout, r"file .*f_string\.py line \d+ rule UseFstring"
+                    result.stdout, r"file .*assert_in\.py line \d+ rule UseAssertIn"
                 )
 
     def test_validate_config(self) -> None:

@@ -4,19 +4,19 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-Tests of ``fixit.api.fixit_bytes`` on the new engine (#21), for what the
+Tests of ``fixit.api.fixit_bytes``, which runs the new engine (#21), for what the
 characterization tests do not pin: the results it yields and what it returns,
 the fixes sent back to it, the warning when the fixes do not converge, and the
 metrics; and through the CLI, ``fix --interactive`` and a syntax error.
 """
 
-import os
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from ..api import CORE_ENGINE, fixit_bytes
+from ..api import fixit_bytes
 from ..core import loader
 from ..core.source import ParseError
 from ..core.text import Position, Range
@@ -104,7 +104,6 @@ class FixitBytesTest(TestCase):
     maxDiff = None
 
     def setUp(self) -> None:
-        self.enterContext(patch.dict(os.environ, {CORE_ENGINE: "1"}))
         loader._WARNED.clear()
 
     def test_violations(self) -> None:
@@ -233,9 +232,6 @@ class FixitBytesTest(TestCase):
 class CommandTest(TestCase):
     maxDiff = None
 
-    def setUp(self) -> None:
-        self.enterContext(patch.dict(os.environ, {CORE_ENGINE: "1"}))
-
     def fix(self, source: str, answers: str, *rules: str) -> tuple[str, str]:
         """The file after ``fix --interactive`` with ``answers``, and stderr."""
         enable = ", ".join(f'"fixit.rules:{rule}"' for rule in rules)
@@ -268,6 +264,16 @@ class CommandTest(TestCase):
         self.assertIn(expected, printed)
         self.assertNotIn(".rules:Bad", printed)
         self.assertEqual(result.exit_code, -1)
+
+    def test_debug(self) -> None:
+        files_ = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "t.py": "x = 1\n"}
+        # rich prints when it is installed; None makes its import fail.
+        for label, modules in (("as installed", {}), ("without rich", {"rich": None})):
+            with self.subTest(label), patch.dict(sys.modules, modules):
+                result = invoke(files_, ["debug", "t.py"])
+                self.assertEqual(result.exit_code, 0, result.exception)
+                rule = "fixit.core.rules.use_assert_in:UseAssertIn"
+                self.assertIn(rule, result.stdout)
 
     def test_answers(self) -> None:
         two = "self.assertTrue(a in b)\nself.assertTrue(c in d)\n"

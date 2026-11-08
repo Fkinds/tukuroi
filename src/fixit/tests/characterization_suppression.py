@@ -15,15 +15,12 @@ longer suppresses every rule: ``test_directive_of_the_new_grammar`` has the
 directives whose meaning changed.
 """
 
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
-from unittest.mock import patch
 
 from click.testing import CliRunner, Result
 
-from ..api import CORE_ENGINE
 from ..cli import main
 from ..util import chdir
 
@@ -75,10 +72,6 @@ Cases = tuple[tuple[str, str, tuple[str, ...]], ...]
 
 class SuppressionCharacterizationTest(TestCase):
     maxDiff = None
-
-    def setUp(self) -> None:
-        # Temporary (#21): the tests run the new engine (see CharacterizationTestCase).
-        self.enterContext(patch.dict(os.environ, {CORE_ENGINE: "1"}))
 
     def lint(self, rule: str, source: str, newline: str) -> Result:
         with TemporaryDirectory() as td:

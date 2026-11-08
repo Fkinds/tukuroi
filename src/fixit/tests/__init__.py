@@ -5,7 +5,6 @@
 
 import os
 
-from fixit.api import CORE_ENGINE
 from fixit.config import collect_rules
 from fixit.core.loader import RuleName, import_rules
 from fixit.core.testing import generate_test_cases
@@ -56,8 +55,6 @@ from .smoke import SmokeTest
 # FIXIT_CUSTOM_RULES (see "Security" in the docs). custom_rules_switch sets it
 # where it needs it. Every test module imports this package first.
 os.environ.pop("FIXIT_CUSTOM_RULES", None)
-# Temporary (#21): the libcst engine, but in the tests that set it.
-os.environ.pop(CORE_ENGINE, None)
 
 # The test cases of the rules of the new engine (#21), named after each rule with
 # "Core" in front: the rules of the libcst engine have the same names.

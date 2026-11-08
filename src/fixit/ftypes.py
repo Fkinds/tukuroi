@@ -30,13 +30,6 @@ T = TypeVar("T")
 
 STDIN = Path("-")
 
-# Temporary (#21): with this set to "1", fixit_bytes (and so `lint`, `fix` and
-# the LSP), `fixit test` and `fixit validate-config` run the new engine. The
-# characterization tests move to it file by file, and the last PR of the switch
-# takes this out. It is an environment variable because `lint` checks several
-# files in spawned processes.
-CORE_ENGINE = "_FIXIT_CORE_ENGINE"
-
 # Re-export libcst's position types. #21 replaces them.
 CodeRange  # noqa: B018
 CodePosition  # noqa: B018

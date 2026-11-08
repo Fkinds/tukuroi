@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-import os
 import sys
 import time
 import traceback
@@ -17,20 +16,16 @@ import trailrunner
 from moreorless import unified_diff
 from moreorless.click import echo_color_precomputed_diff
 
-from .config import collect_rules, generate_config, load_rules
+from .config import generate_config, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
 from .core.rule import Report, Rule
 from .core.source import ParseError, Source
 from .core.text import Range
-from .engine import LintRunner
-from .format import format_module
 from .ftypes import (
-    CORE_ENGINE,
     STDIN,
     Config,
     FileContent,
-    LintViolation,
     Metrics,
     MetricsHook,
     Options,
@@ -146,59 +141,9 @@ def fixit_bytes(
     violations of a file whose fixes were applied, a last :class:`Result` tells
     how many were (``applied``).
 
-    """
-    if os.environ.get(CORE_ENGINE) == "1":
-        return (
-            yield from _fixit_bytes_core(
-                path, content, config=config, autofix=autofix, metrics_hook=metrics_hook
-            )
-        )
-    try:
-        rules = collect_rules(config)
-
-        if not rules:
-            yield Result(path, violation=None)
-            return None
-
-        runner = LintRunner(path, content)
-        pending_fixes: list[LintViolation] = []
-
-        clean = True
-        for violation in runner.collect_violations(rules, config, metrics_hook):
-            clean = False
-            fix = yield Result(path, violation)
-            if fix or autofix:
-                pending_fixes.append(violation)
-
-        if clean:
-            yield Result(path, violation=None)
-
-        if pending_fixes:
-            updated = runner.apply_replacements(pending_fixes)
-            if applied := sum(1 for v in pending_fixes if v.autofixable):
-                yield Result(path, violation=None, applied=applied)
-            return format_module(updated, path, config)
-
-    except Exception as error:
-        # TODO: this is not the right place to catch errors
-        LOG.debug("Exception while linting", exc_info=error)
-        yield Result(path, violation=None, error=(error, traceback.format_exc()))
-
-    return None
-
-
-def _fixit_bytes_core(
-    path: Path,
-    content: FileContent,
-    *,
-    config: Config,
-    autofix: bool,
-    metrics_hook: MetricsHook | None,
-) -> Generator[Result, bool, FileContent | None]:
-    """
-    :func:`fixit_bytes` on the new engine (#21). The fixes that ``autofix`` takes
-    are applied round after round; those sent back to the generator, in one
-    round. The fixed text is formatted with ``ruff format``.
+    It runs the new engine (#21). The fixes that ``autofix`` takes are applied
+    round after round; those sent back to the generator, in one round. The fixed
+    text is formatted with ``ruff format``.
     """
     try:
         rules = load_rules(config)
@@ -242,7 +187,7 @@ def _fixit_bytes_core(
             return source.encode(fixed.text)
 
     except Exception as error:
-        # As fixit_bytes: an exception in a rule is the result of the file.
+        # An exception in a rule is the result of the file.
         LOG.debug("Exception while linting", exc_info=error)
         yield Result(path, violation=None, error=(error, traceback.format_exc()))
 

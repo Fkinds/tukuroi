@@ -59,8 +59,6 @@ Cases = tuple[tuple[str, Mapping[str, str], str, tuple[str, ...]], ...]
 
 
 class ConfigCharacterizationTest(CharacterizationTestCase):
-    core_engine = True
-
     def assert_reported(self, cases: Cases) -> None:
         """``(label, config files, path linted, rules that report it)``"""
         for label, configs, path, rules in cases:

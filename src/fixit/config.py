@@ -6,7 +6,6 @@
 import importlib
 import inspect
 import logging
-import os
 import pkgutil
 import platform
 import sys
@@ -27,7 +26,6 @@ from .core.loader import collect_rules as collect_core_rules
 from .core.rule import Rule
 from .format import FORMAT_STYLES
 from .ftypes import (
-    CORE_ENGINE,
     Config,
     Options,
     OutputFormat,
@@ -660,11 +658,7 @@ def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
                         log_skipped(qualified_rule)
                         continue
                     try:
-                        if os.environ.get(CORE_ENGINE) == "1":
-                            import_rules(rule_name(qualified_rule))
-                        else:
-                            for _ in find_rules(qualified_rule):
-                                pass
+                        import_rules(rule_name(qualified_rule))
                     # Importing a rule runs its code, which can raise any exception.
                     except Exception as e:  # noqa: BLE001
                         exceptions.append(

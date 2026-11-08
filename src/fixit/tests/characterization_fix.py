@@ -456,8 +456,6 @@ def ruff_format(*sources: str) -> list[str]:
 
 
 class FixCharacterizationTest(CharacterizationTestCase):
-    core_engine = True
-
     def test_fix_each_rule(self) -> None:
         for rule, source, position, fixed in FIXES:
             with self.subTest(rule, source=source):
