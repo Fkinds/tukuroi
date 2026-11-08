@@ -11,9 +11,10 @@ the config and the URI of the document.
 
 They run the CLI only, so that the engine rewrite (#21) can be checked against
 them. The expected values are copied from the output of the libcst engine.
-``NOTE`` marks behavior that looks wrong but is pinned as is. ``#21`` marks
-output that the new engine is known to change: it counts positions in the
-encoding agreed with the client, and runs ``ruff format`` after a fix.
+``NOTE`` marks behavior that looks wrong but is pinned as is. The server runs
+the new engine (#21): it counts positions in the encoding agreed with the
+client and in the text of the client (LSP 3.17), and runs ``ruff format`` after
+a fix.
 
 ``invoke`` of ``characterization_cli`` does not fit: on ``exit`` the server
 closes stdout, which ``click`` reads afterwards.
@@ -33,6 +34,7 @@ from unittest.mock import patch
 
 from .. import __version__
 from ..cli import main
+from ..lsp import BOM
 from ..util import chdir
 from .characterization_cli import CharacterizationTestCase, config, fresh_logging
 from .characterization_fix import ruff_format
@@ -222,61 +224,72 @@ def in_order(published: Sequence[Json]) -> list[Json]:
 
 
 # (label, rule, source, result of formatting)
-# NOTE: when the source ends with a line break, the end of the range is past
-# the end of the last line, by the length of the line break. LSP 3.17
-# "Position": a client reads it as the end of the line, so the last line break
-# is kept, and the text ends with 2 of them.
+# The edit replaces the whole text: to the position after its last character,
+# with the lines of LSP 3.17 "Text Documents" (#21). The libcst engine ended it
+# past the end of the last line, by the length of the line break, and counted
+# the lines of str.splitlines().
 FORMATTING = (
     (
         "fix",
         UI,
         f"x = 1\n{CALL}\ny = 2\n",
-        edit("0:0", "2:6", f"x = 1\n{FIXED}\ny = 2\n"),
+        edit("0:0", "3:0", f"x = 1\n{FIXED}\ny = 2\n"),
     ),
-    ("fix, 1 line", UI, f"{CALL}\n", edit("0:0", "0:24", f"{FIXED}\n")),
+    ("fix, 1 line", UI, f"{CALL}\n", edit("0:0", "1:0", f"{FIXED}\n")),
     (
         "fix, CRLF",
         UI,
         f"x = 1\r\n{CALL}\r\n",
-        edit("0:0", "1:25", f"x = 1\r\n{FIXED}\r\n"),
+        edit("0:0", "2:0", f"x = 1\r\n{FIXED}\r\n"),
     ),
-    # NOTE: the edit changes nothing.
-    ("no autofix", SI, UNFIXABLE, edit("0:0", "1:9", UNFIXABLE)),
+    # Nothing changes: no edit (#21).
+    ("no autofix", SI, UNFIXABLE, None),
     ("no violation", UI, "x = 1\n", None),
     ("ignored", UI, f"{CALL}  # lint-ignore\n", None),
-    # NOTE: the end counts U+2028 as a line break (str.splitlines); LSP 3.17
-    # "Text Documents" counts only \n, \r\n and \r.
+    # U+2028 is not a line break in LSP.
     (
         "U+2028",
         UI,
         f'{CALL}\nx = "\u2028"\n',
-        edit("0:0", "2:2", f'{FIXED}\nx = "\u2028"\n'),
+        edit("0:0", "2:0", f'{FIXED}\nx = "\u2028"\n'),
     ),
-)
-FORMATTING_21 = (
-    # #21: ruff format adds "\n" at the end of newText.
-    (
-        "no line break at end",
-        UI,
-        f"x = 1\n{CALL}",
-        edit("0:0", "1:23", f"x = 1\n{FIXED}"),
-    ),
-    # NOTE: the "\r" at the end is dropped.
-    # #21: ruff format adds it back at the end of newText.
-    ("CR", UI, f"x = 1\r{CALL}\r", edit("0:0", "1:24", f"x = 1\r{FIXED}")),
-    # #21: 😀 is 2 UTF-16 units; the new engine ends the range at 1:9.
-    ("emoji", UI, f'{CALL}\nx = "😀"\n', edit("0:0", "1:8", f'{FIXED}\nx = "😀"\n')),
-    # #21: the fix drops "# c"; the new engine does not apply it.
+    # 😀 is 2 UTF-16 units, but the edit ends after the last line break.
+    ("emoji", UI, f'{CALL}\nx = "😀"\n', edit("0:0", "2:0", f'{FIXED}\nx = "😀"\n')),
+    # The comment is kept: the fix edits the name and the arguments.
     (
         "comment in the range",
         UI,
         "self.assertTrue(\n    a in b  # c\n)\n",
-        edit("0:0", "2:2", "self.assertIn(\n    a, b)\n"),
+        edit("0:0", "3:0", "self.assertIn(\n    a,\n    b,  # c\n)\n"),
     ),
+)
+# The texts that ruff format changes, besides the fix.
+# (label, rule, source, result of formatting)
+FORMATTING_UNFORMATTED = (
+    # ruff format adds "\n" at the end.
+    (
+        "no line break at end",
+        UI,
+        f"x = 1\n{CALL}",
+        edit("0:0", "1:23", f"x = 1\n{FIXED}\n"),
+    ),
+    # The end of the last line counts 😀 as 2 UTF-16 units.
+    (
+        "emoji at the end",
+        UI,
+        f'{CALL}\nx = "😀"',
+        edit("0:0", "1:8", f'{FIXED}\nx = "😀"\n'),
+    ),
+    # ruff format keeps "\r" at the end, which libcst dropped.
+    ("CR", UI, f"x = 1\r{CALL}\r", edit("0:0", "2:0", f"x = 1\r{FIXED}\r")),
+    # The BOM counts as a character, and stays in newText.
+    ("BOM", UI, f"\ufeff{CALL}\n", edit("0:0", "1:0", f"\ufeff{FIXED}\n")),
 )
 
 
 class LspCharacterizationTest(CharacterizationTestCase):
+    core_engine = True
+
     def assert_published(self, served: Served, *expected: Json) -> None:
         self.assertEqual(in_order(served.published), in_order(expected))
         # The server shows no error to the user.
@@ -389,28 +402,30 @@ class LspCharacterizationTest(CharacterizationTestCase):
             ("CR", None, f"x = 1\r\r{CALL}\r", "2:0", "2:23"),
             # Not a line break in LSP, unlike in str.splitlines.
             ("U+2028", None, f'x = "\u2028"; {CALL}\n', "0:9", "0:32"),
-            # NOTE: the BOM is not counted; in the text of the client the call
-            # starts at 0:1.
-            ("BOM", None, f"\ufeff{CALL}\n", "0:0", "0:23"),
+            # The BOM counts as a character in the text of the client (#21); the
+            # libcst engine did not count it.
+            ("BOM", None, f"\ufeff{CALL}\n", "0:1", "0:24"),
         )
         self.assert_positions(cases)
 
-    def test_21_positions_count_code_points(self) -> None:
+    def test_positions_in_the_units_of_the_client(self) -> None:
+        # In the units agreed with the client, UTF-16 by default (#21). The
+        # libcst engine counted code points.
         cases = (
-            # #21: 😀 is 2 UTF-16 units; the new engine reports 0:10-0:33.
-            ("emoji before", None, f'x = "😀"; {CALL}\n', "0:9", "0:32"),
-            # #21: the new engine reports 0:0-0:26.
-            ("emoji inside", None, 'self.assertTrue(a in "😀")\n', "0:0", "0:25"),
-            # #21: the new engine reports 0:0-1:14.
+            # 😀 is 2 UTF-16 units.
+            ("emoji before", None, f'x = "😀"; {CALL}\n', "0:10", "0:33"),
+            ("emoji inside", None, 'self.assertTrue(a in "😀")\n', "0:0", "0:26"),
             (
                 "emoji, 2 lines",
                 None,
                 'self.assertTrue(\n    a in "😀")\n',
                 "0:0",
-                "1:13",
+                "1:14",
             ),
-            # #21: あ is 3 UTF-8 bytes; the new engine reports 0:11-0:34.
-            ("utf-8, あ before", ["utf-8"], f'x = "あ"; {CALL}\n', "0:9", "0:32"),
+            # あ is 3 UTF-8 bytes.
+            ("utf-8, あ before", ["utf-8"], f'x = "あ"; {CALL}\n', "0:11", "0:34"),
+            # The BOM is on the first line only.
+            ("BOM, line 2", None, f"\ufeffx = 1\n{CALL}\n", "1:0", "1:23"),
         )
         self.assert_positions(cases)
 
@@ -468,30 +483,25 @@ class LspCharacterizationTest(CharacterizationTestCase):
         # Not in FORMATTING: `ruff format` fails on it.
         self.assert_formatting((("syntax error", UI, f"{CALL}\nprint)\n", None),))
 
-    def test_21_formatting_result(self) -> None:
-        self.assert_formatting(FORMATTING_21)
+    def test_formatting_of_unformatted_text(self) -> None:
+        self.assert_formatting(FORMATTING_UNFORMATTED)
 
     def test_formatting_cases_under_ruff_format(self) -> None:
         # Not a test of fixit: checks that the cases above fit the new engine.
-        _, cr, emoji, comment = FORMATTING_21
-        stable = [cr[2], comment[2]]
-        for _, _, text, result in (*FORMATTING, emoji):
+        stable = []
+        for _, _, text, result in FORMATTING:
             stable += [text, *(e["newText"] for e in result or ())]
-        # The texts of the #21 cases that ruff format changes.
-        changed = {
-            f"x = 1\n{CALL}": f"x = 1\n{CALL}\n",
-            f"x = 1\n{FIXED}": f"x = 1\n{FIXED}\n",
-            f"x = 1\r{FIXED}": f"x = 1\r{FIXED}\r",
-        }
-        results = ruff_format(*stable, *changed)
-        self.assertEqual(results, [*stable, *changed.values()])
+        # The engine formats the text without its BOM, and puts it back.
+        unformatted = FORMATTING_UNFORMATTED
+        stable += [e["newText"].removeprefix(BOM) for *_, r in unformatted for e in r]
+        self.assertEqual(ruff_format(*stable), stable)
 
     def test_formatting_of_document_not_opened(self) -> None:
         with self.subTest("on disk"):
             files = {"pyproject.toml": config(NA), "t.py": FIXABLE}
             served = serve(files, session(formatting()))
             # The text is read from the file.
-            result = edit("0:0", "0:22", "self.assertEqual(a, 3)\n")
+            result = edit("0:0", "1:0", "self.assertEqual(a, 3)\n")
             self.assertEqual(served.responses[10], {"result": result})
         with self.subTest("not on disk"):
             served = serve({"pyproject.toml": config(NA)}, session(formatting()))
@@ -526,12 +536,12 @@ class LspCharacterizationTest(CharacterizationTestCase):
     def test_uri_of_document(self) -> None:
         files = {"pyproject.toml": config(NA), "a b/pyproject.toml": config(SI)}
         text = FIXABLE + UNFIXABLE
-        fixed = edit("0:0", "2:9", "self.assertEqual(a, 3)\n" + UNFIXABLE)
+        fixed = edit("0:0", "3:0", "self.assertEqual(a, 3)\n" + UNFIXABLE)
         cases = (
             # Not linted; nothing is published.
             ("untitled", "untitled:Untitled-1", None, None),
             # The path is decoded; the URI is published as sent.
-            ("percent-encoded", f"{ROOT}/a%20b/t.py", SI_1, edit("0:0", "2:9", text)),
+            ("percent-encoded", f"{ROOT}/a%20b/t.py", SI_1, None),
             # NOTE: neither the suffix nor languageId is looked at.
             ("not .py", f"{ROOT}/t.txt", NA_0, fixed),
         )
