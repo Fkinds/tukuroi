@@ -16,57 +16,10 @@ Built-in Rules
 
 .. automodule:: fixit.rules
 
-- :class:`NoAssertTrueForComparisons`
 - :class:`NoNamedTuple`
 - :class:`NoStaticIfCondition`
-- :class:`SortedAttributes`
 - :class:`UseAssertIn`
 - :class:`UseAssertIsNotNone`
-- :class:`VariadicCallableSyntax`
-
-.. class:: NoAssertTrueForComparisons
-
-    Finds incorrect use of ``assertTrue`` when the intention is to compare two values.
-    These calls are replaced with ``assertEqual``.
-    Comparisons with True, False and None are replaced with one-argument
-    calls to ``assertTrue``, ``assertFalse`` and ``assertIsNone``.
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        "assertTrue" does not compare its arguments, use "assertEqual" or other appropriate functions.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            self.assertTrue(a == b)
-        .. code:: python
-
-            self.assertTrue(data.is_valid(), "is_valid() method")
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            self.assertTrue(a, 3)
-
-            # suggested fix
-            self.assertEqual(a, 3)
-
-        .. code:: python
-
-            self.assertTrue(hash(s[:4]), 0x1234)
-
-            # suggested fix
-            self.assertEqual(hash(s[:4]), 0x1234)
 
 .. class:: NoNamedTuple
 
@@ -163,74 +116,6 @@ Built-in Rules
 
             if crazy_expression or True:
                 do_something()
-.. class:: SortedAttributes
-
-    Ever wanted to sort a bunch of class attributes alphabetically?
-    Well now it's easy! Just add "@sorted-attributes" in the doc string of
-    a class definition and lint will automatically sort all attributes alphabetically.
-
-    Feel free to add other methods and such -- it should only affect class attributes.
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        It appears you are using the @sorted-attributes directive and the class variables are unsorted. See the lint autofix suggestion.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            class MyConstants:
-                """
-                @sorted-attributes
-                """
-                A = 'zzz123'
-                B = 'aaa234'
-
-            class MyUnsortedConstants:
-                B = 'aaa234'
-                A = 'zzz123'
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            class MyUnsortedConstants:
-                """
-                @sorted-attributes
-                """
-                z = "hehehe"
-                B = 'aaa234'
-                A = 'zzz123'
-                cab = "foo bar"
-                Daaa = "banana"
-
-                @classmethod
-                def get_foo(cls) -> str:
-                    return "some random thing"
-
-            # suggested fix
-            class MyUnsortedConstants:
-                """
-                @sorted-attributes
-                """
-                A = 'zzz123'
-                B = 'aaa234'
-                Daaa = "banana"
-                cab = "foo bar"
-                z = "hehehe"
-
-                @classmethod
-                def get_foo(cls) -> str:
-                    return "some random thing"
-
 .. class:: UseAssertIn
 
     Discourages use of ``assertTrue(x in y)`` and ``assertFalse(x in y)``
@@ -317,47 +202,5 @@ Built-in Rules
 
             # suggested fix
             self.assertIsNotNone(x)
-
-.. class:: VariadicCallableSyntax
-
-    Callable types with arbitrary parameters should be written as `Callable[..., T]`
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            from typing import Callable
-            x: Callable[[int], int]
-        .. code:: python
-
-            from typing import Callable
-            x: Callable[[int, int, ...], int]
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            from typing import Callable
-            x: Callable[[...], int] = ...
-
-            # suggested fix
-            from typing import Callable
-            x: Callable[..., int] = ...
-
-        .. code:: python
-
-            import typing as t
-            x: t.Callable[[...], int] = ...
-
-            # suggested fix
-            import typing as t
-            x: t.Callable[..., int] = ...
 
     
