@@ -23,6 +23,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
+from ..api import CORE_ENGINE
 from ..config import collect_rules, parse_rule
 from ..ftypes import Config
 from .characterization_cli import Run, records
@@ -116,6 +117,10 @@ def lint(
 class CustomRulesSwitchTest(TestCase):
     maxDiff = None
 
+    def setUp(self) -> None:
+        # Temporary (#21): the tests run the new engine (see CharacterizationTestCase).
+        self.enterContext(patch.dict(os.environ, {CORE_ENGINE: "1"}))
+
     def assert_lint(
         self, result: Run, rules: Sequence[str], warning: str = "", path: str = "t.py"
     ) -> None:
@@ -205,7 +210,8 @@ class CustomRulesSwitchTest(TestCase):
             ("override", root(BUILTIN) + sub, RULES, None, "sub/t.py", (SI,), skipped(".rules")),
             ("disable a custom rule", root(BUILTIN, disable=[".rules"]), RULES, None, "t.py", (SI,), ""),
             ("built-in rule", root(BUILTIN), RULES, None, "t.py", (SI,), ""),
-            ("fixit.upgrade", root("fixit.upgrade"), RULES, None, "t.py", (), ""),
+            # The new engine has only fixit.rules built in; #21 removes fixit.upgrade.
+            ("fixit.upgrade", root("fixit.upgrade"), RULES, None, "t.py", (), skipped("fixit.upgrade")),
         )  # fmt: skip
         for label, config, files, site, path, rules, warning in cases:
             with self.subTest(label):
@@ -214,15 +220,15 @@ class CustomRulesSwitchTest(TestCase):
                 self.assert_lint(result, rules, warning, path)
                 self.assertEqual(imported(result), set())
 
-    def test_21_warning_for_each_file(self) -> None:
-        # #21: the new loader logs the warning once in a process for each rule,
-        # so it is logged once here (issuecomment-6706326492).
+    def test_warning_once_for_two_files(self) -> None:
+        # The new loader logs the warning once in a process for each rule (#21,
+        # issuecomment-6706326492).
         before = {"pyproject.toml": root(".rules"), **RULES, "t.py": SOURCE}
         args = ["--no-custom-rules", "fix", "--automatic", "t.py", "u.py"]
         result = run(before | {"u.py": SOURCE}, args)
         self.assertEqual(result.stdout, "")
         two = "🧼 2 files clean 🧼\n"
-        self.assertEqual(result.stderr, skipped(".rules") * 2 + two)
+        self.assertEqual(result.stderr, skipped(".rules") + two)
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(imported(result), set())
 

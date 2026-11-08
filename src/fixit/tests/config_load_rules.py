@@ -130,6 +130,7 @@ class LoadRulesTest(TestCase):
             (QualifiedRule("pkg.rules", "Foo"), RuleName("pkg.rules", "Foo")),
             (local(root), RuleName(".rules", None, root)),
             (QualifiedRule(".rules", "Foo", ".", root), RuleName(".rules", "Foo", root)),
+            (QualifiedRule(".rules", None, ".", Path(".")), RuleName(".rules", None, Path.cwd())),
         )  # fmt: skip
         for rule_, name in cases:
             with self.subTest(str(rule_)):

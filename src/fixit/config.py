@@ -6,6 +6,7 @@
 import importlib
 import inspect
 import logging
+import os
 import pkgutil
 import platform
 import sys
@@ -21,11 +22,12 @@ from typing import (
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from .core.loader import RuleName
+from .core.loader import RuleName, import_rules
 from .core.loader import collect_rules as collect_core_rules
 from .core.rule import Rule
 from .format import FORMAT_STYLES
 from .ftypes import (
+    CORE_ENGINE,
     Config,
     Options,
     OutputFormat,
@@ -299,8 +301,12 @@ def load_rules(config: Config) -> tuple[type[Rule], ...]:
 
 
 def rule_name(rule: QualifiedRule) -> RuleName:
-    """``rule`` as the new engine names it: the directory only for a local rule."""
-    return RuleName(rule.module, rule.name, rule.root if rule.local else None)
+    """
+    ``rule`` as the new engine names it: with the directory, made absolute, only
+    for a local rule. ``validate-config`` gives the directory of its path as is.
+    """
+    root = rule.root.resolve() if rule.local and rule.root else None
+    return RuleName(rule.module, rule.name, root)
 
 
 def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
@@ -654,8 +660,11 @@ def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
                         log_skipped(qualified_rule)
                         continue
                     try:
-                        for _ in find_rules(qualified_rule):
-                            pass
+                        if os.environ.get(CORE_ENGINE) == "1":
+                            import_rules(rule_name(qualified_rule))
+                        else:
+                            for _ in find_rules(qualified_rule):
+                                pass
                     # Importing a rule runs its code, which can raise any exception.
                     except Exception as e:  # noqa: BLE001
                         exceptions.append(
