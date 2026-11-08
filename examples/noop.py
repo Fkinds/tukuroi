@@ -3,10 +3,9 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from fixit import LintRule
+from fixit import Rule, Valid
 
 
-class NoOp(LintRule):
+class NoOp(Rule):
     MESSAGE = "You shouldn't be seeing this"
-    VALID = []
-    INVALID = []
+    VALID = (Valid("x = 1\n"),)

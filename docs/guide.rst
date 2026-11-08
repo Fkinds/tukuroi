@@ -9,5 +9,7 @@ User Guide
 .. include:: guide/configuration.rst
 .. include:: guide/integrations.rst
 
+.. include:: guide/rules.rst
+
 .. include:: guide/builtins.rst
 .. include:: guide/ruff.rst

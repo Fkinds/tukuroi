@@ -123,6 +123,8 @@ for more details.
     Delay in seconds for server-side debounce. *default: 0.5*
 
 
+.. _test_command:
+
 ``test``
 ^^^^^^^^
 
@@ -140,11 +142,11 @@ Example:
 
 .. code:: console
 
-    $ fixit test .examples.teambread.rules
-    test_INVALID_0 (fixit.testing.HollywoodNameRule) ... ok
-    test_INVALID_1 (fixit.testing.HollywoodNameRule) ... ok
-    test_VALID_0 (fixit.testing.HollywoodNameRule) ... ok
-    test_VALID_1 (fixit.testing.HollywoodNameRule) ... ok
+    $ fixit test .rules
+    test_INVALID_0 (fixit.testing.HollywoodName.test_INVALID_0) ... ok
+    test_INVALID_1 (fixit.testing.HollywoodName.test_INVALID_1) ... ok
+    test_VALID_0 (fixit.testing.HollywoodName.test_VALID_0) ... ok
+    test_VALID_1 (fixit.testing.HollywoodName.test_VALID_1) ... ok
 
     ----------------------------------------------------------------------
     Ran 4 tests in 0.024s
