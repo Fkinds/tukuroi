@@ -18,103 +18,13 @@ Built-in Rules
 
 .. automodule:: fixit.rules
 
-- :class:`ComparePrimitivesByEqual`
-- :class:`CompareSingletonPrimitivesByIs`
 - :class:`NoAssertTrueForComparisons`
-- :class:`NoInheritFromObject`
 - :class:`NoNamedTuple`
-- :class:`NoRedundantFString`
 - :class:`NoStaticIfCondition`
 - :class:`SortedAttributes`
 - :class:`UseAssertIn`
 - :class:`UseAssertIsNotNone`
 - :class:`VariadicCallableSyntax`
-
-.. class:: ComparePrimitivesByEqual
-
-    Enforces the use of ``==`` and ``!=`` in comparisons to primitives rather than ``is`` and ``is not``.
-    The ``==`` operator checks equality (https://docs.python.org/3/reference/datamodel.html#object.__eq__),
-    while ``is`` checks identity (https://docs.python.org/3/reference/expressions.html#is).
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        Don't use `is` or `is not` to compare primitives, as they compare references. Use == or != instead.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            a == 1
-        .. code:: python
-
-            a == '1'
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            a is 1
-
-            # suggested fix
-            a == 1
-
-        .. code:: python
-
-            a is '1'
-
-            # suggested fix
-            a == '1'
-
-.. class:: CompareSingletonPrimitivesByIs
-
-    Enforces the use of `is` and `is not` in comparisons to singleton primitives (None, True, False) rather than == and !=.
-    The == operator checks equality, when in this scenario, we want to check identity.
-    See Flake8 rules E711 (https://www.flake8rules.com/rules/E711.html) and E712 (https://www.flake8rules.com/rules/E712.html).
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        Comparisons to singleton primitives should not be done with == or !=, as they check equality rather than identity. Use `is` or `is not` instead.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            if x: pass
-        .. code:: python
-
-            if not x: pass
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            x != True
-
-            # suggested fix
-            x is not True
-
-        .. code:: python
-
-            x != False
-
-            # suggested fix
-            x is not False
 
 .. class:: NoAssertTrueForComparisons
 
@@ -159,53 +69,6 @@ Built-in Rules
 
             # suggested fix
             self.assertEqual(hash(s[:4]), 0x1234)
-
-.. class:: NoInheritFromObject
-
-    In Python 3, a class is inherited from ``object`` by default.
-    Explicitly inheriting from ``object`` is redundant, so removing it keeps the code simpler.
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        Inheriting from object is a no-op.  'class Foo:' is just fine =)
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            class A(something):    pass
-        .. code:: python
-
-            class A:
-                pass
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            class B(object):
-                pass
-
-            # suggested fix
-            class B:
-                pass
-
-        .. code:: python
-
-            class B(object, A):
-                pass
-
-            # suggested fix
-            class B(A):
-                pass
 
 .. class:: NoNamedTuple
 
@@ -268,47 +131,6 @@ Built-in Rules
             @dataclass(frozen=True)
             class Foo:
                 pass
-
-.. class:: NoRedundantFString
-
-    Remove redundant f-string without placeholders.
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        f-string doesn't have placeholders, remove redundant f-string.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            good: str = "good"
-        .. code:: python
-
-            good: str = f"with_arg{arg}"
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            bad: str = f"bad" + "bad"
-
-            # suggested fix
-            bad: str = "bad" + "bad"
-
-        .. code:: python
-
-            bad: str = f'bad'
-
-            # suggested fix
-            bad: str = 'bad'
 
 .. class:: NoStaticIfCondition
 
