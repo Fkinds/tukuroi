@@ -11,12 +11,11 @@ They run the CLI only, so that the engine rewrite (#21) can be checked against
 them. The expected values are copied from the output of the libcst engine.
 ``NOTE`` marks behavior that looks wrong but is pinned as is.
 
-The new engine runs ``ruff format`` on each file it fixes, so the sources and
-the fixed results here are left as is by ``ruff format``
-(``test_sources_are_stable_under_ruff_format``). The methods marked ``#21`` pin
-fixes whose result ``ruff format`` does change, fixes that drop a comment
-inside the range they replace, which the new engine does not apply, and fixes
-that overlap, which the new engine applies in order, round by round.
+The CLI runs the new engine (#21). It runs ``ruff format`` on each file it
+fixes, so the fixed results here are what ``ruff format`` writes, and most
+sources are left as is by it (``test_sources_are_stable_under_ruff_format``).
+The new engine does not apply a fix that drops a comment inside the range it
+replaces, and applies fixes that overlap in order, round by round.
 """
 
 import subprocess
@@ -48,6 +47,9 @@ VC = "VariadicCallableSyntax"
 IMPORT_NT = "from typing import NamedTuple\n\n\n"
 IMPORT_CB = "from typing import Callable\n\n"
 DC = "@dataclass(frozen=True)\n"
+# NoNamedTuple imports dataclass after the imports (#21, issuecomment-6709426366);
+# ruff format then puts 2 blank lines after it.
+IMPORT_DC = "from typing import NamedTuple\nfrom dataclasses import dataclass\n\n\n"
 DOC = '    """@sorted-attributes"""\n\n'
 A40 = "a" * 40
 A60 = "a" * 60
@@ -114,6 +116,89 @@ FIXES = (
         "3:3",
         "from typing import Callable as C\n\nx: C[..., int]\n",
     ),
+    # The fix alone leaves ")" after the arguments; ruff format puts it on its
+    # own line.
+    (
+        UI,
+        f"self.assertTrue(\n    {A40} in {A40}\n)\n",
+        "1:0",
+        f"self.assertIn(\n    {A40}, {A40}\n)\n",
+    ),
+    # ruff format joins the call into one line.
+    (
+        NA,
+        f"self.assertTrue(\n    {A40},\n    None,\n)\n",
+        "1:0",
+        f"self.assertIsNone({A40})\n",
+    ),
+    (
+        NN,
+        f"self.assertTrue(\n    {A60} is not None\n)\n",
+        "1:0",
+        f"self.assertIsNotNone({A60})\n",
+    ),
+    # The blank line above `b` moves with it.
+    (
+        SA,
+        f"class C:\n{DOC}    b = 1\n    a = 2\n",
+        "1:0",
+        f"class C:\n{DOC}    a = 2\n\n    b = 1\n",
+    ),
+    # ruff format keeps each element on its own line, for the trailing comma.
+    (
+        VC,
+        f"{IMPORT_CB}x: Callable[\n    [...],\n    int,\n]\n",
+        "3:3",
+        f"{IMPORT_CB}x: Callable[\n    ...,\n    int,\n]\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple):\n    a: int\n",
+        "4:0",
+        f"{IMPORT_DC}{DC}class Foo:\n    a: int\n",
+    ),
+    (
+        NT,
+        "import typing\n\n\nclass Foo(typing.NamedTuple):\n    a: int\n",
+        "4:0",
+        f"import typing\nfrom dataclasses import dataclass\n\n\n{DC}class Foo:\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}@deco\nclass Foo(NamedTuple):\n    a: int\n",
+        "5:0",
+        f"{IMPORT_DC}@deco\n{DC}class Foo:\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple, Base):\n    a: int\n",
+        "4:0",
+        f"{IMPORT_DC}{DC}class Foo(Base):\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(Base, NamedTuple):\n    a: int\n",
+        "4:0",
+        f"{IMPORT_DC}{DC}class Foo(Base):\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple, metaclass=M):\n    a: int\n",
+        "4:0",
+        f"{IMPORT_DC}{DC}class Foo(metaclass=M):\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class C:\n    class Foo(NamedTuple):\n        a: int\n",
+        "5:4",
+        f"{IMPORT_DC}class C:\n    {DC}    class Foo:\n        a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple):  # c\n    a: int\n",
+        "4:0",
+        f"{IMPORT_DC}{DC}class Foo:  # c\n    a: int\n",
+    ),
 )
 
 # (label, rules, source, (rule, position) reported, the file after, summary)
@@ -158,9 +243,19 @@ MULTI = (
         "if True:\n    self.assertIn(a, b)\n",
         DIRTY_F,
     ),
+    (
+        "same rule, 2 classes",
+        (NT,),
+        f"{IMPORT_NT}class Foo(NamedTuple):\n    a: int\n\n\nclass Bar(NamedTuple):\n    b: int\n",
+        ((NT, "4:0"), (NT, "8:0")),
+        f"{IMPORT_DC}{DC}class Foo:\n    a: int\n\n\n{DC}class Bar:\n    b: int\n",
+        DIRTY_FF,
+    ),
 )
 
-# No two of the rules report the same call. These fixes are inside each other.
+# No two of the rules report the same call. These fixes are inside each other:
+# the engine applies the outer one, and the inner one in the next round, as it
+# lints the result again (#21).
 # (label, rules, source, (rule, position) reported, the file after)
 NESTED = (
     (
@@ -168,29 +263,30 @@ NESTED = (
         (UI, NA),
         "self.assertTrue(a in self.assertTrue(x, 3))\n",
         ((UI, "1:0"), (NA, "1:21")),
-        "self.assertIn(a, self.assertTrue(x, 3))\n",
+        "self.assertIn(a, self.assertEqual(x, 3))\n",
     ),
     (
         "subscript in call",
         (NA, VC),
         f"{IMPORT_CB}self.assertTrue(Callable[[...], int], None)\n",
         ((NA, "3:0"), (VC, "3:16")),
-        f"{IMPORT_CB}self.assertIsNone(Callable[[...], int])\n",
+        f"{IMPORT_CB}self.assertIsNone(Callable[..., int])\n",
     ),
     (
         "annotation in class",
         (NT, VC),
         "from typing import Callable, NamedTuple\n\n\nclass Foo(NamedTuple):\n    f: Callable[[...], int]\n",
         ((NT, "4:0"), (VC, "5:7")),
-        f"from typing import Callable, NamedTuple\n\n\n{DC}class Foo:\n    f: Callable[[...], int]\n",
+        f"from typing import Callable, NamedTuple\nfrom dataclasses import dataclass\n\n\n{DC}class Foo:\n    f: Callable[..., int]\n",
     ),
     (
         "class in class",
         (NT,),
         f"{IMPORT_NT}class Foo(NamedTuple):\n    class Bar(NamedTuple):\n        a: int\n",
-        # NOTE: the inner class is reported before the outer one.
-        ((NT, "5:4"), (NT, "4:0")),
-        f"{IMPORT_NT}{DC}class Foo:\n    class Bar(NamedTuple):\n        a: int\n",
+        # The outer class is reported first: the reports are in the order of
+        # their position.
+        ((NT, "4:0"), (NT, "5:4")),
+        f"{IMPORT_DC}{DC}class Foo:\n    {DC}    class Bar:\n        a: int\n",
     ),
 )
 
@@ -246,12 +342,11 @@ SUPPRESSED = (
     ),
 )
 
-# NoNamedTuple and SortedAttributes report the same class.
-# (source, the file after SortedAttributes, the file after NoNamedTuple)
+# NoNamedTuple and SortedAttributes report the same class; both fixes are
+# applied. (source, the file after)
 ONE_CLASS = (
     f"{IMPORT_NT}class Foo(NamedTuple):\n{DOC}    x: int\n    b = 1\n    a = 2\n",
-    f"{IMPORT_NT}class Foo(NamedTuple):\n{DOC}    x: int\n    a = 2\n    b = 1\n",
-    f"{IMPORT_NT}{DC}class Foo:\n{DOC}    x: int\n    b = 1\n    a = 2\n",
+    f"{IMPORT_DC}{DC}class Foo:\n{DOC}    x: int\n    a = 2\n    b = 1\n",
 )
 
 DIFF_SOURCE = "x = 1\nself.assertTrue(a in b)\ny = 2\n"
@@ -269,79 +364,20 @@ DIFF = diff(
     " y = 2",
 )
 
-# #21: the result of the fix is not what `ruff format` writes, so the new engine
-# writes the last value instead.
-# (rule, source, position reported, the file after, after `ruff format`)
-FIXES_21 = (
-    # #21: ruff format puts ")" on its own line.
-    (
-        UI,
-        f"self.assertTrue(\n    {A40} in {A40}\n)\n",
-        "1:0",
-        f"self.assertIn(\n    {A40}, {A40})\n",
-        f"self.assertIn(\n    {A40}, {A40}\n)\n",
-    ),
-    # #21: ruff format joins the call into one line.
-    (
-        NA,
-        f"self.assertTrue(\n    {A40},\n    None,\n)\n",
-        "1:0",
-        f"self.assertIsNone(\n    {A40})\n",
-        f"self.assertIsNone({A40})\n",
-    ),
-    # #21: ruff format joins the call into one line.
-    (
-        NN,
-        f"self.assertTrue(\n    {A60} is not None\n)\n",
-        "1:0",
-        f"self.assertIsNotNone(\n    {A60})\n",
-        f"self.assertIsNotNone({A60})\n",
-    ),
-    # #21: ruff format splits the bases, one per line, for the trailing comma.
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(Base, NamedTuple):\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo(Base, ):\n    a: int\n",
-        f"{IMPORT_NT}{DC}class Foo(\n    Base,\n):\n    a: int\n",
-    ),
-    # #21: ruff format adds the blank line after the docstring back.
-    (
-        SA,
-        f"class C:\n{DOC}    b = 1\n    a = 2\n",
-        "1:0",
-        'class C:\n    """@sorted-attributes"""\n    a = 2\n\n    b = 1\n',
-        f"class C:\n{DOC}    a = 2\n\n    b = 1\n",
-    ),
-    # #21: ruff format puts each element on its own line.
-    (
-        VC,
-        f"{IMPORT_CB}x: Callable[\n    [...],\n    int,\n]\n",
-        "3:3",
-        f"{IMPORT_CB}x: Callable[\n    ..., int,\n]\n",
-        f"{IMPORT_CB}x: Callable[\n    ...,\n    int,\n]\n",
-    ),
-)
-
-# #21: in a file that is not formatted, the fix changes only its own range;
-# the new engine formats the whole file.
-# (source, the file after, after `ruff format`)
-UNFORMATTED_21 = (
-    # #21: ruff format also changes `x=1`, the spaces in the call and `[1,2]`.
+# In a file that is not formatted, ruff format changes the rest of the file too.
+# (source, the file after `fix --automatic`)
+UNFORMATTED = (
     (
         "x=1\nself.assertTrue( a  in  b )\ny = [1,2]\n",
-        "x=1\nself.assertIn( a, b)\ny = [1,2]\n",
         "x = 1\nself.assertIn(a, b)\ny = [1, 2]\n",
     ),
-    # #21: ruff format adds the newline at the end.
-    (
-        "x = 1\nself.assertTrue(a in b)",
-        "x = 1\nself.assertIn(a, b)",
-        "x = 1\nself.assertIn(a, b)\n",
-    ),
+    # It adds the newline at the end.
+    ("x = 1\nself.assertTrue(a in b)", "x = 1\nself.assertIn(a, b)\n"),
 )
 
-# A comment inside the range that the fix replaces, kept in the result.
+# A comment inside the range that the fix replaces, kept in the result: the
+# fixes of the new engine (#21) edit the name of the method and the arguments,
+# not the whole call.
 # (rule, source, position reported, the file after `fix --automatic`)
 COMMENTS = (
     (
@@ -350,128 +386,51 @@ COMMENTS = (
         "1:0",
         "self.assertEqual(\n    a,  # c\n    3,\n)\n",
     ),
-)
-
-# #21: the comment inside the range is not in the result of the fix, so the new
-# engine does not apply it: the line ends without " (has autofix)", the summary
-# counts no auto-fix, and the file is left as is.
-# (rule, source, position reported, the file after `fix --automatic`)
-COMMENTS_21 = (
     (
         UI,
         "self.assertTrue(\n    a in b  # c\n)\n",
         "1:0",
-        "self.assertIn(\n    a, b)\n",
+        "self.assertIn(\n    a,\n    b,  # c\n)\n",
     ),
     (
         NN,
         "self.assertTrue(\n    a is not None  # c\n)\n",
         "1:0",
-        "self.assertIsNotNone(\n    a)\n",
+        "self.assertIsNotNone(\n    a  # c\n)\n",
     ),
-    # The fix drops the argument with the comment.
+    # The fix drops the argument before the comment.
     (
         NA,
         "self.assertTrue(\n    a,\n    None,  # c\n)\n",
         "1:0",
-        "self.assertIsNone(\n    a)\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(\n    NamedTuple,  # c\n):\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo:\n    a: int\n",
+        "self.assertIsNone(\n    a  # c\n)\n",
     ),
     (
         VC,
         f"{IMPORT_CB}x: Callable[\n    [...],  # c\n    int,\n]\n",
         "3:3",
-        f"{IMPORT_CB}x: Callable[\n    ..., int,\n]\n",
+        f"{IMPORT_CB}x: Callable[\n    ...,  # c\n    int,\n]\n",
     ),
-)
-
-# #21: the comment after "(" is kept, but the result is not what `ruff format`
-# writes, so the new engine writes the last value instead: ruff format puts ")"
-# on its own line.
-# (rule, source, position reported, the file after, after `ruff format`)
-COMMENTS_UNFORMATTED_21 = (
     (
         UI,
         "self.assertTrue(  # c\n    a in b\n)\n",
         "1:0",
-        "self.assertIn(  # c\n    a, b)\n",
         "self.assertIn(  # c\n    a, b\n)\n",
     ),
     (
         NN,
         "self.assertTrue(  # c\n    a is not None\n)\n",
         "1:0",
-        "self.assertIsNotNone(  # c\n    a)\n",
         "self.assertIsNotNone(  # c\n    a\n)\n",
     ),
 )
 
-
-# #21: NoNamedTuple also adds "from dataclasses import dataclass" after the
-# imports (issuecomment-6709426366); ruff format then puts 2 blank lines after it.
-# (rule, source, position reported, the file after `fix --automatic`)
-FIXES_NT_21 = (
-    # NOTE: `dataclass` is not imported, and the NamedTuple import is left.
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(NamedTuple):\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo:\n    a: int\n",
-    ),
-    (
-        NT,
-        "import typing\n\n\nclass Foo(typing.NamedTuple):\n    a: int\n",
-        "4:0",
-        f"import typing\n\n\n{DC}class Foo:\n    a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}@deco\nclass Foo(NamedTuple):\n    a: int\n",
-        "5:0",
-        f"{IMPORT_NT}@deco\n{DC}class Foo:\n    a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(NamedTuple, Base):\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo(Base):\n    a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(NamedTuple, metaclass=M):\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo(metaclass=M):\n    a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}class C:\n    class Foo(NamedTuple):\n        a: int\n",
-        "5:4",
-        f"{IMPORT_NT}class C:\n    {DC}    class Foo:\n        a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(NamedTuple):  # c\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo:  # c\n    a: int\n",
-    ),
-)
-
-# #21: as FIXES_NT_21.
-# (label, rules, source, (rule, position) reported, the file after, summary)
-MULTI_NT_21 = (
-    (
-        "same rule, 2 classes",
-        (NT,),
-        f"{IMPORT_NT}class Foo(NamedTuple):\n    a: int\n\n\nclass Bar(NamedTuple):\n    b: int\n",
-        ((NT, "4:0"), (NT, "8:0")),
-        f"{IMPORT_NT}{DC}class Foo:\n    a: int\n\n\n{DC}class Bar:\n    b: int\n",
-        DIRTY_FF,
-    ),
+# The fix would drop the comment inside the range it replaces, so the engine
+# does not apply it (#21): the line ends without " (has autofix)", the summary
+# counts no auto-fix, and the file is left as is.
+# (rule, source, position reported)
+COMMENTS_DROPPED = (
+    (NT, f"{IMPORT_NT}class Foo(\n    NamedTuple,  # c\n):\n    a: int\n", "4:0"),
 )
 
 
@@ -497,6 +456,8 @@ def ruff_format(*sources: str) -> list[str]:
 
 
 class FixCharacterizationTest(CharacterizationTestCase):
+    core_engine = True
+
     def test_fix_each_rule(self) -> None:
         for rule, source, position, fixed in FIXES:
             with self.subTest(rule, source=source):
@@ -504,26 +465,6 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stdout, line("t.py", rule, position))
                 self.assertEqual(result.stderr, DIRTY_F)
                 # NOTE: `fix` exits with 0 even when it reports violations.
-                self.assertEqual(result.exit_code, 0)
-                self.assertEqual(result.files["t.py"], fixed)
-
-    def test_21_fix_no_named_tuple(self) -> None:
-        # #21: see FIXES_NT_21.
-        for rule, source, position, fixed in FIXES_NT_21:
-            with self.subTest(rule, source=source):
-                result = fix((rule,), source)
-                self.assertEqual(result.stdout, line("t.py", rule, position))
-                self.assertEqual(result.stderr, DIRTY_F)
-                self.assertEqual(result.exit_code, 0)
-                self.assertEqual(result.files["t.py"], fixed)
-
-    def test_21_fix_two_named_tuples(self) -> None:
-        # #21: see FIXES_NT_21.
-        for label, rules, source, reported, fixed, summary in MULTI_NT_21:
-            with self.subTest(label):
-                result = fix(rules, source)
-                self.assert_violations(result.stdout, in_t(reported))
-                self.assertEqual(result.stderr, summary)
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files["t.py"], fixed)
 
@@ -536,34 +477,22 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files["t.py"], fixed)
 
-    def test_21_fix_inside_another_fix(self) -> None:
-        # #21: the new engine applies the fixes in the order of their start, and
-        # skips one that overlaps a fix already applied. Then it lints the result
-        # again and applies the fixes found, until none is left: the inner fix is
-        # applied in the next round if the result still has it. The summary
-        # counts the fixes applied (issuecomment-6706326492).
+    def test_fix_inside_another_fix(self) -> None:
         for label, rules, source, reported, fixed in NESTED:
             with self.subTest(label):
                 result = fix(rules, source)
                 self.assert_violations(result.stdout, in_t(reported))
-                # NOTE: only the outer fix is applied, but the summary counts 2.
                 self.assertEqual(result.stderr, DIRTY_FF)
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files["t.py"], fixed)
 
-    def test_21_fix_two_rules_on_one_class(self) -> None:
-        # #21: both fixes start at the class, so the new engine applies the one
-        # of the rule whose name comes first, NoNamedTuple, and SortedAttributes
-        # in the next round: the file gets both fixes, in every run.
-        source, sorted_, dataclass = ONE_CLASS
+    def test_fix_two_rules_on_one_class(self) -> None:
+        source, fixed = ONE_CLASS
         result = fix((NT, SA), source)
         self.assert_violations(result.stdout, in_t(((NT, "4:0"), (SA, "4:0"))))
         self.assertEqual(result.stderr, DIRTY_FF)
         self.assertEqual(result.exit_code, 0)
-        # NOTE: only the fix of the rule reported last is applied. The rules run
-        # in set order, so which one it is changes between runs.
-        nt_last = result.stdout.rfind(f" {NT}: ") > result.stdout.rfind(f" {SA}: ")
-        self.assertEqual(result.files["t.py"], dataclass if nt_last else sorted_)
+        self.assertEqual(result.files["t.py"], fixed)
 
     def test_fix_with_suppression(self) -> None:
         for label, rules, source, reported, fixed, summary in SUPPRESSED:
@@ -636,8 +565,12 @@ class FixCharacterizationTest(CharacterizationTestCase):
                     (
                         NT,
                         "4:0",
+                        # With the import of dataclass (#21).
                         diff(
-                            "@@ -3,3 +3,4 @@",
+                            "@@ -1,5 +1,7 @@",
+                            " from typing import NamedTuple",
+                            "+from dataclasses import dataclass",
+                            " ",
                             " ",
                             "-class Foo(NamedTuple):",
                             "+@dataclass(frozen=True)",
@@ -746,17 +679,8 @@ class FixCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(result.stderr, line("t.py", UI, "2:0") + DIRTY_F)
         self.assertEqual(result.exit_code, 0)
 
-    def test_21_fix_result_is_not_ruff_formatted(self) -> None:
-        for rule, source, position, fixed, _ in FIXES_21:
-            with self.subTest(rule, source=source):
-                result = fix((rule,), source)
-                self.assertEqual(result.stdout, line("t.py", rule, position))
-                self.assertEqual(result.stderr, DIRTY_F)
-                self.assertEqual(result.exit_code, 0)
-                self.assertEqual(result.files["t.py"], fixed)
-
-    def test_21_fix_leaves_the_rest_unformatted(self) -> None:
-        for source, fixed, _ in UNFORMATTED_21:
+    def test_fix_formats_the_whole_file(self) -> None:
+        for source, fixed in UNFORMATTED:
             with self.subTest("file", source=source):
                 result = fix((UI,), source)
                 self.assertEqual(result.stdout, line("t.py", UI, "2:0"))
@@ -777,46 +701,29 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files["t.py"], fixed)
 
-    def test_21_fix_drops_a_comment_in_its_range(self) -> None:
-        for rule, source, position, fixed in COMMENTS_21:
+    def test_fix_that_drops_a_comment_is_not_applied(self) -> None:
+        for rule, source, position in COMMENTS_DROPPED:
             with self.subTest(rule, source=source):
                 result = fix((rule,), source)
-                # #21: the line ends without " (has autofix)".
-                self.assertEqual(result.stdout, line("t.py", rule, position))
-                # #21: DIRTY, without "auto-fix available" and "fix applied".
-                self.assertEqual(result.stderr, DIRTY_F)
+                no_fix = line("t.py", rule, position).replace(" (has autofix)", "")
+                self.assertEqual(result.stdout, no_fix)
+                self.assertEqual(result.stderr, DIRTY)
                 self.assertEqual(result.exit_code, 0)
-                # #21: the file is left as is: `source`.
-                self.assertEqual(result.files["t.py"], fixed)
-
-    def test_21_fix_keeps_a_comment_but_is_not_ruff_formatted(self) -> None:
-        for rule, source, position, fixed, _ in COMMENTS_UNFORMATTED_21:
-            with self.subTest(rule, source=source):
-                result = fix((rule,), source)
-                self.assertEqual(result.stdout, line("t.py", rule, position))
-                self.assertEqual(result.stderr, DIRTY_F)
-                self.assertEqual(result.exit_code, 0)
-                self.assertEqual(result.files["t.py"], fixed)
+                self.assertEqual(result.files["t.py"], source)
 
     def test_sources_are_stable_under_ruff_format(self) -> None:
         # Not a test of fixit: checks that the cases above fit the new engine.
-        pairs = [(source, fixed) for _, source, _, fixed in FIXES + FIXES_NT_21]
-        pairs += [(row[2], row[4]) for row in MULTI + MULTI_NT_21 + NESTED + SUPPRESSED]
-        pairs += [ONE_CLASS[:2], ONE_CLASS[::2]]
+        pairs = [(source, fixed) for _, source, _, fixed in FIXES + COMMENTS]
+        pairs += [(row[2], row[4]) for row in MULTI + NESTED + SUPPRESSED]
+        pairs += [ONE_CLASS]
         pairs += [(DIFF_SOURCE, "x = 1\nself.assertIn(a, b)\ny = 2\n")]
-        pairs += [(source, fixed) for _, source, _, fixed in COMMENTS]
         stable = [text for pair in pairs for text in pair]
-        # The new engine leaves these files as is.
-        stable += [source for _, source, _, _ in COMMENTS_21]
+        stable += [source for _, source, _ in COMMENTS_DROPPED]
+        stable += [fixed for _, fixed in UNFORMATTED]
         for source, formatted in zip(stable, ruff_format(*stable), strict=True):
             with self.subTest(source=source):
                 self.assertEqual(formatted, source)
-        cases = [(s, f, out, True) for _, s, _, f, out in FIXES_21]
-        cases += [(s, f, out, False) for s, f, out in UNFORMATTED_21]
-        cases += [(s, f, out, True) for _, s, _, f, out in COMMENTS_UNFORMATTED_21]
-        results = ruff_format(*(text for s, f, _, _ in cases for text in (s, f)))
-        for i, (source, fixed, formatted, is_formatted) in enumerate(cases):
-            with self.subTest("#21", source=source):
-                self.assertEqual(results[2 * i] == source, is_formatted)
-                self.assertEqual(results[2 * i + 1], formatted)
-                self.assertNotEqual(formatted, fixed)
+        sources = [source for source, _ in UNFORMATTED]
+        for source, formatted in zip(sources, ruff_format(*sources), strict=True):
+            with self.subTest("not formatted", source=source):
+                self.assertNotEqual(formatted, source)
