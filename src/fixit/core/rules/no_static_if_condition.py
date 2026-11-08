@@ -141,6 +141,8 @@ class NoStaticIfCondition(Rule):
             """,
         ),
         Invalid("if a or b or True:\n    pass\n"),
+        Invalid("if True or x:\n    pass\n"),
+        Invalid("if x and False and y:\n    pass\n"),
         Invalid("if not not True:\n    pass\n"),
         Invalid("if x:\n    pass\nelif False:\n    pass\n", position=Position(3, 0)),
     )
