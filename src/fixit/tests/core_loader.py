@@ -197,6 +197,30 @@ class ImportRulesTest(TestCase):
                     import_rules(RuleName.parse(text, root))
                 self.assertEqual(str(caught.exception), message)
 
+    def test_fixit_rules_imports_the_rules_of_the_new_engine(self) -> None:
+        # Until the last stage of #21 moves them to fixit/rules.
+        core = import_rules(RuleName("fixit.core.rules"))
+        self.assertEqual(len(core), 7)
+        cases = (
+            # (name, rules)
+            ("fixit.rules", core),
+            ("fixit.rules:UseAssertIn", tuple(r for r in core if r.name() == "UseAssertIn")),
+            ("fixit.rules.use_assert_in", tuple(r for r in core if r.name() == "UseAssertIn")),
+        )  # fmt: skip
+        for text, rules in cases:
+            with self.subTest(text):
+                self.assertEqual(import_rules(RuleName.parse(text, Path("/r"))), rules)
+        errors = (
+            # (name, message): the name given, not fixit.core.rules.
+            ("fixit.rules:NoRedundantFString", "could not find rule fixit.rules:NoRedundantFString"),
+            ("fixit.rules.nope", "could not import rule(s) fixit.rules.nope"),
+            ("fixit.rulesx", "could not import rule(s) fixit.rulesx"),
+        )  # fmt: skip
+        for text, message in errors:
+            with self.subTest(text), self.assertRaises(CollectionError) as caught:
+                import_rules(RuleName.parse(text, Path("/r")))
+            self.assertEqual(str(caught.exception), message)
+
 
 KETTLE = {"src/kettle/__init__.py": "", "src/kettle/rules.py": HEAD + rule("NoBadName")}
 

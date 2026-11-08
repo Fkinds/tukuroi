@@ -18,6 +18,7 @@ from .characterization_fix import FixCharacterizationTest
 from .characterization_lsp import LspCharacterizationTest
 from .characterization_suppression import SuppressionCharacterizationTest
 from .config import ConfigTest
+from .config_load_rules import LoadRulesTest
 from .core_directives import DirectiveCoversTest, ParseDirectivesTest
 from .core_edits import ApplyFixesTest, CheckFixTest, DropsCommentsTest
 from .core_engine import DispatchTest, ReportsTest
