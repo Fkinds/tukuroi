@@ -26,7 +26,6 @@ classifiers = [
 requires-python = ">=3.14"
 dependencies = [
     "click >= 8.3.3, < 9",
-    "libcst >= 0.3.18",
     "moreorless >= 0.4.0",
     "ruff >= 0.17.3",
     "trailrunner >= 1.2",
@@ -70,7 +69,6 @@ version_file = false
 ignored_authors = ["dependabot"]
 
 [tool.ruff.lint.per-file-ignores]
-# #21 deletes or rewrites these files. Remove each entry together with its file.
 # Package modules re-export names.
 "__init__.py" = ["F401"]
 

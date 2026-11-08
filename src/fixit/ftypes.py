@@ -5,7 +5,6 @@
 
 import re
 from collections.abc import Callable, Iterable, Sequence
-from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -15,30 +14,16 @@ from typing import (
     TypeVar,
 )
 
-from libcst import CSTNode, CSTNodeT, FlattenSentinel, RemovalSentinel
-from libcst._add_slots import add_slots
-from libcst.metadata import CodePosition as CodePosition  # noqa: PLC0414  # re-export
-from libcst.metadata import CodeRange as CodeRange  # noqa: PLC0414  # re-export
-
 from .core.text import Range
 
 T = TypeVar("T")
 
 STDIN = Path("-")
 
-# Re-export libcst's position types. #21 replaces them.
-CodeRange  # noqa: B018
-CodePosition  # noqa: B018
-
 FileContent = bytes
-
-NodeReplacement = CSTNodeT | FlattenSentinel[CSTNodeT] | RemovalSentinel
 
 Metrics = dict[str, Any]
 MetricsHook = Callable[[Metrics], None]
-
-VisitorMethod = Callable[[CSTNode], None]
-VisitHook = Callable[[str], AbstractContextManager[None]]
 
 
 class OutputFormat(str, Enum):
@@ -46,22 +31,6 @@ class OutputFormat(str, Enum):
     fixit = "fixit"
     # json = "json"  # TODO
     vscode = "vscode"
-
-
-LintIgnoreRegex = re.compile(
-    r"""
-    \#\s*                   # leading hash and whitespace
-    (lint-(?:ignore|fixme)) # directive
-    (?:
-        (?::\s*|\s+)        # separator
-        (
-            \w+             # first rule name
-            (?:,\s*\w+)*    # subsequent rule names
-        )
-    )?                      # rule names are optional
-    """,
-    re.VERBOSE,
-)
 
 
 QualifiedRuleRegex = re.compile(
@@ -191,34 +160,12 @@ class RawConfig:
         self.path = self.path.resolve()
 
 
-@add_slots
-@dataclass(frozen=True)
-class LintViolation:
-    """
-    An individual lint error, with an optional replacement and expected diff.
-    """
-
-    rule_name: str
-    range: CodeRange
-    message: str
-    node: CSTNode
-    replacement: NodeReplacement[CSTNode] | None
-    diff: str = ""
-
-    @property
-    def autofixable(self) -> bool:
-        """
-        Whether the violation includes a suggested replacement.
-        """
-        return bool(self.replacement)
-
-
 @dataclass(frozen=True, slots=True)
 class Violation:
     """
-    A violation that the new engine (#21) reports: the rule, where it is (lines
-    from 1, columns in characters from 0), the message, whether the engine can
-    fix it, and the diff of its fix alone.
+    A violation that a rule reports: the rule, where it is (lines from 1,
+    columns in characters from 0), the message, whether Fixit can fix it, and
+    the diff of its fix alone.
     """
 
     rule_name: str
@@ -236,6 +183,6 @@ class Result:
     """
 
     path: Path
-    violation: LintViolation | Violation | None
+    violation: Violation | None
     error: tuple[Exception, str] | None = None
     applied: int = 0

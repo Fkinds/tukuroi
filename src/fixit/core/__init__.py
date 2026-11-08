@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-The new engine of Fixit, built on ``ast`` and ``tokenize`` (#21).
-
-It is built here next to the libcst engine, which the CLI and the LSP still use.
+The engine of Fixit, built on ``ast`` and ``tokenize`` (#21): it parses the
+source, runs the rules, applies their fixes, and formats with ruff.
 """
