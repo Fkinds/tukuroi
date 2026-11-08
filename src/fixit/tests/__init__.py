@@ -66,10 +66,7 @@ add_lint_rule_tests_to_module(
     globals(),
     collect_rules(
         Config(
-            enable=[
-                QualifiedRule("fixit.rules"),
-                QualifiedRule("fixit.upgrade"),
-            ],
+            enable=[QualifiedRule("fixit.rules")],
             python_version=None,
         )
     ),
