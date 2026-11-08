@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import re
 import threading
 from collections.abc import Callable, Generator
 from functools import partial
@@ -32,6 +33,16 @@ from .api import fixit_bytes
 from .config import generate_config
 from .ftypes import Config, FileContent, LSPOptions, Options, Result
 from .util import capture
+
+# Line breaks of LSP 3.17 ("Text Documents"): not those of str.splitlines(),
+# which also breaks at U+2028 and others.
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
+BOM = "\ufeff"
+
+
+def lines_of(text: str) -> list[str]:
+    """The lines of ``text`` as LSP counts them, without their line breaks."""
+    return _LINE_BREAK.split(text)
 
 
 class LSP:
@@ -84,6 +95,20 @@ class LSP:
             config=self.load_config(path),
         )
 
+    def position(self, text: str, line: int, column: int) -> Position:
+        """
+        The position in ``text``, the document of the client, of ``line`` (from
+        1) and ``column`` (characters from 0) of the engine, in the units agreed
+        with the client (UTF-16 by default). The engine does not count a BOM;
+        the client counts it as a character (#21).
+        """
+        if line == 1 and text.startswith(BOM):
+            column += 1
+        codec = self.lsp.workspace.position_codec
+        return codec.position_to_client_units(
+            lines_of(text), Position(line - 1, column)
+        )
+
     def _validate(self, uri: str, version: int) -> None:
         """
         Effect: publishes Fixit diagnostics to the LSP client.
@@ -91,17 +116,17 @@ class LSP:
         generator = self.diagnostic_generator(uri)
         if not generator:
             return
+        text = self.lsp.workspace.get_text_document(uri).source  # type: ignore[no-untyped-call]
         diagnostics = []
         for result in generator:
             violation = result.violation
             if not violation:
                 continue
+            start, end = violation.range.start, violation.range.end
             diagnostic = Diagnostic(
                 Range(
-                    Position(  # LSP is 0-indexed; fixit line numbers are 1-indexed
-                        violation.range.start.line - 1, violation.range.start.column
-                    ),
-                    Position(violation.range.end.line - 1, violation.range.end.column),
+                    self.position(text, start.line, start.column),
+                    self.position(text, end.line, end.column),
                 ),
                 violation.message,
                 severity=DiagnosticSeverity.Warning,
@@ -144,11 +169,13 @@ class LSP:
         doc: TextDocument = self.lsp.workspace.get_text_document(
             params.text_document.uri
         )
-        entire_range = Range(
-            start=Position(line=0, character=0),
-            end=Position(line=len(doc.lines) - 1, character=len(doc.lines[-1])),
+        # The whole document: to the position after its last character (#21).
+        lines = lines_of(doc.source)
+        codec = self.lsp.workspace.position_codec
+        end = codec.position_to_client_units(
+            lines, Position(len(lines) - 1, len(lines[-1]))
         )
-
+        entire_range = Range(start=Position(line=0, character=0), end=end)
         return [TextEdit(new_text=formatted_content.decode(), range=entire_range)]
 
     def start(self) -> None:
