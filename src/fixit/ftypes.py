@@ -120,8 +120,9 @@ def is_collection(value: Any) -> bool:
 
 
 # The packages of the rules that come with Fixit. With custom rules turned off
-# (`--no-custom-rules`), Fixit imports no other rules.
-BUILTIN_RULE_PACKAGES = ("fixit.rules", "fixit.upgrade")
+# (`--no-custom-rules`), Fixit imports no other rules. As for the new engine
+# (#21), fixit.upgrade is not one of them: #21 removes it.
+BUILTIN_RULE_PACKAGES = ("fixit.rules",)
 
 
 @dataclass(frozen=True)

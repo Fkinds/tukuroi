@@ -22,7 +22,7 @@ The following options are available for all commands:
 .. attribute:: --custom-rules / --no-custom-rules
 
     Load custom rules, or turn them off. Custom rules are the rules that do not
-    come with Fixit (anything but :mod:`fixit.rules` and ``fixit.upgrade``),
+    come with Fixit (anything but :mod:`fixit.rules`),
     such as local rules in the repo. Fixit loads them by default. See
     :ref:`security` for when to turn them off, and what Fixit does then.
 
@@ -174,19 +174,6 @@ Example:
     Ran 4 tests in 0.024s
 
     OK
-
-
-``upgrade``
-^^^^^^^^^^^
-
-Upgrade lint rules or client code to the latest version of Fixit.
-Automatically applies fixes from all upgrade rules in :mod:`fixit.upgrade`.
-
-Shortcut for ``fixit --rules fixit.upgrade fix --automatic <path>``
-
-.. code:: console
-
-    $ fixit upgrade [PATH ...]
 
 
 ``debug``
