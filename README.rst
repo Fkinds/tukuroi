@@ -26,7 +26,8 @@
 
 Fixit provides a highly configurable linting framework with support for
 auto-fixes, custom "local" lint rules, and hierarchical configuration, built
-on `LibCST <https://libcst.rtfd.io>`_.
+on Python's ``ast`` module, with fixed files formatted by
+`ruff <https://docs.astral.sh/ruff/>`_.
 
 Fixit makes it quick and easy to write new lint rules and offer suggested
 changes for any errors found, which can then be accepted automatically,

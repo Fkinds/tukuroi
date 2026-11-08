@@ -17,7 +17,8 @@ usage details.
 
 The server imports the custom rules that the configuration of each opened file
 enables. To open code that you do not trust, start it with
-``fixit --no-custom-rules lsp`` (see :ref:`security`).
+``fixit --no-custom-rules lsp`` (see :ref:`security`). It imports each module
+of rules once: after changing a custom rule, restart the server.
 
 Examples of client setup:
 

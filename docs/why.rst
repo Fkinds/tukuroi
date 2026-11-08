@@ -11,13 +11,13 @@ focusing on important progress.
 At some point, they may start to ignore lint suggestions, even the important ones.
 
 We'd like to help developers move faster by **auto-fixing** lint violations.
-The first challenge is that most tools analyze source code using
-`AST <https://docs.python.org/3/library/ast.html>`_ which doesn't preserve formatting
-information (comments, whitespaces, etc) and so it is hard for them to suggest
-high-quality autofixes.
-We built `LibCST <https://github.com/Instagram/LibCST>`_ to make parsing and modifying
-source code as a Concrete Syntax Tree easy. Fixit rules take advantage of LibCST APIs
-to find problematic code and transform it to eliminate the problems.
+The `AST <https://docs.python.org/3/library/ast.html>`_ doesn't preserve formatting
+information (comments, whitespaces, etc), so Fixit never turns a tree back into
+code. Rules find problematic code in the AST, and fix it by replacing ranges of
+the original text: everything outside those ranges is left as it was, and a fix
+that would drop a comment is not applied. Fixit then formats the fixed files
+with `ruff <https://docs.astral.sh/ruff/>`_, and leaves to ruff the many rules
+that it already has.
 
 Learning from building a Flake8 plugin
 ======================================

@@ -3,25 +3,24 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import unittest
+
+
 # Triggers built-in lint rules
-class Foo(object):
-    def bar(self, value: str) -> str:
-        return "value is {}".format(value)
+class FooTest(unittest.TestCase):
+    def test_bar(self) -> None:
+        self.assertTrue(value in values)
+        if True:
+            self.assertTrue(value, None)
 
-# lint-fixme: SomethingUnrelated
-class Bar(object):
-    pass
+    def test_ignored(self) -> None:
+        # lint-fixme: SomethingUnrelated
+        self.assertTrue(one in many)
 
+        # lint-ignore
+        self.assertTrue(two in many)
 
-# lint-ignore
-class Phi(object):
-    pass
+        # lint-fixme: UseAssertIn
+        self.assertTrue(three in many)
 
-
-# lint-fixme: NoInheritFromObject
-class Rho(object):
-    pass
-
-
-class Zeta(object):  # lint-ignore NoInheritFromObject
-    pass
+        self.assertTrue(four in many)  # lint-ignore: UseAssertIn

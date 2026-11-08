@@ -53,7 +53,7 @@ The main configuration table.
 
         enable = [
             "fixit.rules",  # all lint rules in this package (non-recursive)
-            "fixit.rules:UseFstringRule",  # single lint rule by name
+            "fixit.rules:UseAssertIn",  # single lint rule by name
         ]
 
     Local rules, available only in the repo being linted, can be referenced by
@@ -66,7 +66,7 @@ The main configuration table.
         enable = [
             ".rules",  # all rules in teambread/rules/ (non-recursive)
             ".rules.hollywood",  # all rules in teambread/rules/hollywood.py
-            ".rules:HollywoodNameRule",  # single lint rule by name
+            ".rules:HollywoodName",  # single lint rule by name
         ]
 
     Overrides disabled rules from any configuration further up the hierarchy.
