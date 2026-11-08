@@ -78,43 +78,6 @@ FIXES = (
     (NN, "self.assertFalse(a is not None)\n", "1:0", "self.assertIsNone(a)\n"),
     (NN, "self.assertTrue(not a is None)\n", "1:0", "self.assertIsNotNone(a)\n"),
     (NN, "self.assertFalse(not a is not None)\n", "1:0", "self.assertIsNotNone(a)\n"),
-    # NOTE: `dataclass` is not imported, and the NamedTuple import is left.
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(NamedTuple):\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo:\n    a: int\n",
-    ),
-    (
-        NT,
-        "import typing\n\n\nclass Foo(typing.NamedTuple):\n    a: int\n",
-        "4:0",
-        f"import typing\n\n\n{DC}class Foo:\n    a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}@deco\nclass Foo(NamedTuple):\n    a: int\n",
-        "5:0",
-        f"{IMPORT_NT}@deco\n{DC}class Foo:\n    a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(NamedTuple, Base):\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo(Base):\n    a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(NamedTuple, metaclass=M):\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo(metaclass=M):\n    a: int\n",
-    ),
-    (
-        NT,
-        f"{IMPORT_NT}class C:\n    class Foo(NamedTuple):\n        a: int\n",
-        "5:4",
-        f"{IMPORT_NT}class C:\n    {DC}    class Foo:\n        a: int\n",
-    ),
     (
         SA,
         f"class C:\n{DOC}    x: int\n    b = 1\n    a = 2\n",
@@ -169,14 +132,6 @@ MULTI = (
         f"{IMPORT_CB}\ndef f(a: Callable[[...], int]) -> Callable[[...], str]:\n    pass\n",
         ((VC, "4:9"), (VC, "4:34")),
         f"{IMPORT_CB}\ndef f(a: Callable[..., int]) -> Callable[..., str]:\n    pass\n",
-        DIRTY_FF,
-    ),
-    (
-        "same rule, 2 classes",
-        (NT,),
-        f"{IMPORT_NT}class Foo(NamedTuple):\n    a: int\n\n\nclass Bar(NamedTuple):\n    b: int\n",
-        ((NT, "4:0"), (NT, "8:0")),
-        f"{IMPORT_NT}{DC}class Foo:\n    a: int\n\n\n{DC}class Bar:\n    b: int\n",
         DIRTY_FF,
     ),
     (
@@ -395,12 +350,6 @@ COMMENTS = (
         "1:0",
         "self.assertEqual(\n    a,  # c\n    3,\n)\n",
     ),
-    (
-        NT,
-        f"{IMPORT_NT}class Foo(NamedTuple):  # c\n    a: int\n",
-        "4:0",
-        f"{IMPORT_NT}{DC}class Foo:  # c\n    a: int\n",
-    ),
 )
 
 # #21: the comment inside the range is not in the result of the fix, so the new
@@ -463,6 +412,69 @@ COMMENTS_UNFORMATTED_21 = (
 )
 
 
+# #21: NoNamedTuple also adds "from dataclasses import dataclass" after the
+# imports (issuecomment-6709426366); ruff format then puts 2 blank lines after it.
+# (rule, source, position reported, the file after `fix --automatic`)
+FIXES_NT_21 = (
+    # NOTE: `dataclass` is not imported, and the NamedTuple import is left.
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple):\n    a: int\n",
+        "4:0",
+        f"{IMPORT_NT}{DC}class Foo:\n    a: int\n",
+    ),
+    (
+        NT,
+        "import typing\n\n\nclass Foo(typing.NamedTuple):\n    a: int\n",
+        "4:0",
+        f"import typing\n\n\n{DC}class Foo:\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}@deco\nclass Foo(NamedTuple):\n    a: int\n",
+        "5:0",
+        f"{IMPORT_NT}@deco\n{DC}class Foo:\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple, Base):\n    a: int\n",
+        "4:0",
+        f"{IMPORT_NT}{DC}class Foo(Base):\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple, metaclass=M):\n    a: int\n",
+        "4:0",
+        f"{IMPORT_NT}{DC}class Foo(metaclass=M):\n    a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class C:\n    class Foo(NamedTuple):\n        a: int\n",
+        "5:4",
+        f"{IMPORT_NT}class C:\n    {DC}    class Foo:\n        a: int\n",
+    ),
+    (
+        NT,
+        f"{IMPORT_NT}class Foo(NamedTuple):  # c\n    a: int\n",
+        "4:0",
+        f"{IMPORT_NT}{DC}class Foo:  # c\n    a: int\n",
+    ),
+)
+
+# #21: as FIXES_NT_21.
+# (label, rules, source, (rule, position) reported, the file after, summary)
+MULTI_NT_21 = (
+    (
+        "same rule, 2 classes",
+        (NT,),
+        f"{IMPORT_NT}class Foo(NamedTuple):\n    a: int\n\n\nclass Bar(NamedTuple):\n    b: int\n",
+        ((NT, "4:0"), (NT, "8:0")),
+        f"{IMPORT_NT}{DC}class Foo:\n    a: int\n\n\n{DC}class Bar:\n    b: int\n",
+        DIRTY_FF,
+    ),
+)
+
+
 def fix(rules: tuple[str, ...], source: str, *args: str) -> Run:
     files = {"pyproject.toml": config(*rules), "t.py": source}
     return invoke(files, ["fix", "--automatic", *args, "t.py"])
@@ -492,6 +504,26 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stdout, line("t.py", rule, position))
                 self.assertEqual(result.stderr, DIRTY_F)
                 # NOTE: `fix` exits with 0 even when it reports violations.
+                self.assertEqual(result.exit_code, 0)
+                self.assertEqual(result.files["t.py"], fixed)
+
+    def test_21_fix_no_named_tuple(self) -> None:
+        # #21: see FIXES_NT_21.
+        for rule, source, position, fixed in FIXES_NT_21:
+            with self.subTest(rule, source=source):
+                result = fix((rule,), source)
+                self.assertEqual(result.stdout, line("t.py", rule, position))
+                self.assertEqual(result.stderr, DIRTY_F)
+                self.assertEqual(result.exit_code, 0)
+                self.assertEqual(result.files["t.py"], fixed)
+
+    def test_21_fix_two_named_tuples(self) -> None:
+        # #21: see FIXES_NT_21.
+        for label, rules, source, reported, fixed, summary in MULTI_NT_21:
+            with self.subTest(label):
+                result = fix(rules, source)
+                self.assert_violations(result.stdout, in_t(reported))
+                self.assertEqual(result.stderr, summary)
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files["t.py"], fixed)
 
@@ -768,8 +800,8 @@ class FixCharacterizationTest(CharacterizationTestCase):
 
     def test_sources_are_stable_under_ruff_format(self) -> None:
         # Not a test of fixit: checks that the cases above fit the new engine.
-        pairs = [(source, fixed) for _, source, _, fixed in FIXES]
-        pairs += [(row[2], row[4]) for row in MULTI + NESTED + SUPPRESSED]
+        pairs = [(source, fixed) for _, source, _, fixed in FIXES + FIXES_NT_21]
+        pairs += [(row[2], row[4]) for row in MULTI + MULTI_NT_21 + NESTED + SUPPRESSED]
         pairs += [ONE_CLASS[:2], ONE_CLASS[::2]]
         pairs += [(DIFF_SOURCE, "x = 1\nself.assertIn(a, b)\ny = 2\n")]
         pairs += [(source, fixed) for _, source, _, fixed in COMMENTS]
