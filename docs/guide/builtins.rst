@@ -25,12 +25,9 @@ Built-in Rules
 - :class:`NoNamedTuple`
 - :class:`NoRedundantFString`
 - :class:`NoStaticIfCondition`
-- :class:`ReplaceUnionWithOptional`
-- :class:`RewriteToComprehension`
 - :class:`SortedAttributes`
 - :class:`UseAssertIn`
 - :class:`UseAssertIsNotNone`
-- :class:`UseAsyncSleepInAsyncDef`
 - :class:`VariadicCallableSyntax`
 
 .. class:: ComparePrimitivesByEqual
@@ -346,92 +343,6 @@ Built-in Rules
 
             if crazy_expression or True:
                 do_something()
-.. class:: ReplaceUnionWithOptional
-
-    Enforces the use of ``Optional[T]`` over ``Union[T, None]`` and ``Union[None, T]``.
-    See https://docs.python.org/3/library/typing.html#typing.Optional to learn more about Optionals.
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        `Optional[T]` is preferred over `Union[T, None]` or `Union[None, T]`. Learn more: https://docs.python.org/3/library/typing.html#typing.Optional
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            def func() -> Optional[str]:
-                pass
-        .. code:: python
-
-            def func() -> Optional[Dict]:
-                pass
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            def func() -> Union[str, None]:
-                pass
-        .. code:: python
-
-            from typing import Optional
-            def func() -> Union[Dict[str, int], None]:
-                pass
-
-            # suggested fix
-            from typing import Optional
-            def func() -> Optional[Dict[str, int]]:
-                pass
-
-.. class:: RewriteToComprehension
-
-    A derivative of flake8-comprehensions's C400-C402 and C403-C404.
-    Comprehensions are more efficient than functions calls. This C400-C402
-    suggest to use `dict/set/list` comprehensions rather than respective
-    function calls whenever possible. C403-C404 suggest to remove unnecessary
-    list comprehension in a set/dict call, and replace it with set/dict
-    comprehension.
-
-    .. attribute:: AUTOFIX
-        :no-index:
-        :type: Yes
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            [val for val in iterable]
-        .. code:: python
-
-            {val for val in iterable}
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            list(val for val in iterable)
-
-            # suggested fix
-            [val for val in iterable]
-
-        .. code:: python
-
-            list(val for row in matrix for val in row)
-
-            # suggested fix
-            [val for row in matrix for val in row]
-
 .. class:: SortedAttributes
 
     Ever wanted to sort a bunch of class attributes alphabetically?
@@ -587,43 +498,6 @@ Built-in Rules
             # suggested fix
             self.assertIsNotNone(x)
 
-.. class:: UseAsyncSleepInAsyncDef
-
-    Detect if asyncio.sleep is used in an async function
-
-    .. attribute:: MESSAGE
-        :no-index:
-
-        Use asyncio.sleep in async function
-
-
-    .. attribute:: VALID
-        :no-index:
-
-        .. code:: python
-
-            import time
-            def func():
-                time.sleep(1)
-        .. code:: python
-
-            from time import sleep
-            def func():
-                sleep(1)
-
-    .. attribute:: INVALID
-        :no-index:
-
-        .. code:: python
-
-            import time
-            async def func():
-                time.sleep(1)
-        .. code:: python
-
-            from time import sleep
-            async def func():
-                sleep(1)
 .. class:: VariadicCallableSyntax
 
     Callable types with arbitrary parameters should be written as `Callable[..., T]`
