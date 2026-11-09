@@ -14,6 +14,7 @@ from .core.rule import Invalid, Rule, Valid
 from .core.text import Position, Range, Span
 from .ftypes import (
     Config,
+    Error,
     FileContent,
     Options,
     QualifiedRule,
@@ -24,6 +25,7 @@ from .ftypes import (
 __all__ = [
     "Config",
     "Edit",
+    "Error",
     "FileContent",
     "Invalid",
     "Options",

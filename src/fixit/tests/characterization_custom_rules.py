@@ -173,6 +173,11 @@ def summary(rules: Collection[str]) -> str:
     return DIRTY_A if BAD in rules else DIRTY if rules else CLEAN
 
 
+# The process pool of `lint` starts new interpreters: sys.dont_write_bytecode
+# does not reach them.
+ENV = {"PYTHON_COLORS": "0", "PYTHONDONTWRITEBYTECODE": "1"}
+
+
 def run(
     files: Mapping[str, str],
     args: Sequence[str],
@@ -185,13 +190,14 @@ def run(
     installed package.
 
     ``sys.path`` and ``sys.modules`` are put back afterwards. No ``.pyc`` is
-    written: ``invoke`` reads every file back as text. "" (the current
-    directory, added by ``python -c``) is taken off ``sys.path``, as when the
-    ``fixit`` script runs. Python colors the output of unittest when
-    FORCE_COLOR is set; PYTHON_COLORS=0 turns it off for ``fixit test``.
+    written, by this process or the process pool of ``lint``: ``invoke`` reads
+    every file back as text. "" (the current directory, added by ``python
+    -c``) is taken off ``sys.path``, as when the ``fixit`` script runs. Python
+    colors the output of unittest when FORCE_COLOR is set; PYTHON_COLORS=0
+    turns it off for ``fixit test``.
     """
     path, before, bytecode = sys.path[:], set(sys.modules), sys.dont_write_bytecode
-    with TemporaryDirectory() as td, patch.dict(os.environ, {"PYTHON_COLORS": "0"}):
+    with TemporaryDirectory() as td, patch.dict(os.environ, ENV):
         lib = Path(td).resolve()
         for name, text in (site or {}).items():
             (lib / name).parent.mkdir(parents=True, exist_ok=True)

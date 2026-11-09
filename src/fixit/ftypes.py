@@ -175,6 +175,21 @@ class Violation:
     diff: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class Error:
+    """
+    An exception that stopped Fixit on a file, in strings alone: the name of
+    its type and its message, as :mod:`traceback` writes them, and the
+    traceback (empty for a syntax error in the file). The process pool of
+    ``lint`` sends it back whatever the exception was, even one that a rule
+    of the repo defines (#64).
+    """
+
+    type: str
+    message: str
+    traceback: str = ""
+
+
 @dataclass
 class Result:
     """
@@ -184,5 +199,5 @@ class Result:
 
     path: Path
     violation: Violation | None
-    error: tuple[Exception, str] | None = None
+    error: Error | None = None
     applied: int = 0

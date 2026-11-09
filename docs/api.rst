@@ -32,6 +32,7 @@ Simple API
 
 .. autoclass:: Violation
 .. autoclass:: Result
+.. autoclass:: Error
 
 
 Advanced API
