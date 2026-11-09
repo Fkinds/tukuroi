@@ -8,7 +8,8 @@ Tests of ``fixit.api.fixit_bytes``, which runs the new engine (#21), for what th
 characterization tests do not pin: the results it yields and what it returns,
 the fixes sent back to it, the warning when the fixes do not converge, the
 metrics, and the errors; and through the CLI, ``fix --interactive``, a syntax
-error, and the exceptions that ``lint`` sends back from its process pool.
+error, and the exceptions that ``lint`` sends back from its process pool, or a
+process of it that ends.
 """
 
 import re
@@ -89,6 +90,16 @@ UNPICKLABLE = HEAD + (
     '        if self.source.path.stem == "local":\n'
     '            raise Local("local")\n'
     '        raise ValueError("lock", threading.Lock())\n'
+)
+# A rule that ends the process that lints exit.py.
+EXIT = HEAD + (
+    "import os\n\n\n"
+    "class Exit(Rule):\n"
+    '    MESSAGE = "Exit."\n\n'
+    "    def visit_Module(self, node: ast.Module) -> None:\n"
+    "        assert self.source.path\n"
+    '        if self.source.path.stem == "exit":\n'
+    "            os._exit(3)\n"
 )
 
 
@@ -308,6 +319,18 @@ class CommandTest(TestCase):
         # The tracebacks come back too.
         self.assertIn('raise Odd("odd", 1)', result.stdout)
         summary = "🛠️  3 files checked, 3 files with errors 🛠️"
+        self.assertEqual(result.stderr.splitlines()[-1], summary)
+        self.assertEqual(result.exit_code, 2)
+
+    def test_a_process_of_the_pool_ends(self) -> None:
+        # The pool breaks: the other files are linted again (#94).
+        pyproject = '[tool.fixit]\nroot = true\nenable = [".rules"]\n'
+        files_ = {"pyproject.toml": pyproject, "rules.py": EXIT}
+        files_ |= {f"{name}.py": "x = 1\n" for name in ("a", "b", "exit")}
+        result = run_cli(files_, ["lint", "a.py", "b.py", "exit.py"])
+        message = "the process that linted the file exited with status 3"
+        self.assertEqual(result.stdout, f"exit.py: EXCEPTION: {message}\n")
+        summary = "🛠️  3 files checked, 1 file with errors 🛠️"
         self.assertEqual(result.stderr.splitlines()[-1], summary)
         self.assertEqual(result.exit_code, 2)
 

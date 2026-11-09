@@ -45,6 +45,7 @@ from .core_text import LineIndexTest, PositionTest, RangeTest, SpanTest
 from .custom_rules_switch import CustomRulesSwitchTest
 from .examples import ExamplesTest
 from .ftypes import TypesTest
+from .pool import PoolTest
 from .smoke import SmokeTest
 
 # Expect the default of the switch for custom rules, even when the shell sets
