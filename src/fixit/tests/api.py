@@ -6,10 +6,12 @@
 """
 Tests of ``fixit.api.fixit_bytes``, which runs the new engine (#21), for what the
 characterization tests do not pin: the results it yields and what it returns,
-the fixes sent back to it, the warning when the fixes do not converge, and the
-metrics; and through the CLI, ``fix --interactive`` and a syntax error.
+the fixes sent back to it, the warning when the fixes do not converge, the
+metrics, and the errors; and through the CLI, ``fix --interactive``, a syntax
+error, and the exceptions that ``lint`` sends back from its process pool.
 """
 
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -18,9 +20,8 @@ from unittest.mock import patch
 
 from ..api import fixit_bytes
 from ..core import loader
-from ..core.source import ParseError
 from ..core.text import Position, Range
-from ..ftypes import Config, Metrics, QualifiedRule, Result, Violation
+from ..ftypes import Config, Error, Metrics, QualifiedRule, Result, Violation
 from ..util import capture, chdir
 from .characterization_cli import invoke
 from .characterization_custom_rules import run as run_cli
@@ -58,6 +59,36 @@ BOOM = HEAD + (
     '    MESSAGE = "Boom."\n\n'
     "    def visit_Name(self, node: ast.Name) -> None:\n"
     '        raise RuntimeError("boom")\n'
+)
+# A rule that raises an exception whose str() fails.
+MUTE = HEAD + (
+    "\n\nclass Mute(Exception):\n"
+    "    def __str__(self) -> str:\n"
+    "        raise RuntimeError\n\n\n"
+    "class Boom(Rule):\n"
+    '    MESSAGE = "Boom."\n\n'
+    "    def visit_Name(self, node: ast.Name) -> None:\n"
+    "        raise Mute\n"
+)
+# A rule that raises, for each file, an exception that does not pickle: one
+# whose __init__ takes other arguments than its args, one whose class the
+# parent process cannot import, and one with an argument that does not pickle.
+UNPICKLABLE = HEAD + (
+    "import threading\n\n\n"
+    "class Odd(Exception):\n"
+    "    def __init__(self, a: str, b: int) -> None:\n"
+    "        super().__init__(a)\n\n\n"
+    "class Local(Exception):\n"
+    "    pass\n\n\n"
+    "class Boom(Rule):\n"
+    '    MESSAGE = "Boom."\n\n'
+    "    def visit_Module(self, node: ast.Module) -> None:\n"
+    "        assert self.source.path\n"
+    '        if self.source.path.stem == "odd":\n'
+    '            raise Odd("odd", 1)\n'
+    '        if self.source.path.stem == "local":\n'
+    '            raise Local("local")\n'
+    '        raise ValueError("lock", threading.Lock())\n'
 )
 
 
@@ -181,10 +212,9 @@ class FixitBytesTest(TestCase):
     def test_syntax_error(self) -> None:
         results, returned = run(config(Path("/repo"), UI), "print)\n")
         [result] = results
-        assert result.error is not None
-        error, traceback = result.error
-        assert isinstance(error, ParseError)
-        self.assertEqual((error.position, traceback), (Position(1, 5), ""))
+        # The file is wrong, not fixit: no traceback.
+        message = "Syntax Error @ 1:5: unmatched ')'"
+        self.assertEqual(result.error, Error("fixit.core.source.ParseError", message))
         self.assertIsNone(returned)
 
     def test_exception_in_a_rule(self) -> None:
@@ -192,10 +222,20 @@ class FixitBytesTest(TestCase):
             results, returned = run(config(root), "x = 1\n")
         [result] = results
         assert result.error is not None
-        error, traceback = result.error
-        self.assertEqual(str(error), "boom")
-        self.assertIn('raise RuntimeError("boom")', traceback)
+        # The module of a built-in exception is not named, as in traceback.
+        found = (result.error.type, result.error.message)
+        self.assertEqual(found, ("RuntimeError", "boom"))
+        self.assertIn('raise RuntimeError("boom")', result.error.traceback)
         self.assertIsNone(returned)
+
+    def test_exception_whose_str_fails(self) -> None:
+        with files({"rules.py": MUTE}) as root:
+            results, _ = run(config(root), "x = 1\n")
+        [result] = results
+        assert result.error is not None
+        self.assertRegex(result.error.type, r"^__fixit_local_\w+__\.rules\.Mute$")
+        # As traceback writes it.
+        self.assertEqual(result.error.message, "<exception str() failed>")
 
     def test_fixes_that_do_not_converge(self) -> None:
         with (
@@ -247,6 +287,28 @@ class CommandTest(TestCase):
         self.assertEqual(
             result.stdout, "b.py: EXCEPTION: Syntax Error @ 1:5: unmatched ')'\n"
         )
+        self.assertEqual(result.exit_code, 2)
+
+    def test_exceptions_from_the_process_pool(self) -> None:
+        # Two files or more are linted in a process pool, which pickles the
+        # result of each file (#64).
+        pyproject = '[tool.fixit]\nroot = true\nenable = [".rules"]\n'
+        files_ = {"pyproject.toml": pyproject, "rules.py": UNPICKLABLE}
+        files_ |= {f"{name}.py": "x = 1\n" for name in ("local", "lock", "odd")}
+        result = run_cli(files_, ["lint", "local.py", "lock.py", "odd.py"])
+        found = sorted(
+            re.findall(r"^(\S+): EXCEPTION: (.*)$", result.stdout, re.MULTILINE)
+        )
+        # The address of the lock changes.
+        lock = "('lock', <unlocked _thread.lock object at "
+        self.assertEqual(
+            [(path, message.split("0x")[0]) for path, message in found],
+            [("local.py", "local"), ("lock.py", lock), ("odd.py", "odd")],
+        )
+        # The tracebacks come back too.
+        self.assertIn('raise Odd("odd", 1)', result.stdout)
+        summary = "🛠️  3 files checked, 3 files with errors 🛠️"
+        self.assertEqual(result.stderr.splitlines()[-1], summary)
         self.assertEqual(result.exit_code, 2)
 
     def test_validate_config(self) -> None:

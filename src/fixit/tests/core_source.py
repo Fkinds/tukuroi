@@ -11,7 +11,6 @@ errors, where comments are, and nodes with and without a position.
 """
 
 import ast
-import pickle
 import tokenize
 from pathlib import Path
 from unittest import TestCase
@@ -152,13 +151,6 @@ class SourceParseErrorTest(TestCase):
             Source.from_text("x = (\n")
         self.assertNotIsInstance(caught.exception, (SyntaxError, ValueError))
         self.assertEqual(str(caught.exception), caught.exception.message)
-
-    def test_parse_error_pickles(self) -> None:
-        # The process pool of `lint` sends it back from the process of a file.
-        error = ParseError(Position(2, 4), "invalid syntax")
-        copy = pickle.loads(pickle.dumps(error))
-        self.assertIs(type(copy), ParseError)
-        self.assertEqual((copy.position, copy.message), (error.position, error.message))
 
 
 class SourceContentTest(TestCase):

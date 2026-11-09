@@ -25,6 +25,7 @@ from .core.text import Range
 from .ftypes import (
     STDIN,
     Config,
+    Error,
     FileContent,
     Metrics,
     MetricsHook,
@@ -49,7 +50,22 @@ def _describe(error: Exception) -> str:
     if isinstance(error, ParseError):
         line, column = error.position.line, error.position.column
         return f"Syntax Error @ {line}:{column}: {error.message}"
-    return str(error)
+    try:
+        return str(error)
+    except Exception:  # noqa: BLE001
+        # The str() of a rule's exception can raise anything: as traceback.
+        return "<exception str() failed>"
+
+
+def _error(error: Exception, tb: str = "") -> Error:
+    """
+    ``error`` in strings alone, so that the process pool of ``lint`` can send
+    it back: an exception that a rule raises may not pickle, or its class may
+    not import in the parent process (#64). The name of its type is that of
+    :mod:`traceback`.
+    """
+    name = traceback.TracebackException.from_exception(error).exc_type_str
+    return Error(name, _describe(error), tb)
 
 
 def print_result(
@@ -101,10 +117,10 @@ def print_result(
 
     elif result.error:
         # An exception occurred while processing a file
-        error, tb = result.error
-        click.secho(f"{path}: EXCEPTION: {_describe(error)}", fg="red", err=stderr)
-        if tb:
-            click.echo(tb.strip(), err=stderr)
+        error = result.error
+        click.secho(f"{path}: EXCEPTION: {error.message}", fg="red", err=stderr)
+        if error.traceback:
+            click.echo(error.traceback.strip(), err=stderr)
         return True
 
     elif result.applied:
@@ -154,7 +170,7 @@ def fixit_bytes(
             source = Source.from_bytes(content, path)
         except ParseError as error:
             # The file is wrong, not fixit: no traceback.
-            yield Result(path, violation=None, error=(error, ""))
+            yield Result(path, violation=None, error=_error(error))
             return None
 
         start = time.perf_counter()
@@ -189,7 +205,7 @@ def fixit_bytes(
     except Exception as error:
         # An exception in a rule is the result of the file.
         LOG.debug("Exception while linting", exc_info=error)
-        yield Result(path, violation=None, error=(error, traceback.format_exc()))
+        yield Result(path, violation=None, error=_error(error, traceback.format_exc()))
 
     return None
 
@@ -247,7 +263,7 @@ def fixit_stdin(
 
     except Exception as error:
         LOG.debug("Exception while fixit_stdin", exc_info=error)
-        yield Result(path, violation=None, error=(error, traceback.format_exc()))
+        yield Result(path, violation=None, error=_error(error, traceback.format_exc()))
 
 
 def fixit_file(
@@ -283,7 +299,7 @@ def fixit_file(
 
     except Exception as error:
         LOG.debug("Exception while fixit_file", exc_info=error)
-        yield Result(path, violation=None, error=(error, traceback.format_exc()))
+        yield Result(path, violation=None, error=_error(error, traceback.format_exc()))
 
 
 def _fixit_file_wrapper(
