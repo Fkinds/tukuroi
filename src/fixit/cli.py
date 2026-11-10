@@ -230,6 +230,9 @@ def fix(
     dirty: set[Path] = set()
     autofixes = 0
     fixed = 0
+    # The violations of each file: those reported, or those left after the
+    # fixes applied to it. 1 if any are left, as `ruff check --fix` (#40).
+    left: dict[Path, int] = {}
 
     # TODO: make this parallel
     generator = capture(
@@ -256,8 +259,14 @@ def fix(
             dirty.add(result.path)
             if autofix and result.violation and result.violation.autofixable:
                 autofixes += 1
+        if result.violation:
+            left[result.path] = left.get(result.path, 0) + 1
+        if result.error:
+            exit_code |= 2
         # The fixes applied to a file, after its violations.
-        fixed += result.applied
+        if result.applied:
+            fixed += result.applied
+            left[result.path] = result.remaining
         if interactive and result.violation and result.violation.autofixable:
             autofixes += 1
             answer = click.prompt(
@@ -268,6 +277,8 @@ def fix(
             elif answer == "q":
                 break
 
+    if any(left.values()):
+        exit_code |= 1
     splash(visited, dirty, autofixes, fixed)
     ctx.exit(exit_code)
 

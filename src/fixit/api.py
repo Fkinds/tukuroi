@@ -156,7 +156,8 @@ def fixit_bytes(
     If ``autofix`` is ``True``, all violations with replacements will be applied
     automatically, even if ``False`` is sent back to the generator. After the
     violations of a file whose fixes were applied, a last :class:`Result` tells
-    how many were (``applied``).
+    how many were (``applied``), and how many violations are left in the fixed
+    text (``remaining``): ``fix`` exits with 1 if any are (#40).
 
     It runs the new engine (#21). The fixes that ``autofix`` takes are applied
     round after round; those sent back to the generator, in one round. The fixed
@@ -199,7 +200,10 @@ def fixit_bytes(
             rounds = f"{MAX_ROUNDS} rounds"
             LOG.warning("%s: fixes did not converge after %s", _shown(path), rounds)
         if fixed.applied:
-            yield Result(path, violation=None, applied=fixed.applied)
+            left = lint(Source.from_text(fixed.text, path), rules).reports
+            yield Result(
+                path, violation=None, applied=fixed.applied, remaining=len(left)
+            )
         if fixed.text != source.text:
             return source.encode(fixed.text)
 

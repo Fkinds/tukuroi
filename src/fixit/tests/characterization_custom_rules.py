@@ -590,7 +590,8 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         result = run(before, ["fix", "--automatic", "t.py"])
         self.assertEqual(records(result.stdout), sorted([found(BAD), found(UGLY)]))
         self.assertEqual(result.stderr, DIRTY_F)
-        self.assertEqual(result.exit_code, 0)
+        # The violation of the rule without a fix is left (#40).
+        self.assertEqual(result.exit_code, 1)
         self.assertEqual(result.files["t.py"], SOURCE.replace("bad", "good"))
 
     def test_rules_option_with_custom_rules(self) -> None:

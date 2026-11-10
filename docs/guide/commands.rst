@@ -64,6 +64,10 @@ and error messages, and the input read from STDIN.
 
     Show suggested fixes, in unified diff format, when available.
 
+The exit code is 0 when no file has a lint error, 1 when a file has one, and 2
+when Fixit could not lint a file (a syntax error, or an exception in a rule);
+3 for both.
+
 
 ``fix``
 ^^^^^^^
@@ -89,6 +93,10 @@ the input read from STDIN, and the fixed output printed to STDOUT (ignoring
 .. attribute:: --diff / -d
 
     Show applied fixes in unified diff format when applied automatically.
+
+The exit code is that of ``lint``, for the lint errors left after the fixes,
+as with ``ruff check --fix``: 1 only when a file still has one, because it has
+no fix, or its fix was declined or could not be applied.
 
 
 .. _lsp_command:

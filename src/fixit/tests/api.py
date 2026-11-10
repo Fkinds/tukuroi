@@ -179,20 +179,23 @@ class FixitBytesTest(TestCase):
         root = Path("/repo")
         two = "self.assertTrue(a in b)\nself.assertTrue(c in d)\n"
         cases = (
-            # (label, source, autofix, answers, applied, returned)
-            ("autofix", SOURCE, True, (), 1, FIXED),
-            ("autofix, 2 fixes", two, True, (), 2, "self.assertIn(a, b)\nself.assertIn(c, d)\n"),
-            ("yes to the 2nd", two, False, (False, True), 1, "self.assertTrue(a in b)\nself.assertIn(c, d)\n"),
-            ("yes to the violation without a fix", SOURCE, False, (False, True), 0, None),
-            ("no to both", two, False, (False, False), 0, None),
+            # (label, source, autofix, answers, applied, remaining, returned)
+            # The violation of NoStaticIfCondition, which has no fix, remains.
+            ("autofix", SOURCE, True, (), 1, 1, FIXED),
+            ("autofix, 2 fixes", two, True, (), 2, 0, "self.assertIn(a, b)\nself.assertIn(c, d)\n"),
+            ("yes to the 2nd", two, False, (False, True), 1, 1, "self.assertTrue(a in b)\nself.assertIn(c, d)\n"),
+            ("yes to the violation without a fix", SOURCE, False, (False, True), 0, 0, None),
+            ("no to both", two, False, (False, False), 0, 0, None),
         )  # fmt: skip
-        for label, source, autofix, answers, applied, fixed in cases:
+        for label, source, autofix, answers, applied, remaining, fixed in cases:
             with self.subTest(label):
                 results, returned = run(
                     config(root, UI, SI), source, autofix=autofix, answers=answers
                 )
                 violations = [r for r in results if r.violation]
-                last = [Result(root / "t.py", None, applied=applied)] if applied else []
+                last = [
+                    Result(root / "t.py", None, applied=applied, remaining=remaining)
+                ][:applied]
                 self.assertEqual(results[len(violations) :], last)
                 self.assertEqual(returned, None if fixed is None else fixed.encode())
 
@@ -258,6 +261,9 @@ class FixitBytesTest(TestCase):
         warning = "t.py: fixes did not converge after 100 rounds"
         self.assertEqual([r.getMessage() for r in logs.records], [warning])
         self.assertEqual(results[-1].applied, 100)
+        # The fixed text, linted again, still has the violation: one reported
+        # and 100 fixes applied do not tell it (#40).
+        self.assertEqual(results[-1].remaining, 1)
         self.assertEqual(returned, ("x = 1\n" * 100 + "y = 2\n").encode())
 
     def test_metrics(self) -> None:
@@ -283,14 +289,16 @@ class FixitBytesTest(TestCase):
 class CommandTest(TestCase):
     maxDiff = None
 
-    def fix(self, source: str, answers: str, *rules: str) -> tuple[str, str]:
-        """The file after ``fix --interactive`` with ``answers``, and stderr."""
+    def fix(self, source: str, answers: str, *rules: str) -> tuple[str, str, int]:
+        """
+        The file after ``fix --interactive`` with ``answers``, the last line of
+        stderr, and the exit code.
+        """
         enable = ", ".join(f'"fixit.rules:{rule}"' for rule in rules)
         pyproject = f'[tool.fixit]\nroot = true\ndisable = ["fixit.rules"]\nenable = [{enable}]\n'
         files_ = {"pyproject.toml": pyproject, "t.py": source}
         result = invoke(files_, ["fix", "--interactive", "t.py"], stdin=answers)
-        self.assertEqual(result.exit_code, 0)
-        return result.files["t.py"], result.stderr.splitlines()[-1]
+        return result.files["t.py"], result.stderr.splitlines()[-1], result.exit_code
 
     def test_syntax_error_is_one_line(self) -> None:
         files_ = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "b.py": "print)\n"}
@@ -364,18 +372,20 @@ class CommandTest(TestCase):
         two = "self.assertTrue(a in b)\nself.assertTrue(c in d)\n"
         summary = "🛠️  1 file checked, 1 file with errors, {} 🛠️"
         cases = (
-            # (label, answers, file after, summary)
-            ("y, y", "y\ny\n", "self.assertIn(a, b)\nself.assertIn(c, d)\n", "2 auto-fixes available, 2 fixes applied"),
-            ("n, y", "n\ny\n", "self.assertTrue(a in b)\nself.assertIn(c, d)\n", "2 auto-fixes available, 1 fix applied"),
-            ("n, n", "n\nn\n", two, "2 auto-fixes available"),
+            # (label, answers, file after, summary, exit code)
+            # 1 if a violation is left: its fix was not taken (#40).
+            ("y, y", "y\ny\n", "self.assertIn(a, b)\nself.assertIn(c, d)\n", "2 auto-fixes available, 2 fixes applied", 0),
+            ("n, y", "n\ny\n", "self.assertTrue(a in b)\nself.assertIn(c, d)\n", "2 auto-fixes available, 1 fix applied", 1),
+            ("n, n", "n\nn\n", two, "2 auto-fixes available", 1),
             # Quit: nothing applied to the file, even the fix answered first.
-            ("y, q", "y\nq\n", two, "2 auto-fixes available"),
+            ("y, q", "y\nq\n", two, "2 auto-fixes available", 1),
         )  # fmt: skip
-        for label, answers, fixed, counts in cases:
+        for label, answers, fixed, counts, exit_code in cases:
             with self.subTest(label):
-                after, last = self.fix(two, answers, UI)
+                after, last, code = self.fix(two, answers, UI)
                 self.assertEqual(after, fixed)
                 self.assertEqual(last, summary.format(counts))
+                self.assertEqual(code, exit_code)
 
 
 class PublicNamesTest(TestCase):

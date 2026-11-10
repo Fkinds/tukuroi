@@ -201,10 +201,11 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, exit_code)
 
     def test_fix_exit_code_and_summary(self) -> None:
+        # As `ruff check --fix`: 1 if violations are left after the fixes (#40).
         cases = (
-            ("no file", {}, (), NONE, {}),
-            ("clean", {"a.py": OK}, (), CLEAN, {}),
-            ("no autofix", {"a.py": UNFIXABLE}, (("a.py", SI),), DIRTY, {}),
+            ("no file", {}, (), NONE, 0, {}),
+            ("clean", {"a.py": OK}, (), CLEAN, 0, {}),
+            ("no autofix", {"a.py": UNFIXABLE}, (("a.py", SI),), DIRTY, 1, {}),
             (
                 "fixed",
                 {"a.py": FIXABLE, "b.py": OK},
@@ -213,6 +214,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
                     "🛠️  2 files checked, 1 file with errors, 1 auto-fix available,"
                     " 1 fix applied 🛠️\n"
                 ),
+                0,
                 {"a.py": FIXED},
             ),
             (
@@ -223,17 +225,17 @@ class CliCharacterizationTest(CharacterizationTestCase):
                     "🛠️  1 file checked, 1 file with errors, 2 auto-fixes available,"
                     " 2 fixes applied 🛠️\n"
                 ),
+                0,
                 {"a.py": FIXED + FIXED},
             ),
         )
-        for label, files, reported, stderr, changed in cases:
+        for label, files, reported, stderr, exit_code, changed in cases:
             with self.subTest(label):
                 before = {"pyproject.toml": CONFIG, **files}
                 result = invoke(before, ["fix", "--automatic", "."])
                 self.assert_violations(result.stdout, reported)
                 self.assertEqual(result.stderr, stderr)
-                # NOTE: `fix` exits with 0 even when it reports violations.
-                self.assertEqual(result.exit_code, 0)
+                self.assertEqual(result.exit_code, exit_code)
                 self.assertEqual(result.files, before | changed)
 
     def test_fix_without_paths(self) -> None:
@@ -273,7 +275,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 3,
                 {},
             ),
-            # NOTE: `fix` exits with 0 even when a file raised an exception.
+            # `fix` exits with 2 when a file raised an exception, as `lint` (#40).
             (
                 "fix",
                 {"a.py": FIXABLE},
@@ -282,7 +284,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
                     "🛠️  2 files checked, 2 files with errors, 1 auto-fix available,"
                     " 1 fix applied 🛠️\n"
                 ),
-                0,
+                2,
                 {"a.py": FIXED},
             ),
         )
@@ -393,8 +395,8 @@ class CliCharacterizationTest(CharacterizationTestCase):
             self.assertEqual(result.stdout, BROKEN)
             self.assertTrue(result.stderr.startswith("t.py: EXCEPTION: "))
             self.assertTrue(result.stderr.endswith(f"\n{DIRTY}"))
-            # NOTE: `fix` exits with 0 even when the input raised an exception.
-            self.assertEqual(result.exit_code, 0)
+            # As `lint` (#40).
+            self.assertEqual(result.exit_code, 2)
 
     def test_output_format(self) -> None:
         vscode = {"pyproject.toml": CONFIG + 'output-format = "vscode"\n'}
