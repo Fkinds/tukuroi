@@ -124,19 +124,13 @@ for more details.
 
 .. code:: console
 
-    $ fixit lsp [--stdio | --tcp PORT | --ws PORT]
+    $ fixit lsp [--stdio] [--debounce-interval SECONDS]
+
+The server talks over stdio only, with the editor that starts it.
 
 .. attribute:: --stdio
 
-    Serve LSP over stdio. *default*
-
-.. attribute:: --tcp
-
-    Serve LSP over TCP on PORT.
-
-.. attribute:: --ws
-
-    Serve LSP over WebSocket on PORT.
+    Serve LSP over stdio, as without it. Some clients pass it.
 
 .. attribute:: --debounce-interval
 

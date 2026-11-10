@@ -346,22 +346,20 @@ def fix(
 
 @main.command()
 @click.pass_context
-@click.option("--stdio", type=bool, default=True, help="Serve LSP over stdio")
-@click.option("--tcp", type=int, help="Port to serve LSP over")
-@click.option("--ws", type=int, help="Port to serve WS over")
+# Over stdio only (#15). --stdio is taken, for the clients that pass it.
+@click.option(
+    "--stdio",
+    is_flag=True,
+    expose_value=False,
+    help="Serve LSP over stdio (the default)",
+)
 @click.option(
     "--debounce-interval",
     type=float,
     default=LSPOptions.debounce_interval,
     help="Delay in seconds for server-side debounce",
 )
-def lsp(
-    ctx: click.Context,
-    stdio: bool,
-    tcp: int | None,
-    ws: int | None,
-    debounce_interval: float,
-) -> None:
+def lsp(ctx: click.Context, debounce_interval: float) -> None:
     """
     Start server for:
     https://microsoft.github.io/language-server-protocol/
@@ -369,12 +367,7 @@ def lsp(
     from .lsp import LSP
 
     main_options = ctx.obj
-    lsp_options = LSPOptions(
-        tcp=tcp,
-        ws=ws,
-        stdio=stdio,
-        debounce_interval=debounce_interval,
-    )
+    lsp_options = LSPOptions(debounce_interval=debounce_interval)
     LSP(main_options, lsp_options).start()
 
 
