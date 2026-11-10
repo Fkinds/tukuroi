@@ -192,8 +192,9 @@ def collect_rules(
     custom_rules: bool = True,
 ) -> tuple[type[Rule], ...]:
     """
-    The rules of ``enable`` without those of ``disable``, but for the rules that
-    ``enable`` names one by one, sorted by name. A name whose rules cannot be
+    The rules of ``enable`` without those of ``disable``, sorted by name. For a
+    rule in both, the more specific name wins (#40, see :func:`_specificity`),
+    and ``disable`` if they are as specific. A name whose rules cannot be
     loaded raises a :class:`CollectionError` (see :func:`load`). ``root_import``
     is the path that ``enable-root-import`` adds to ``sys.path``. With
     ``custom_rules`` false, only the built-in rules are imported: the others in
@@ -202,23 +203,34 @@ def collect_rules(
     """
     if not custom_rules:
         root_import = None
-    enabled: set[type[Rule]] = set()
-    named: set[type[Rule]] = set()
-    disabled: set[type[Rule]] = set()
+    # Each rule, with the most specific of the names that give it.
+    enabled: dict[type[Rule], int] = {}
+    disabled: dict[type[Rule], int] = {}
     with _on_path(root_import):
         for name in enable:
             if not (custom_rules or is_builtin(name)):
                 _warn(f"Skipped rules '{name}': custom rules are turned off")
                 continue
-            rules = _load(name, root_import)
-            enabled.update(rules)
-            if name.name is not None:
-                named.update(rules)
+            for rule in _load(name, root_import):
+                enabled[rule] = max(enabled.get(rule, -1), _specificity(name))
         for name in disable:
             if custom_rules or is_builtin(name):
-                disabled.update(_load(name, root_import))
-    rules = enabled - (disabled - named)
+                for rule in _load(name, root_import):
+                    disabled[rule] = max(disabled.get(rule, -1), _specificity(name))
+    rules = (rule for rule, n in enabled.items() if n > disabled.get(rule, -1))
     return tuple(sorted(rules, key=lambda r: (r.name(), r.__module__)))
+
+
+def _specificity(name: RuleName) -> int:
+    """
+    How specific ``name`` is (#40): a module by its depth, and one rule more
+    than any module. ``fixit.rules`` is less specific than
+    ``fixit.rules.no_static_if_condition``, which is less specific than
+    ``fixit.rules:NoStaticIfCondition``.
+    """
+    if name.name is not None:
+        return sys.maxsize
+    return name.module.count(".")
 
 
 def load(name: RuleName, root_import: Path | None = None) -> tuple[type[Rule], ...]:

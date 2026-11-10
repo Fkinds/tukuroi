@@ -360,11 +360,62 @@ class ConfigTest(TestCase):
                     enable=[QualifiedRule("fixit.rules"), QualifiedRule("foo")],
                 ),
             ),
+            (
+                "nearer level wins",
+                [
+                    RawConfig(
+                        (root / "a/b/fixit.toml"),
+                        {"disable": ["fixit.rules"], "enable": ["foo.bar"]},
+                    ),
+                    RawConfig(
+                        (root / "a/fixit.toml"),
+                        {"enable": ["fixit.rules:X", "foo"], "disable": ["foo.bar:Y"]},
+                    ),
+                ],
+                Config(
+                    path=target,
+                    root=(root / "a"),
+                    enable=[QualifiedRule("foo"), QualifiedRule("foo.bar")],
+                    disable=[QualifiedRule("fixit.rules")],
+                ),
+            ),
         )
         for name, raw_configs, expected in params:
             with self.subTest(name):
                 actual = config.merge_configs(target, raw_configs)
                 self.assertEqual(expected, actual)
+
+    def test_contains(self) -> None:
+        a, b = Path("/a"), Path("/b")
+        cases = (
+            # (name, other, contains)
+            ("x", "x", True),
+            ("x", "x:R", True),
+            ("x", "x.y", True),
+            ("x", "x.y:R", True),
+            # One level down only, as the rules of a package.
+            ("x", "x.y.z", False),
+            ("x", "x.y.z:R", False),
+            ("x", "xy", False),
+            ("x.y", "x", False),
+            ("x:R", "x:R", True),
+            ("x:R", "x", False),
+            ("x:R", "x:S", False),
+            # A rule named by its package is not told apart from its module.
+            ("x.y", "x:R", False),
+            (".rules", ".rules.y", True),
+        )
+        for name, other, expected in cases:
+            with self.subTest(f"{name} {other}"):
+                self.assertIs(
+                    config.contains(
+                        config.parse_rule(name, a), config.parse_rule(other, a)
+                    ),
+                    expected,
+                )
+        # The modules in the repo of two configs differ.
+        local = config.parse_rule(".rules", a)
+        self.assertFalse(config.contains(local, config.parse_rule(".rules", b)))
 
     def test_generate_config(self) -> None:
         for name, path, root, options, expected in (
