@@ -14,7 +14,7 @@ from typing import (
     TypeVar,
 )
 
-from .core.text import Range
+from .core.text import Position, Range
 
 T = TypeVar("T")
 
@@ -180,12 +180,14 @@ class Error:
     its type and its message, as :mod:`traceback` writes them, and the
     traceback (empty for a syntax error in the file). The process pool of
     ``lint`` sends it back whatever the exception was, even one that a rule
-    of the repo defines (#64).
+    of the repo defines (#64). A syntax error has its position too, which the
+    LSP shows the error at (#96).
     """
 
     type: str
     message: str
     traceback: str = ""
+    position: Position | None = None
 
 
 @dataclass

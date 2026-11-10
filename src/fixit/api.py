@@ -70,7 +70,8 @@ def _error(error: Exception, tb: str = "") -> Error:
     :mod:`traceback`.
     """
     name = traceback.TracebackException.from_exception(error).exc_type_str
-    return Error(name, _describe(error), tb)
+    position = error.position if isinstance(error, ParseError) else None
+    return Error(name, _describe(error), tb, position)
 
 
 def print_result(

@@ -36,6 +36,7 @@ from click.testing import CliRunner
 
 from .. import __version__
 from ..cli import main
+from ..config import generate_config
 from ..lsp import BOM
 from ..util import chdir
 from .characterization_cli import CharacterizationTestCase, config, fresh_logging
@@ -86,8 +87,8 @@ SHUTDOWN = request(2, "shutdown")
 EXIT = notification("exit")
 
 
-def did_open(text: str, uri: str = T) -> Json:
-    document = {"uri": uri, "languageId": "python", "version": 1, "text": text}
+def did_open(text: str, uri: str = T, language: str = "python") -> Json:
+    document = {"uri": uri, "languageId": language, "version": 1, "text": text}
     return notification("textDocument/didOpen", {"textDocument": document})
 
 
@@ -130,6 +131,11 @@ def diagnostic(rule: str, start: str, end: str) -> Json:
         "code": rule,
         "source": "fixit",
     }
+
+
+def error(at: str, message: str) -> Json:
+    """An error of the document, as a diagnostic at ``at`` (#96)."""
+    return {"range": span(at, at), "message": message, "severity": 1, "source": "fixit"}
 
 
 def published(*found: tuple[str, str, str], uri: str = T, version: int = 1) -> Json:
@@ -225,7 +231,7 @@ def in_order(published: Sequence[Json]) -> list[Json]:
     result = []
     for p in published:
         found = p["diagnostics"]
-        if len({d["code"] for d in found}) > 1:
+        if len({d.get("code") for d in found}) > 1:
             found = sorted(found, key=lambda d: json.dumps(d, sort_keys=True))
         result.append({**p, "diagnostics": found})
     return result
@@ -312,8 +318,9 @@ class LspCharacterizationTest(CharacterizationTestCase):
         for label, encodings, encoding, stderr in cases:
             with self.subTest(label):
                 served = serve({}, session(encodings=encodings))
-                # NOTE: it offers executeCommand with no commands, and workspace
-                # folders, which it does not use.
+                # pygls offers executeCommand with no commands, and workspace
+                # folders, whose notifications it handles: both as LSP 3.17
+                # allows, and kept (#96).
                 folders = {"supported": True, "changeNotifications": True}
                 capabilities = {
                     "positionEncoding": encoding,
@@ -355,8 +362,9 @@ class LspCharacterizationTest(CharacterizationTestCase):
     def test_exit_code(self) -> None:
         cases = (
             ("after shutdown", [*START, SHUTDOWN, EXIT], 0),
-            # NOTE: LSP 3.17 "exit": without shutdown, the exit code should be 1.
-            ("without shutdown", [*START, EXIT], 0),
+            # LSP 3.17 "exit" (#96): the libcst engine exited with 0.
+            ("without shutdown", [*START, EXIT], 1),
+            ("end of stdin", START, 1),
         )
         for label, messages, exit_code in cases:
             with self.subTest(label):
@@ -377,8 +385,6 @@ class LspCharacterizationTest(CharacterizationTestCase):
             ),
             ("2 rules", (NA, SI), FIXABLE + UNFIXABLE, (NA_0, SI_1)),
             ("1 of 2 ignored", (UI,), ignored, ((UI, "1:0", "1:23"),)),
-            # NOTE: the syntax error is not reported, and hides the violation.
-            ("syntax error", (UI,), f"{CALL}\nprint)\n", ()),
         )
         for label, rules, text, found in cases:
             with self.subTest(label):
@@ -521,20 +527,68 @@ class LspCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(ruff_format(*stable), stable)
 
     def test_formatting_of_document_not_opened(self) -> None:
-        with self.subTest("on disk"):
-            files = {"pyproject.toml": config(NA), "t.py": FIXABLE}
-            served = serve(files, session(formatting()))
-            # The text is read from the file.
-            result = edit("0:0", "1:0", "self.assertEqual(a, 3)\n")
-            self.assertEqual(served.responses[10], {"result": result})
-        with self.subTest("not on disk"):
-            served = serve({"pyproject.toml": config(NA)}, session(formatting()))
-            error = served.responses[10]["error"]
-            # NOTE: the traceback of the server is sent to the client.
-            self.assertEqual(list(error.pop("data")), ["traceback"])
-            message = "FileNotFoundError: [Errno 2] No such file or directory:"
-            message += " '/ROOT/t.py'"
-            self.assertEqual(error, {"code": -32603, "message": message})
+        # An error, RequestFailed of LSP 3.17, without reading the file (#96).
+        # The libcst engine formatted the file on disk, or sent the traceback
+        # of the server when there was none.
+        failed = {"code": -32803, "message": f"document is not open: {T}"}
+        for label, files in (("on disk", {"t.py": FIXABLE}), ("not on disk", {})):
+            with self.subTest(label):
+                served = serve(
+                    {"pyproject.toml": config(NA), **files}, session(formatting())
+                )
+                self.assertEqual(served.responses[10], {"error": failed})
+
+    def test_errors_are_diagnostics(self) -> None:
+        # At the position of a syntax error, and at the start of the document
+        # for another (#96). The libcst engine published no diagnostic, and
+        # showed an error of the config in a message, with its traceback in
+        # the error of the formatting.
+        nope = '[tool.fixit]\nroot = true\nenable = ["fixit.rules:Nope"]\n'
+        one = "[tool.fixit]\nroot = true\nenable = 1\n"
+        cases = (
+            # (label, config, text, diagnostic)
+            ("syntax error", config(UI), f"{CALL}\nprint)\n", error("1:5", "Syntax Error @ 2:5: unmatched ')'")),
+            ("rule that cannot be loaded", nope, CALL, error("0:0", "pyproject.toml: enable: could not find rule fixit.rules:Nope")),
+            ("value of the config", one, CALL, error("0:0", "pyproject.toml: enable: must be an array of strings, got an integer")),
+        )  # fmt: skip
+        for label, pyproject, text, found in cases:
+            with self.subTest(label):
+                messages = session(did_open(text), formatting())
+                served = serve({"pyproject.toml": pyproject}, messages)
+                self.assert_published(served, {**published(), "diagnostics": [found]})
+                # Nothing to apply: the diagnostic tells why.
+                self.assertEqual(served.responses[10], {"result": None})
+
+    def test_exception_in_a_rule(self) -> None:
+        # A diagnostic with the type, and the traceback in the log (#96).
+        boom = (
+            "import ast\n\nfrom fixit import Rule\n\n\nclass Boom(Rule):\n"
+            "    MESSAGE = 'm'\n\n"
+            "    def visit_Name(self, node: ast.Name) -> None:\n"
+            "        raise RuntimeError('boom')\n"
+        )
+        files = {
+            "pyproject.toml": '[tool.fixit]\nroot = true\nenable = [".rules"]\n',
+            "rules.py": boom,
+        }
+        served = serve(files, session(did_open("x\n")))
+        found = error("0:0", "RuntimeError: boom")
+        self.assertEqual(served.published, [{**published(), "diagnostics": [found]}])
+        [log] = served.logs
+        self.assertEqual(log["method"], "window/logMessage")
+        self.assertEqual(log["params"]["type"], 1)
+        logged = log["params"]["message"]
+        self.assertTrue(logged.startswith("/ROOT/t.py:\nTraceback"), logged)
+        self.assertTrue(logged.endswith("RuntimeError: boom\n"), logged)
+
+    def test_config_is_read_each_time(self) -> None:
+        # A change to it is seen without a restart (#96): the libcst engine
+        # read it once for each path.
+        files = {"pyproject.toml": config(UI)}
+        messages = session(did_open(f"{CALL}\n"), did_change(change("0:0", "0:0", "x")))
+        with patch("fixit.lsp.generate_config", wraps=generate_config) as read:
+            serve(files, messages)
+        self.assertEqual(read.call_count, 2)
 
     def test_config_is_looked_up_from_document_path(self) -> None:
         both = config(NA, SI)
@@ -566,7 +620,7 @@ class LspCharacterizationTest(CharacterizationTestCase):
             ("untitled", "untitled:Untitled-1", None, None),
             # The path is decoded; the URI is published as sent.
             ("percent-encoded", f"{ROOT}/a%20b/t.py", SI_1, None),
-            # NOTE: neither the suffix nor languageId is looked at.
+            # languageId tells the language, not the suffix (#96).
             ("not .py", f"{ROOT}/t.txt", NA_0, fixed),
         )
         for label, uri, found, result in cases:
@@ -575,3 +629,10 @@ class LspCharacterizationTest(CharacterizationTestCase):
                 expected = [] if found is None else [published(found, uri=uri)]
                 self.assert_published(served, *expected)
                 self.assertEqual(served.responses[10], {"result": result})
+        # Not linted, as the client says the text is not Python (#96): the
+        # libcst engine linted any text.
+        with self.subTest("not Python"):
+            opened = did_open(text, T, "plaintext")
+            served = serve(files, session(opened, formatting()))
+            self.assert_published(served)
+            self.assertEqual(served.responses[10], {"result": None})

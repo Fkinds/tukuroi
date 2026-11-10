@@ -260,7 +260,9 @@ class FixitBytesTest(TestCase):
         [result] = results
         # The file is wrong, not fixit: no traceback.
         message = "Syntax Error @ 1:5: unmatched ')'"
-        self.assertEqual(result.error, Error("fixit.core.source.ParseError", message))
+        # With its position, which the LSP shows it at (#96).
+        error = Error("fixit.core.source.ParseError", message, "", Position(1, 5))
+        self.assertEqual(result.error, error)
         self.assertIsNone(returned)
 
     def test_exception_in_a_rule(self) -> None:

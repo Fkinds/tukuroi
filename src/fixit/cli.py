@@ -374,7 +374,7 @@ def lsp(ctx: click.Context, debounce_interval: float) -> None:
 
     main_options = ctx.obj
     lsp_options = LSPOptions(debounce_interval=debounce_interval)
-    LSP(main_options, lsp_options).start()
+    ctx.exit(LSP(main_options, lsp_options).start())
 
 
 @main.command()

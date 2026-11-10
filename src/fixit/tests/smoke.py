@@ -146,10 +146,14 @@ class SmokeTest(TestCase):
                 def payload(content: str) -> str:
                     return f"Content-Length: {len(content)}\r\n\r\n{content}"
 
+                # The exit code is 0 after shutdown only (LSP 3.17, #96). Not
+                # "exit": the server closes stdout, which click flushes after.
+                shutdown = '{"jsonrpc":"2.0","id":2,"method":"shutdown"}'
+                messages = (initialize, did_open, shutdown)
                 result = self.runner.invoke(
                     main,
                     ["lsp", "--debounce-interval", "0"],
-                    input=payload(initialize) + payload(did_open),
+                    input="".join(map(payload, messages)),
                     catch_exceptions=False,
                 )
 
