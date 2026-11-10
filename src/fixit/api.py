@@ -35,6 +35,7 @@ from .ftypes import (
     Result,
     Violation,
 )
+from .template import format_template
 
 LOG = logging.getLogger(__name__)
 
@@ -102,14 +103,18 @@ def print_result(
         elif output_format == OutputFormat.vscode:
             line = f"{path}:{start_line}:{start_col} {rule_name}: {message}"
         elif output_format == OutputFormat.custom:
-            line = output_template.format(
-                message=message,
-                path=path,
-                result=result,
-                rule_name=rule_name,
-                start_col=start_col,
-                start_line=start_line,
-            )
+            # The names only, and strings and numbers (#14).
+            end = result.violation.range.end
+            values = {
+                "end_col": end.column,
+                "end_line": end.line,
+                "message": message,
+                "path": str(path),
+                "rule_name": rule_name,
+                "start_col": start_col,
+                "start_line": start_line,
+            }
+            line = format_template(output_template, values)
         else:
             raise NotImplementedError(f"output-format = {output_format!r}")
         click.secho(line, fg="yellow", err=stderr)

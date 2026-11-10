@@ -52,6 +52,7 @@ from .examples import ExamplesTest
 from .ftypes import TypesTest
 from .pool import PoolTest
 from .smoke import SmokeTest
+from .template import TemplateTest
 
 # Expect the default of the switch for custom rules, even when the shell sets
 # FIXIT_CUSTOM_RULES (see "Security" in the docs). custom_rules_switch sets it

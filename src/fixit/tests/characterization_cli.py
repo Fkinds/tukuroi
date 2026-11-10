@@ -435,6 +435,35 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stderr, DIRTY_A)
                 self.assertEqual(result.exit_code, 1)
 
+    def test_output_template(self) -> None:
+        # The fields are strings and numbers, with the end of the violation
+        # (#14); `result` is gone.
+        template = "{path:>6}|{start_line}:{start_col}-{end_line}:{end_col}|{rule_name}"
+        cases = (
+            ("config", [], CONFIG + 'output-format = "custom"\n' + f"output-template = '{template}'\n"),
+            ("option", ["-o", "custom", "--output-template", template], CONFIG),
+        )  # fmt: skip
+        for label, options, toml in cases:
+            with self.subTest(label):
+                files = {"pyproject.toml": toml, "t.py": FIXABLE}
+                result = invoke(files, [*options, "lint", "t.py"])
+                self.assertEqual(result.stdout, f"  t.py|1:0-1:21|{NA}\n")
+                self.assertEqual(result.exit_code, 1)
+
+    def test_output_template_invalid(self) -> None:
+        # A usage error, before any file is linted (#14). The libcst engine
+        # printed a traceback as it printed a violation.
+        files = {"pyproject.toml": CONFIG, "t.py": FIXABLE}
+        args = ["-o", "custom", "--output-template", "{path.parent}", "lint", "t.py"]
+        result = invoke(files, args)
+        error = (
+            "\nError: Invalid value for '--output-template': '{path.parent}' uses"
+            " an attribute or an index, which is not allowed\n"
+        )
+        self.assertTrue(result.stderr.endswith(error), result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.exit_code, 2)
+
     def test_output_format_with_diff_and_fix(self) -> None:
         before = {"pyproject.toml": CONFIG, "t.py": FIXABLE}
         vscode = line("t.py", NA, sep=":")

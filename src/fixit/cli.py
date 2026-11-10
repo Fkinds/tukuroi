@@ -25,6 +25,7 @@ from .config import (
 )
 from .core.testing import generate_test_cases
 from .ftypes import STDIN, LSPOptions, Options, OutputFormat, QualifiedRule
+from .template import template_error
 from .util import capture
 
 
@@ -92,6 +93,13 @@ def check_stdin(
     if value[:1] == (STDIN,) and len(value) > 2:
         message = "only one path may follow '-' (stdin): the name of its file"
         raise click.BadParameter(message, ctx, param)
+    return value
+
+
+def check_template(ctx: click.Context, param: click.Parameter, value: str) -> str:
+    """``--output-template``: a template that is not valid is a usage error (#14)."""
+    if value and (error := template_error(value)):
+        raise click.BadParameter(error, ctx, param)
     return value
 
 
@@ -163,6 +171,7 @@ class _FixitGroup(click.Group):
     "--output-template",
     type=str,
     default="",
+    callback=check_template,
     help="Python format template to use with output format 'custom'",
 )
 @click.option("--print-metrics", is_flag=True, help="Print metrics of this run")

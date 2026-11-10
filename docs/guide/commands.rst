@@ -48,6 +48,8 @@ The following options are available for all commands:
 .. attribute:: --output-template TEMPLATE
 
     Override the python formatting template to use with ``output-format = 'custom'``.
+    The same variables as in :attr:`output-template` are allowed, and nothing
+    else: an invalid template is a usage error.
 
 Any command exits with 2 on a usage error, and on a configuration that Fixit
 cannot use: a file that is not TOML, or an invalid value. The error goes to
