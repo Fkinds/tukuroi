@@ -423,8 +423,8 @@ def debug(ctx: click.Context, paths: Sequence[Path]) -> None:
 
     for path in paths:
         path = path.resolve()
-        config = generate_config(path, options=options)
-        # The new loader (#21) tells no reason for a rule it does not enable.
+        # A rule that cannot be loaded is an error, with its config (#40).
+        config = generate_config(path, options=options, check=True)
         enabled = load_rules(config)
 
         pprint(">>> ", path)

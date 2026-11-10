@@ -260,7 +260,7 @@ def fixit_stdin(
 
     try:
         content: FileContent = sys.stdin.buffer.read()
-        config = generate_config(path, options=options)
+        config = generate_config(path, options=options, check=True)
 
         updated = yield from fixit_bytes(
             path, content, config=config, autofix=autofix, metrics_hook=metrics_hook
@@ -298,7 +298,7 @@ def fixit_file(
 
     try:
         content: FileContent = path.read_bytes()
-        config = generate_config(path, options=options)
+        config = generate_config(path, options=options, check=True)
 
         updated = yield from fixit_bytes(
             path, content, config=config, autofix=autofix, metrics_hook=metrics_hook

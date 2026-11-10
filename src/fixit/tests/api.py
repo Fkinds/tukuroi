@@ -23,6 +23,7 @@ from unittest.mock import patch
 from ..api import fixit_bytes, fixit_file, fixit_paths
 from ..config import ConfigError, generate_config
 from ..core import loader
+from ..core.loader import load as load_core_rules
 from ..core.text import Position, Range
 from ..ftypes import (
     STDIN,
@@ -43,6 +44,7 @@ from .core_loader import HEAD, files
 UI = "UseAssertIn"
 SI = "NoStaticIfCondition"
 NT = "NoNamedTuple"
+NOPE = '[tool.fixit]\nroot = true\nenable = ["fixit.rules:Nope"]\n'
 
 SOURCE = "x = 1\nself.assertTrue(a in b)\nif True:\n    pass\n"
 FIXED = "x = 1\nself.assertIn(a, b)\nif True:\n    pass\n"
@@ -455,6 +457,46 @@ class FixitPathsTest(TestCase):
             options = Options(config_file=root / "pyproject.toml")
             list(fixit_paths([Path("a"), Path("b")], options=options, parallel=False))
             self.assertEqual(checked.call_count, 1)
+
+    def test_rule_that_cannot_be_loaded(self) -> None:
+        # An error of the config that names it, with the key (#40).
+        tree = {"pyproject.toml": NOPE, "sub/t.py": "", "t.py": ""}
+        shown = "pyproject.toml: enable: could not find rule fixit.rules:Nope"
+        with files(tree) as root, chdir(root):
+            with self.assertRaises(ConfigError) as caught:
+                next(fixit_paths([Path("t.py")]))
+            self.assertEqual(caught.exception.describe(), shown)
+            # A file linted alone: the error is its result, and no rule runs.
+            error = Error("fixit.config.ConfigError", shown)
+            results = list(fixit_file(Path("t.py")))
+            self.assertEqual(results, [Result(root / "t.py", None, error)])
+
+    def test_rules_of_a_config_loaded_once(self) -> None:
+        enable = f'[tool.fixit]\nroot = true\nenable = ["fixit.rules:{SI}"]\n'
+        tree = {"pyproject.toml": enable, "a/t.py": "", "a/u.py": "", "b/t.py": ""}
+        with (
+            files(tree) as root,
+            chdir(root),
+            patch("fixit.config.load_core_rules", wraps=load_core_rules) as loaded,
+        ):
+            list(fixit_paths([Path("a"), Path("b")], parallel=False))
+        # Before any file, and not again for each file in the process.
+        self.assertEqual(loaded.call_count, 1)
+
+    def test_custom_rules_turned_off(self) -> None:
+        # The rules skipped are not loaded: no error.
+        tree = {
+            "pyproject.toml": '[tool.fixit]\nroot = true\nenable = [".nope"]\n',
+            "t.py": "",
+        }
+        with files(tree) as root, chdir(root), self.assertLogs("fixit.config") as logs:
+            options = Options(custom_rules=False)
+            results = list(fixit_paths([Path("t.py")], options=options))
+        self.assertEqual(results, [Result(root / "t.py", None)])
+        skipped = (
+            "WARNING:fixit.config:Skipped rules '.nope': custom rules are turned off"
+        )
+        self.assertEqual(logs.output, [skipped])
 
     def test_stdin_paths(self) -> None:
         # The CLI refuses these as usage errors (#40). The API warns about "-"

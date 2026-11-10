@@ -560,6 +560,15 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stderr, log + CLEAN)
                 self.assertEqual(result.exit_code, 0)
 
+    def test_rules_option_over_unknown_names_in_the_config(self) -> None:
+        # The rules of the config are not used, and not loaded (#40).
+        toml = '[tool.fixit]\nroot = true\nenable = ["fixit.nope"]\n'
+        files = {"pyproject.toml": toml, "t.py": FIXABLE + UNFIXABLE}
+        result = invoke(files, ["--rules", f"fixit.rules:{SI}", "lint", "t.py"])
+        self.assertEqual(result.stdout, line("t.py", SI, "2:0"))
+        self.assertEqual(result.stderr, DIRTY)
+        self.assertEqual(result.exit_code, 1)
+
     def test_rules_option_with_invalid_name(self) -> None:
         files = {"pyproject.toml": CONFIG, "t.py": FIXABLE}
         result = invoke(files, ["--rules", "fixit rules", "lint", "t.py"])
@@ -590,6 +599,30 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 before = {"pyproject.toml": broken, "c.toml": broken, "t.py": FIXABLE}
                 result = invoke(before, args, stdin=FIXABLE)
                 self.assertEqual(result.stderr, f"Error: {shown}: {message}\n")
+                self.assertEqual(result.exit_code, 2)
+                self.assertEqual(result.files, before)
+
+    def test_unknown_rule_in_each_command(self) -> None:
+        # The rules that the config names are loaded before any file is linted
+        # (#40). `fixit test` loads only the rules named on its command line.
+        broken = config("Nope")
+        message = "enable: could not find rule fixit.rules:Nope"
+        cases = (
+            # (label, args, the path of the config shown)
+            ("lint", ["lint", "t.py"], "pyproject.toml"),
+            ("lint stdin", ["lint", "-", "t.py"], "pyproject.toml"),
+            ("fix", ["fix", "--automatic", "t.py"], "pyproject.toml"),
+            ("debug", ["debug", "t.py"], "pyproject.toml"),
+            ("--config-file", ["-c", "c.toml", "lint", "t.py"], "c.toml"),
+        )
+        for label, args, shown in cases:
+            with self.subTest(label):
+                before = {"pyproject.toml": broken, "c.toml": broken, "t.py": FIXABLE}
+                result = invoke(before, args, stdin=FIXABLE)
+                self.assertEqual(result.stderr, f"Error: {shown}: {message}\n")
+                # `debug` prints the options before it reads the config.
+                if label != "debug":
+                    self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 2)
                 self.assertEqual(result.files, before)
 
