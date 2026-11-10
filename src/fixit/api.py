@@ -16,6 +16,7 @@ import trailrunner
 from moreorless import unified_diff
 from moreorless.click import echo_color_precomputed_diff
 
+from . import pool
 from .config import generate_config, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
@@ -352,6 +353,9 @@ def fixit_paths(
         due to limitations in the multiprocessing method in use.
         Setting ``parallel=False`` will enable interactive fixes.
         Setting ``autofix=True`` will always apply fixes automatically during linting.
+
+    When a rule ends the process that lints a file (``os._exit``, a crash, a
+    kill), that file gets an error, and the other files their results (#94).
     """
     if not paths:
         return
@@ -389,5 +393,5 @@ def fixit_paths(
             options=options,
             metrics_hook=metrics_hook,
         )
-        for _, results in trailrunner.run_iter(expanded_paths, fn):
+        for _, results in pool.run(expanded_paths, fn):
             yield from results
