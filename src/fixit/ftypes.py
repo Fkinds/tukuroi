@@ -194,10 +194,12 @@ class Error:
 class Result:
     """
     A single lint result for a given file and lint rule. A file whose fixes
-    were applied ends with a result that has only ``applied``: how many.
+    were applied ends with a result that has only ``applied``: how many, and
+    ``remaining``: the violations left in the file after them.
     """
 
     path: Path
     violation: Violation | None
     error: Error | None = None
     applied: int = 0
+    remaining: int = 0

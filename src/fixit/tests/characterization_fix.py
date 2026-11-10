@@ -201,7 +201,8 @@ FIXES = (
     ),
 )
 
-# (label, rules, source, (rule, position) reported, the file after, summary)
+# (label, rules, source, (rule, position) reported, the file after, summary,
+# exit code: 1 if a violation is left after the fixes, #40)
 MULTI = (
     (
         "same rule, 2 lines",
@@ -210,6 +211,7 @@ MULTI = (
         ((UI, "1:0"), (UI, "3:0")),
         "self.assertIn(a, b)\nx = 1\nself.assertNotIn(c, d)\n",
         DIRTY_FF,
+        0,
     ),
     (
         "same rule, 1 line",
@@ -218,6 +220,7 @@ MULTI = (
         ((VC, "4:9"), (VC, "4:34")),
         f"{IMPORT_CB}\ndef f(a: Callable[..., int]) -> Callable[..., str]:\n    pass\n",
         DIRTY_FF,
+        0,
     ),
     (
         "2 rules",
@@ -226,6 +229,7 @@ MULTI = (
         ((UI, "1:0"), (NA, "2:0")),
         "self.assertIn(a, b)\nself.assertEqual(c, 3)\n",
         DIRTY_FF,
+        0,
     ),
     (
         "2 rules, statement in block",
@@ -234,6 +238,7 @@ MULTI = (
         ((UI, "2:4"), (NN, "3:0")),
         "if x:\n    self.assertIn(a, b)\nself.assertIsNotNone(c)\n",
         DIRTY_FF,
+        0,
     ),
     (
         "with no autofix",
@@ -242,6 +247,7 @@ MULTI = (
         ((SI, "1:0"), (UI, "2:4")),
         "if True:\n    self.assertIn(a, b)\n",
         DIRTY_F,
+        1,
     ),
     (
         "same rule, 2 classes",
@@ -250,6 +256,7 @@ MULTI = (
         ((NT, "4:0"), (NT, "8:0")),
         f"{IMPORT_DC}{DC}class Foo:\n    a: int\n\n\n{DC}class Bar:\n    b: int\n",
         DIRTY_FF,
+        0,
     ),
 )
 
@@ -462,17 +469,17 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 result = fix((rule,), source)
                 self.assertEqual(result.stdout, line("t.py", rule, position))
                 self.assertEqual(result.stderr, DIRTY_F)
-                # NOTE: `fix` exits with 0 even when it reports violations.
+                # Fixed: no violation is left (#40).
                 self.assertEqual(result.exit_code, 0)
                 self.assertEqual(result.files["t.py"], fixed)
 
     def test_fix_two_places_in_one_file(self) -> None:
-        for label, rules, source, reported, fixed, summary in MULTI:
+        for label, rules, source, reported, fixed, summary, exit_code in MULTI:
             with self.subTest(label):
                 result = fix(rules, source)
                 self.assert_violations(result.stdout, in_t(reported))
                 self.assertEqual(result.stderr, summary)
-                self.assertEqual(result.exit_code, 0)
+                self.assertEqual(result.exit_code, exit_code)
                 self.assertEqual(result.files["t.py"], fixed)
 
     def test_fix_inside_another_fix(self) -> None:
@@ -502,10 +509,18 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.files["t.py"], fixed)
 
     def test_fix_without_autofix_leaves_file_unchanged(self) -> None:
+        # The exit code is 1 if a violation is left (#40).
         cases = (
-            ("no autofix", SI, "if True:\n    pass\n", ((SI, "1:0"),), DIRTY),
-            ("clean", UI, "x = 1\n", (), CLEAN),
-            ("all ignored", UI, "self.assertTrue(a in b)  # lint-ignore\n", (), CLEAN),
+            ("no autofix", SI, "if True:\n    pass\n", ((SI, "1:0"),), DIRTY, 1),
+            ("clean", UI, "x = 1\n", (), CLEAN, 0),
+            (
+                "all ignored",
+                UI,
+                "self.assertTrue(a in b)  # lint-ignore\n",
+                (),
+                CLEAN,
+                0,
+            ),
             # Not formatted: `ruff format` changes these.
             (
                 "no autofix, not formatted",
@@ -513,15 +528,16 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 "if True:\n  pass\n",
                 ((SI, "1:0"),),
                 DIRTY,
+                1,
             ),
-            ("clean, not formatted", UI, "x=1\n", (), CLEAN),
+            ("clean, not formatted", UI, "x=1\n", (), CLEAN, 0),
         )
-        for label, rule, source, reported, summary in cases:
+        for label, rule, source, reported, summary, exit_code in cases:
             with self.subTest(label):
                 result = fix((rule,), source)
                 self.assert_violations(result.stdout, in_t(reported))
                 self.assertEqual(result.stderr, summary)
-                self.assertEqual(result.exit_code, 0)
+                self.assertEqual(result.exit_code, exit_code)
                 self.assertEqual(result.files["t.py"], source)
 
     def test_diff(self) -> None:
@@ -637,6 +653,7 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 "x = 1\nself.assertIn(a, b)\ny = 2\n",
                 ((UI, "2:0"),),
                 DIRTY_F,
+                0,
             ),
             (
                 "2 rules",
@@ -645,6 +662,7 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 "self.assertIn(a, b)\nself.assertEqual(c, 3)\n",
                 ((UI, "1:0"), (NA, "2:0")),
                 DIRTY_FF,
+                0,
             ),
             (
                 "no autofix",
@@ -653,12 +671,13 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 "if True:\n    pass\n",
                 ((SI, "1:0"),),
                 DIRTY,
+                1,
             ),
-            ("clean", (UI,), "x = 1\n", "x = 1\n", (), CLEAN),
+            ("clean", (UI,), "x = 1\n", "x = 1\n", (), CLEAN, 0),
             # Not formatted: `ruff format` changes it.
-            ("clean, not formatted", (UI,), "x=1\n", "x=1\n", (), CLEAN),
+            ("clean, not formatted", (UI,), "x=1\n", "x=1\n", (), CLEAN, 0),
         )
-        for label, rules, source, fixed, reported, summary in cases:
+        for label, rules, source, fixed, reported, summary, exit_code in cases:
             with self.subTest(label):
                 files = {"pyproject.toml": config(*rules)}
                 result = invoke(files, ["fix", "-", "t.py"], stdin=source)
@@ -666,7 +685,8 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertTrue(result.stderr.endswith(summary))
                 violations = result.stderr.removesuffix(summary)
                 self.assert_violations(violations, in_t(reported))
-                self.assertEqual(result.exit_code, 0)
+                # 1 if a violation is left (#40).
+                self.assertEqual(result.exit_code, exit_code)
                 self.assertEqual(result.files, files)
 
     def test_fix_stdin_with_diff(self) -> None:
@@ -706,7 +726,8 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 no_fix = line("t.py", rule, position).replace(" (has autofix)", "")
                 self.assertEqual(result.stdout, no_fix)
                 self.assertEqual(result.stderr, DIRTY)
-                self.assertEqual(result.exit_code, 0)
+                # The violation is left (#40).
+                self.assertEqual(result.exit_code, 1)
                 self.assertEqual(result.files["t.py"], source)
 
     def test_sources_are_stable_under_ruff_format(self) -> None:
