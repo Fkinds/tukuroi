@@ -454,6 +454,23 @@ def generate_config(
     return config
 
 
+def check_configs(paths: Sequence[Path], options: Options | None = None) -> None:
+    """
+    Read the config of the directory of each file in ``paths``, in their order
+    and once for each directory, before any file is linted: the first error is
+    raised as a :class:`ConfigError` (#40). With ``--config-file``, that config
+    is read once.
+    """
+    if options and options.config_file:
+        paths = paths[:1]
+    seen: set[Path] = set()
+    for path in paths:
+        directory = path.resolve().parent
+        if directory not in seen:
+            seen.add(directory)
+            generate_config(directory, options=options)
+
+
 def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
     """
     Validate the config provided. The provided path is expected to be a valid toml

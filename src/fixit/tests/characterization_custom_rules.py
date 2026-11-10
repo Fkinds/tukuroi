@@ -422,10 +422,10 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             sub = {"sub/pyproject.toml": toml("enable-root-import = true")}
             result = lint(root(), sub, "sub/t.py")
             error = "enable-root-import: only allowed in a root config"
-            # With the path of the config, without a traceback (#40).
-            where = "sub/t.py: EXCEPTION: sub/pyproject.toml"
-            self.assertEqual(result.stdout, f"{where}: {error}\n")
-            self.assertEqual(result.stderr, DIRTY)
+            # With the path of the config, without a traceback, before any
+            # file is linted (#40).
+            self.assertEqual(result.stderr, f"Error: sub/pyproject.toml: {error}\n")
+            self.assertEqual(result.stdout, "")
             self.assertEqual(result.exit_code, 2)
         must_be = "enable-root-import: must be a boolean or a relative path,"
         cases = (

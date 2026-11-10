@@ -8,7 +8,7 @@ import os
 from fixit.core.loader import RuleName, import_rules
 from fixit.core.testing import generate_test_cases
 
-from .api import CommandTest, FixitBytesTest, PublicNamesTest
+from .api import CommandTest, FixitBytesTest, FixitPathsTest, PublicNamesTest
 from .characterization_cli import CliCharacterizationTest
 from .characterization_config import ConfigCharacterizationTest
 from .characterization_custom_rules import CustomRulesCharacterizationTest
