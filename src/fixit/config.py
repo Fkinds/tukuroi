@@ -261,6 +261,9 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
             data = tomllib.loads(content)
         except tomllib.TOMLDecodeError as error:
             raise ConfigError(str(error), path=path) from error
+        outside = path.name in ("fixit.toml", ".fixit.toml")
+        if outside and (error := next(outside_errors(data), None)):
+            raise ConfigError(error, path=path)
         fixit_data = table(data, "tool", path).get("fixit", {})
         if not isinstance(fixit_data, dict):
             raise ConfigError(must_be("tool.fixit", "a table", fixit_data), path=path)
@@ -275,6 +278,21 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
                 break
 
     return configs
+
+
+def outside_errors(data: dict[str, Any]) -> Iterator[str]:
+    """
+    The keys of ``data``, a fixit.toml or .fixit.toml, outside [tool.fixit],
+    where fixit does not read them (#40). A pyproject.toml has the keys of
+    other tools there, and so may a file of another name (--config-file).
+    """
+    for key, value in data.items():
+        if key != "tool" or not isinstance(value, dict):
+            yield f"{key}: must be under [tool.fixit]"
+            continue
+        for name in value:
+            if name != "fixit":
+                yield f"tool.{name}: must be under [tool.fixit]"
 
 
 def table(data: dict[str, Any], key: str, path: Path) -> dict[str, Any]:
@@ -322,6 +340,19 @@ def must_be(key: str, expected: str, value: object) -> str:
 
 RULES = "an array of strings"
 OVERRIDES = "an array of tables ([[tool.fixit.overrides]])"
+# The keys of [tool.fixit], of an override, and the keys that #21 removed: any
+# other key is an error (#40).
+KEYS = (
+    "disable",
+    "enable",
+    "enable-root-import",
+    "output-format",
+    "output-template",
+    "overrides",
+    "root",
+)
+OVERRIDE_KEYS = ("disable", "enable", "path")
+REMOVED_KEYS = ("formatter", "options", "python-version", "tags")
 # In any case, as the option (#40).
 OUTPUT_FORMATS = {o.value: o for o in OutputFormat}
 
@@ -334,8 +365,9 @@ def value_errors(data: dict[str, Any]) -> Iterator[str]:
     each message starts with the key.
 
     All the overrides are checked, whether or not they apply to the file that is
-    linted. Whether a rule can be imported is not checked, and neither are the
-    unknown keys, nor ``enable-root-import`` in a config that is not the root.
+    linted. A key that is not one of :data:`KEYS` is an error. Whether a rule can
+    be imported is not checked, nor ``enable-root-import`` in a config that is
+    not the root.
     """
     for key, value in data.items():
         match key:
@@ -355,6 +387,15 @@ def value_errors(data: dict[str, Any]) -> Iterator[str]:
                     yield f"{key}: {error}"
             case "overrides":
                 yield from override_errors(value)
+            case _:
+                yield key_error(key, KEYS)
+
+
+def key_error(key: str, keys: Sequence[str]) -> str:
+    """The message for ``key``, which is not one of ``keys``."""
+    if key in REMOVED_KEYS:
+        return f"{key}: no longer supported"
+    return f"{key}: unknown key, not one of {', '.join(map(repr, keys))}"
 
 
 def rule_errors(key: str, value: object) -> Iterator[str]:
@@ -418,6 +459,10 @@ def override_errors(value: object) -> Iterator[str]:
         for key, rules in override.items():
             if key in ("enable", "disable"):
                 yield from (where + error for error in rule_errors(key, rules))
+            elif key in KEYS:
+                yield f"{where}{key}: not allowed in an override"
+            elif key != "path":
+                yield where + key_error(key, OVERRIDE_KEYS)
 
 
 def override_where(path: str) -> str:
@@ -519,9 +564,6 @@ def merge_configs(
                 enable=override.get("enable", ()),
                 disable=override.get("disable", ()),
             )
-
-        for key in data:
-            log.warning("unknown configuration option %r", key)
 
     return Config(
         path=path,

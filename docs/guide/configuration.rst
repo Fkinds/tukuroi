@@ -33,11 +33,15 @@ containing monorepo.
 ``[tool.fixit]``
 ^^^^^^^^^^^^^^^^
 
-The main configuration table.
+The main configuration table. In ``fixit.toml`` and ``.fixit.toml`` too, the
+keys go under ``[tool.fixit]``: a key or a table outside it is a configuration
+error there. In ``pyproject.toml``, the keys of other tools are left alone.
 
-A value of a type other than the one given below, or a rule name that is not
-valid, is a configuration error. Fixit checks the whole file as it reads it, and
-stops at the first error.
+A key other than the ones below, a value of a type other than the one given
+below, or a rule name that is not valid, is a configuration error. Fixit checks
+the whole file as it reads it, and stops at the first error. The settings that
+Fixit no longer supports (``python-version``, ``formatter``, ``options``,
+``tags``) are errors that say so.
 
 .. attribute:: root
     :type: bool
@@ -62,6 +66,7 @@ stops at the first error.
 
     .. code-block:: toml
 
+        [tool.fixit]
         enable = [
             "fixit.rules",  # all lint rules in this package (non-recursive)
             "fixit.rules:UseAssertIn",  # single lint rule by name
@@ -74,6 +79,7 @@ stops at the first error.
     .. code-block:: toml
 
         # teambread/fixit.toml
+        [tool.fixit]
         enable = [
             ".rules",  # all rules in teambread/rules/ (non-recursive)
             ".rules.hollywood",  # all rules in teambread/rules/hollywood.py
@@ -119,6 +125,7 @@ stops at the first error.
 
     .. code-block:: toml
 
+        [tool.fixit]
         root = true
         enable-root-import = "src"
         enable = ["orange.rules"]
@@ -202,7 +209,8 @@ stops at the first error.
 Overrides provide a mechanism for hierarchical configuration within a single
 configuration file. They are defined as an
 `array of tables <https://toml.io/en/v1.0.0#array-of-tables>`_, with each table
-defining the subpath it applies to, along with any values from the tables above:
+defining the subpath it applies to, along with :attr:`enable` and
+:attr:`disable` for it. No other key is allowed in an override:
 
 .. code-block:: toml
 

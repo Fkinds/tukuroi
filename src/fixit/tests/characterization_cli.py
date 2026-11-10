@@ -409,8 +409,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
         upper = {"pyproject.toml": CONFIG + 'output-format = "VSCode"\n'}
         empty = {"pyproject.toml": CONFIG + 'output-format = ""\n'}
         sub = {"sub/pyproject.toml": '[tool.fixit]\noutput-format = "vscode"\n'}
-        override = '[[tool.fixit.overrides]]\npath = "."\noutput-format = "vscode"\n'
-        overrides = {"pyproject.toml": CONFIG + override}
+        # output-format in an override is an error (characterization_config).
         cases = (
             ("fixit", ["--output-format", "fixit"], {}, ".", "t.py", "@"),
             ("vscode", ["--output-format", "vscode"], {}, ".", "t.py", ":"),
@@ -425,7 +424,6 @@ class CliCharacterizationTest(CharacterizationTestCase):
             # The config of the current directory is used, not of the file.
             ("config of the file", [], sub, ".", "sub/t.py", "@"),
             ("config of cwd", [], sub, "sub", "t.py", ":"),
-            ("in overrides", [], overrides, ".", "t.py", "@"),
         )
         for label, options, files, cwd, path, sep in cases:
             with self.subTest(label):
