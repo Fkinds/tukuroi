@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import tomllib
 from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
@@ -468,6 +469,27 @@ class ConfigTest(TestCase):
             with self.assertRaisesRegex(config.ConfigError, "output-format"):
                 config.generate_config(self.tdp / "outer" / "foo.py")
 
+    def test_toml_type(self) -> None:
+        # Each type of TOML v1.1.0, as tomllib reads it (#40).
+        cases = (
+            ('"a"', "a string"),
+            ("1", "an integer"),
+            ("1.5", "a float"),
+            ("inf", "a float"),
+            ("true", "a boolean"),
+            ("1979-05-27T07:32:00Z", "an offset date-time"),
+            ("1979-05-27T07:32:00+09:00", "an offset date-time"),
+            ("1979-05-27T07:32:00", "a local date-time"),
+            ("1979-05-27", "a local date"),
+            ("07:32:00", "a local time"),
+            ("[]", "an array"),
+            ("{}", "a table"),
+        )
+        for value, expected in cases:
+            with self.subTest(value):
+                parsed = tomllib.loads(f"x = {value}")["x"]
+                self.assertEqual(config.toml_type(parsed), expected)
+
     def test_removed_keys(self) -> None:
         # #21 removed these settings: they warn as any unknown key does.
         (self.tdp / "pyproject.toml").write_text(
@@ -623,10 +645,11 @@ class ConfigTest(TestCase):
 
             results = config.validate_config(path)
 
+            # Checked as the config is read (#40).
             self.assertEqual(
                 results,
                 [
-                    "Failed to parse rule `fixit/rules:DeprecatedABCImport` for global enable: ConfigError: invalid rule name 'fixit/rules:DeprecatedABCImport'"
+                    "Invalid config: ConfigError: enable: invalid rule name 'fixit/rules:DeprecatedABCImport'"
                 ],
             )
 
@@ -639,7 +662,7 @@ class ConfigTest(TestCase):
             config_path.write_text(
                 """
                 [tool.fixit]
-                enable = ["fixit/rules:DeprecatedABCImport"]
+                enable = ["fixit.rules:DeprecatedABCImport"]
                 disable = ["fixit.rules"]
                 root = true
 
@@ -657,7 +680,34 @@ class ConfigTest(TestCase):
             self.assertEqual(
                 results,
                 [
-                    "Failed to parse rule `fixit/rules:DeprecatedABCImport` for global enable: ConfigError: invalid rule name 'fixit/rules:DeprecatedABCImport'",
+                    "Failed to import rule `fixit.rules:DeprecatedABCImport` for global enable: CollectionError: could not find rule fixit.rules:DeprecatedABCImport",
                     "Failed to import rule `fixit.rules:DeprecatedABCImport_SUPER_REAL` for override enable: `SUPER_REAL_PATH`: CollectionError: could not find rule fixit.rules:DeprecatedABCImport_SUPER_REAL",
+                ],
+            )
+
+        with (
+            self.subTest("validate-config invalid type"),
+            TemporaryDirectory() as td,
+        ):
+            path = Path(td).resolve() / ".fixit.toml"
+            path.write_text(
+                """
+                [tool.fixit]
+                root = true
+                enable = ["fixit.rules:Nope"]
+
+                [[tool.fixit.overrides]]
+                path = "sub"
+                enable = "fixit.rules"
+                """
+            )
+
+            results = config.validate_config(path)
+
+            # The first error only: fixit.rules:Nope is not imported (#40).
+            self.assertEqual(
+                results,
+                [
+                    'Invalid config: ConfigError: overrides (path = "sub"): enable: must be an array of strings, got a string'
                 ],
             )

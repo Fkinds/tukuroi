@@ -254,53 +254,83 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         self.assert_reported(cases)
 
     def test_invalid_value(self) -> None:
-        # NOTE: "got <class 'str'>" names the type of the key, not of the value.
-        not_array = "must be array of values, got <class 'str'>"
-        name = "invalid rule name 'fixit rules'"
+        # The key, then the type that it must be and the type of the value, as
+        # TOML names them (#40). The libcst engine named the type of the key
+        # ("got <class 'str'>"), took `root = "no"` as true, and printed a
+        # traceback for `enable = [1]`, `output-template = 1` and `path = 1`.
+        rules = "must be an array of strings, got"
+        tables = "must be an array of tables ([[tool.fixit.overrides]]), got"
+        sub = 'overrides (path = "sub"):'
         # (one invalid value, the message)
         cases = (
             # Not an array.
-            ("enable = 1", f"'enable' {not_array}"),
+            ("enable = 1", f"enable: {rules} an integer"),
             # A string is a sequence in Python, but not an array.
-            ('enable = "fixit.rules"', f"'enable' {not_array}"),
-            ('disable = "fixit.rules"', f"'disable' {not_array}"),
+            ('enable = "fixit.rules"', f"enable: {rules} a string"),
+            ('disable = "fixit.rules"', f"disable: {rules} a string"),
+            # An element that is not a string.
+            ("enable = [1]", f"enable: {rules} an array with an integer"),
+            (f"disable = [{NA_}, true]", f"disable: {rules} an array with a boolean"),
             # A string that is not a rule name.
-            ('enable = ["fixit rules"]', name),
-            ('disable = ["fixit rules"]', name),
+            ('enable = ["fixit rules"]', "enable: invalid rule name 'fixit rules'"),
+            ('disable = ["fixit rules"]', "disable: invalid rule name 'fixit rules'"),
+            ("output-format = 1", "output-format: must be a string, got an integer"),
+            (
+                "output-template = 1",
+                "output-template: must be a string, got an integer",
+            ),
             # [tool.fixit.overrides], not [[tool.fixit.overrides]].
-            ('[tool.fixit.overrides]\npath = "sub"', f"'overrides' {not_array}"),
-            ('overrides = ["sub"]', "'overrides' requires array of tables"),
+            ('[tool.fixit.overrides]\npath = "sub"', f"overrides: {tables} a table"),
+            ('overrides = ["sub"]', f"overrides: {tables} an array with a string"),
             (
                 f"[[tool.fixit.overrides]]\nenable = [{NA_}]",
-                "'overrides' table requires 'path' value",
+                "overrides: a table has no path",
+            ),
+            (
+                "[[tool.fixit.overrides]]\npath = 1",
+                "overrides: path: must be a string, got an integer",
+            ),
+            (
+                '[[tool.fixit.overrides]]\npath = ""',
+                "overrides: path: must not be an empty string",
+            ),
+            # The override shows its path. It does not apply to t.py, but it
+            # is checked too.
+            (override("sub", "enable = 1"), f"{sub} enable: {rules} an integer"),
+            (
+                override("sub", 'disable = ["fixit rules"]'),
+                f"{sub} disable: invalid rule name 'fixit rules'",
+            ),
+            # The first error, in the order of the file, not of the keys.
+            ("enable = 1\ndisable = 1", f"enable: {rules} an integer"),
+            (
+                'overrides = [{path = "sub", enable = 1}]\nenable = 1',
+                f"{sub} enable: {rules} an integer",
             ),
             # Not TOML: the message of tomllib.
             ("enable = [", toml_error(toml(ROOT, "enable = ["))),
         )
-        for value, message in cases:
-            with self.subTest(value):
-                files = {"pyproject.toml": toml(ROOT, value), "t.py": SOURCE}
+        # (the whole file, the message): without `root = true` above.
+        whole = (
+            (toml('root = "no"'), "root: must be a boolean, got a string"),
+            # The tables above [tool.fixit].
+            ("tool = 1\n", "tool: must be a table, got an integer"),
+            ("[tool]\nfixit = 1\n", "tool.fixit: must be a table, got an integer"),
+        )
+        for text, message in (*((toml(ROOT, v), m) for v, m in cases), *whole):
+            with self.subTest(text):
+                files = {"pyproject.toml": text, "t.py": SOURCE}
                 result = invoke(files, ["lint", "t.py"])
-                # Without a traceback, before any file is linted (#40). The
-                # libcst engine printed the traceback of the exception.
+                # Without a traceback, before any file is linted (#40).
                 self.assertEqual(result.stderr, f"Error: pyproject.toml: {message}\n")
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 2)
-        # An element that is not a string. The message comes from `re`.
-        for value in ("enable = [1]", "disable = [1]"):
-            with self.subTest(value):
-                files = {"pyproject.toml": toml(ROOT, value), "t.py": SOURCE}
-                result = invoke(files, ["lint", "t.py"])
-                # NOTE: the exception is not caught; a traceback is printed.
-                self.assertIs(type(result.exception), TypeError)
-                self.assertEqual(result.stdout, "")
-                self.assertEqual(result.exit_code, 1)
 
     def test_invalid_value_in_the_config_of_a_file(self) -> None:
         # An error of the file, without a traceback (#40). The other files are
         # linted, in the process pool.
         cases = (
-            ('enable = ["fixit rules"]', "invalid rule name 'fixit rules'"),
+            ('enable = ["fixit rules"]', "enable: invalid rule name 'fixit rules'"),
             ("enable = [", toml_error(toml("enable = ["))),
         )
         for value, message in cases:

@@ -3,9 +3,11 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import json
 import logging
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import (
     Any,
@@ -21,7 +23,6 @@ from .ftypes import (
     QualifiedRule,
     QualifiedRuleRegex,
     RawConfig,
-    is_sequence,
 )
 
 FIXIT_CONFIG_FILENAMES = ("fixit.toml", ".fixit.toml", "pyproject.toml")
@@ -138,7 +139,8 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
 
     Maintains the same order as given in paths, minus any skipped files.
     A file that is not TOML is a :class:`ConfigError`, with the message of
-    :mod:`tomllib`.
+    :mod:`tomllib`, as is the first value of a config that fixit cannot use
+    (see :func:`value_errors`).
     """
     configs: list[RawConfig] = []
 
@@ -149,10 +151,14 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
             data = tomllib.loads(content)
         except tomllib.TOMLDecodeError as error:
             raise ConfigError(str(error), path=path) from error
-        fixit_data = data.get("tool", {}).get("fixit", {})
+        fixit_data = table(data, "tool", path).get("fixit", {})
+        if not isinstance(fixit_data, dict):
+            raise ConfigError(must_be("tool.fixit", "a table", fixit_data), path=path)
 
         if fixit_data:
             config = RawConfig(path=path, data=fixit_data)
+            if (error := next(value_errors(config.data), None)) is not None:
+                raise ConfigError(error, config=config)
             configs.append(config)
 
             if config.data.get("root", False):
@@ -161,21 +167,146 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
     return configs
 
 
-def get_sequence(
-    config: RawConfig, key: str, *, data: dict[str, Any] | None = None
-) -> Sequence[str]:
-    value: Sequence[str]
-    if data:
-        value = data.pop(key, ())
-    else:
-        value = config.data.pop(key, ())
-
-    if not is_sequence(value):
-        raise ConfigError(
-            f"{key!r} must be array of values, got {type(key)}", config=config
-        )
-
+def table(data: dict[str, Any], key: str, path: Path) -> dict[str, Any]:
+    """The table ``key`` of ``data``, read from ``path``: empty if there is none."""
+    value = data.get(key, {})
+    if not isinstance(value, dict):
+        raise ConfigError(must_be(key, "a table", value), path=path)
     return value
+
+
+def toml_type(value: object) -> str:
+    """
+    The type of ``value``, a value that :mod:`tomllib` reads, as TOML v1.1.0
+    names it, with an article (#40).
+    """
+    match value:
+        case bool():
+            return "a boolean"
+        case int():
+            return "an integer"
+        case float():
+            return "a float"
+        case str():
+            return "a string"
+        # Before date: a datetime is a date too.
+        case datetime() if value.tzinfo is not None:
+            return "an offset date-time"
+        case datetime():
+            return "a local date-time"
+        case date():
+            return "a local date"
+        case time():
+            return "a local time"
+        case list():
+            return "an array"
+        case dict():
+            return "a table"
+    return f"a {type(value).__name__}"
+
+
+def must_be(key: str, expected: str, value: object) -> str:
+    """The message for ``value`` of ``key``, which is not ``expected``."""
+    return f"{key}: must be {expected}, got {toml_type(value)}"
+
+
+RULES = "an array of strings"
+OVERRIDES = "an array of tables ([[tool.fixit.overrides]])"
+# In any case, as the option (#40).
+OUTPUT_FORMATS = {o.value: o for o in OutputFormat}
+
+
+def value_errors(data: dict[str, Any]) -> Iterator[str]:
+    """
+    The messages for the values in ``data``, the table ``[tool.fixit]`` of a
+    config, that fixit cannot use: a value of the wrong type, or a rule name that
+    is not valid (#40). The keys are checked in their order in the file, and
+    each message starts with the key.
+
+    All the overrides are checked, whether or not they apply to the file that is
+    linted. Whether a rule can be imported is not checked, and neither are the
+    unknown keys, nor ``enable-root-import`` in a config that is not the root.
+    """
+    for key, value in data.items():
+        match key:
+            case "root":
+                if not isinstance(value, bool):
+                    yield must_be(key, "a boolean", value)
+            case "enable" | "disable":
+                yield from rule_errors(key, value)
+            case "enable-root-import":
+                yield from root_import_errors(value)
+            case "output-format":
+                yield from output_format_errors(value)
+            case "output-template":
+                if not isinstance(value, str):
+                    yield must_be(key, "a string", value)
+            case "overrides":
+                yield from override_errors(value)
+
+
+def rule_errors(key: str, value: object) -> Iterator[str]:
+    """The messages for ``value``, the rules of ``key``: names in an array."""
+    if not isinstance(value, list):
+        yield must_be(key, RULES, value)
+        return
+    for rule in value:
+        if not isinstance(rule, str):
+            yield f"{key}: must be {RULES}, got an array with {toml_type(rule)}"
+            return
+        if not QualifiedRuleRegex.match(rule):
+            yield f"{key}: invalid rule name {rule!r}"
+
+
+def root_import_errors(value: object) -> Iterator[str]:
+    """The messages for ``value`` of ``enable-root-import``."""
+    if isinstance(value, bool):
+        return
+    if not isinstance(value, str) or value == "":
+        got = "an empty string" if value == "" else toml_type(value)
+        yield f"enable-root-import: must be a boolean or a relative path, got {got}"
+    elif Path(value).is_absolute():
+        yield "enable-root-import: absolute paths not allowed"
+    elif ".." in Path(value).parts:
+        yield "enable-root-import: '..' components not allowed"
+
+
+def output_format_errors(value: object) -> Iterator[str]:
+    """The messages for ``value`` of ``output-format``: an empty string is unset."""
+    if not isinstance(value, str):
+        yield must_be("output-format", "a string", value)
+    elif value and value.lower() not in OUTPUT_FORMATS:
+        choices = ", ".join(map(repr, OUTPUT_FORMATS))
+        yield f"output-format: unknown value {value!r}, not one of {choices}"
+
+
+def override_errors(value: object) -> Iterator[str]:
+    """
+    The messages for ``value`` of ``overrides``. The message for an override
+    shows its ``path``, as TOML writes it.
+    """
+    if not isinstance(value, list):
+        yield must_be("overrides", OVERRIDES, value)
+        return
+    for override in value:
+        if not isinstance(override, dict):
+            yield f"overrides: must be {OVERRIDES}, got an array with {toml_type(override)}"
+            return
+        if "path" not in override:
+            yield "overrides: a table has no path"
+            return
+        path = override["path"]
+        if not isinstance(path, str):
+            yield must_be("overrides: path", "a string", path)
+            return
+        if path == "":
+            yield "overrides: path: must not be an empty string"
+            return
+        # A JSON string is a TOML basic string.
+        where = f"overrides (path = {json.dumps(path, ensure_ascii=False)}): "
+        for key, rules in override.items():
+            if key in ("enable", "disable"):
+                yield from (where + error for error in rule_errors(key, rules))
 
 
 def parse_rule(rule: str, root: Path, config: RawConfig | None = None) -> QualifiedRule:
@@ -243,67 +374,32 @@ def merge_configs(
         if data.pop("root", False):
             root = config.path.parent
 
-        value = data.pop("enable-root-import", False)
-        # A bool, or a relative path that is not empty (#21).
-        if not isinstance(value, (bool, str)) or value == "":
-            raise ConfigError(
-                f"enable-root-import: {value!r} is not a bool or a relative path",
-                config=config,
-            )
-        if value:
+        # The values are checked as the config is read (read_configs), but where
+        # the root is depends on the configs that are merged.
+        if value := data.pop("enable-root-import", False):
             if root != config.path.parent:
                 raise ConfigError(
-                    "enable-root-import not allowed in non-root configs", config=config
+                    "enable-root-import: only allowed in a root config", config=config
                 )
-            if isinstance(value, str):
-                value_path = Path(value)
-                if value_path.is_absolute():
-                    raise ConfigError(
-                        "enable-root-import: absolute paths not allowed", config=config
-                    )
-                if ".." in value_path.parts:
-                    raise ConfigError(
-                        "enable-root-import: '..' components not allowed", config=config
-                    )
-                enable_root_import = value_path
-            else:
-                enable_root_import = True
+            enable_root_import = Path(value) if isinstance(value, str) else True
 
         if value := data.pop("output-format", ""):
-            # In any case, as the option (#40).
-            formats = {o.value: o for o in OutputFormat}
-            if not isinstance(value, str) or value.lower() not in formats:
-                choices = ", ".join(map(repr, formats))
-                raise ConfigError(
-                    f"output-format: unknown value {value!r}, not one of {choices}",
-                    config=config,
-                )
-            output_format = formats[value.lower()]
+            output_format = OUTPUT_FORMATS[value.lower()]
 
         if value := data.pop("output-template", ""):
             output_template = value
 
         process_subpath(
             config.path.parent,
-            enable=get_sequence(config, "enable"),
-            disable=get_sequence(config, "disable"),
+            enable=data.pop("enable", ()),
+            disable=data.pop("disable", ()),
         )
 
-        for override in get_sequence(config, "overrides"):
-            if not isinstance(override, dict):
-                raise ConfigError("'overrides' requires array of tables", config=config)
-
-            subpath = override.get("path", None)
-            if not subpath:
-                raise ConfigError(
-                    "'overrides' table requires 'path' value", config=config
-                )
-
-            subpath = config.path.parent / subpath
+        for override in data.pop("overrides", ()):
             process_subpath(
-                subpath,
-                enable=get_sequence(config, "enable", data=override),
-                disable=get_sequence(config, "disable", data=override),
+                config.path.parent / override["path"],
+                enable=override.get("enable", ()),
+                disable=override.get("disable", ()),
             )
 
         for key in data:
@@ -361,8 +457,9 @@ def generate_config(
 def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
     """
     Validate the config provided. The provided path is expected to be a valid toml
-    config file. Any exception found while parsing or importing will be added to a list
-    of exceptions that are returned.
+    config file. The first value that fixit cannot use, as :func:`read_configs`
+    finds it, is the only exception returned (#40). Otherwise, each rule that
+    cannot be imported adds one to the list of exceptions that are returned.
 
     With ``custom_rules`` false, only the names of custom rules are checked: they
     are not imported, and each one logs a warning.
@@ -374,22 +471,17 @@ def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
 
         def validate_rules(rules: list[str], context: str) -> None:
             for rule in rules:
+                # read_configs checked the name.
+                qualified_rule = parse_rule(rule, root, configs)
+                if not (custom_rules or qualified_rule.builtin):
+                    log_skipped(qualified_rule)
+                    continue
                 try:
-                    qualified_rule = parse_rule(rule, root, configs)
-                    if not (custom_rules or qualified_rule.builtin):
-                        log_skipped(qualified_rule)
-                        continue
-                    try:
-                        import_rules(rule_name(qualified_rule))
-                    # Importing a rule runs its code, which can raise any exception.
-                    except Exception as e:  # noqa: BLE001
-                        exceptions.append(
-                            f"Failed to import rule `{rule}` for {context}: {e.__class__.__name__}: {e}"
-                        )
-                # Report any error as a validation result instead of failing.
+                    import_rules(rule_name(qualified_rule))
+                # Importing a rule runs its code, which can raise any exception.
                 except Exception as e:  # noqa: BLE001
                     exceptions.append(
-                        f"Failed to parse rule `{rule}` for {context}: {e.__class__.__name__}: {e}"
+                        f"Failed to import rule `{rule}` for {context}: {e.__class__.__name__}: {e}"
                     )
 
         data = configs.data
@@ -397,7 +489,7 @@ def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
         validate_rules(data.get("disable", []), "global disable")
 
         for override in data.get("overrides", []):
-            override_path = Path(override.get("path", path))
+            override_path = Path(override["path"])
             validate_rules(
                 override.get("enable", []),
                 f"override enable: `{override_path}`",

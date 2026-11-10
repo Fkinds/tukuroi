@@ -407,6 +407,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
     def test_output_format(self) -> None:
         vscode = {"pyproject.toml": CONFIG + 'output-format = "vscode"\n'}
         upper = {"pyproject.toml": CONFIG + 'output-format = "VSCode"\n'}
+        empty = {"pyproject.toml": CONFIG + 'output-format = ""\n'}
         sub = {"sub/pyproject.toml": '[tool.fixit]\noutput-format = "vscode"\n'}
         override = '[[tool.fixit.overrides]]\npath = "."\noutput-format = "vscode"\n'
         overrides = {"pyproject.toml": CONFIG + override}
@@ -418,6 +419,8 @@ class CliCharacterizationTest(CharacterizationTestCase):
             ("config", [], vscode, ".", "t.py", ":"),
             # As the option (#40).
             ("config, any case", [], upper, ".", "t.py", ":"),
+            # An empty string is the default, not an error.
+            ("config, empty", [], empty, ".", "t.py", "@"),
             ("option over config", ["-o", "fixit"], vscode, ".", "t.py", "@"),
             # The config of the current directory is used, not of the file.
             ("config of the file", [], sub, ".", "sub/t.py", "@"),
@@ -468,15 +471,20 @@ class CliCharacterizationTest(CharacterizationTestCase):
             self.assertEqual(result.exit_code, 2)
         # As the option, without the usage lines (#40). The libcst engine
         # printed a traceback, and "{value!r}" as is.
-        for value, shown in (('"json"', "'json'"), ("1", "1")):
+        cases = (
+            (
+                '"json"',
+                "unknown value 'json', not one of 'custom', 'fixit', 'vscode'",
+            ),
+            # Not a string, as TOML names it (#40).
+            ("1", "must be a string, got an integer"),
+        )
+        for value, message in cases:
             with self.subTest("config", value=value):
                 toml = CONFIG + f"output-format = {value}\n"
                 files = {"pyproject.toml": toml, "t.py": FIXABLE}
                 result = invoke(files, ["lint", "t.py"])
-                error = (
-                    f"Error: pyproject.toml: output-format: unknown value {shown},"
-                    " not one of 'custom', 'fixit', 'vscode'\n"
-                )
+                error = f"Error: pyproject.toml: output-format: {message}\n"
                 self.assertEqual(result.stderr, error)
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 2)
