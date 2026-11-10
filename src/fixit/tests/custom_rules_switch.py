@@ -269,7 +269,9 @@ class CustomRulesSwitchTest(TestCase):
             before = {"pyproject.toml": toml(names("enable", "..rules")), **RULES}
             result = run(before, args)
             # Printed with pprint, or rich when installed: only the start is stable.
-            self.assertIn("Failed to parse rule `..rules`", result.stdout)
+            # The name is checked as the config is read (#40).
+            error = "Invalid config: ConfigError: enable: invalid rule name '..rules'"
+            self.assertIn(error, result.stdout)
             self.assertEqual(result.stderr, "")
             self.assertEqual(result.exit_code, -1)
         with self.subTest("on"), switch(None):

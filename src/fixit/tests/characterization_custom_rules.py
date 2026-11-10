@@ -421,18 +421,20 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         with self.subTest("not in the root config"):
             sub = {"sub/pyproject.toml": toml("enable-root-import = true")}
             result = lint(root(), sub, "sub/t.py")
-            error = "enable-root-import not allowed in non-root configs"
+            error = "enable-root-import: only allowed in a root config"
             # With the path of the config, without a traceback (#40).
             where = "sub/t.py: EXCEPTION: sub/pyproject.toml"
             self.assertEqual(result.stdout, f"{where}: {error}\n")
             self.assertEqual(result.stderr, DIRTY)
             self.assertEqual(result.exit_code, 2)
+        must_be = "enable-root-import: must be a boolean or a relative path,"
         cases = (
             ('"/src"', "enable-root-import: absolute paths not allowed"),
             ('"../src"', "enable-root-import: '..' components not allowed"),
-            # Only a bool or a relative path that is not empty (#21).
-            ("1", "enable-root-import: 1 is not a bool or a relative path"),
-            ('""', "enable-root-import: '' is not a bool or a relative path"),
+            # Only a bool or a relative path that is not empty (#21), named
+            # as TOML names them (#40).
+            ("1", f"{must_be} got an integer"),
+            ('""', f"{must_be} got an empty string"),
         )
         for value, message in cases:
             with self.subTest(value):
@@ -524,7 +526,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         # The name of the parent of the config directory, as in `from .. import`.
         result = lint(root("..rules"), {"rules.py": BOTH_PY})
         # Without a traceback, before any file is linted (#40).
-        error = "Error: pyproject.toml: invalid rule name '..rules'\n"
+        error = "Error: pyproject.toml: enable: invalid rule name '..rules'\n"
         self.assertEqual(result.stderr, error)
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.exit_code, 2)

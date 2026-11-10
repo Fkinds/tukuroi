@@ -29,6 +29,10 @@ containing monorepo.
 
 The main configuration table.
 
+A value of a type other than the one given below, or a rule name that is not
+valid, is a configuration error. Fixit checks the whole file as it reads it, and
+stops at the first error.
+
 .. attribute:: root
     :type: bool
     :value: false
@@ -189,6 +193,9 @@ defining the subpath it applies to, along with any values from the tables above:
     [[tool.fixit.overrides]]
     path = "fizz/buzz"
     enable = ["plugin:SomethingNeat"]
+
+Each table needs ``path``, a string that is not empty. Fixit checks every
+table, whether or not it applies to the file being linted.
 
 
 .. _security:
