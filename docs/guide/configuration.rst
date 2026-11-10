@@ -165,7 +165,13 @@ stops at the first error.
     :type: str
 
     Sets the format of output printed to terminal.
-    Python formatting is used in the background to fill in data.
+    It is a Python format string (:meth:`str.format`) with the names of the
+    variables below only. A field with an attribute or an index
+    (``{path.parent}``, ``{path[0]}``), an unknown name, or no name (``{}``) is
+    a configuration error, as is a format spec that the value does not take
+    (``{path:d}``); format specs and conversions (``{path:<40}``,
+    ``{message!r}``) are fine. The template is checked even when
+    :attr:`output-format` is not ``custom``.
     Only active with :attr:`output-format` set to ``custom``.
 
     This option is inferred based on the current working directory or from
@@ -173,17 +179,19 @@ stops at the first error.
 
     Supported variables:
 
-    - ``message``: Message emitted by the applied rule.
+    - ``message``: Message emitted by the applied rule (a string).
 
-    - ``path``: Path to affected file.
+    - ``path``: Path to affected file, as Fixit shows it (a string).
 
-    - ``result``: Raw :class:`~fixit.Result` object.
+    - ``rule_name``: Name of the applied rule (a string).
 
-    - ``rule_name``: Name of the applied rule.
+    - ``start_col``: Start column of affected code (a number, from 0).
 
-    - ``start_col``: Start column of affected code.
+    - ``start_line``: Start line of affected code (a number, from 1).
 
-    - ``start_line``: Start line of affected code.
+    - ``end_col``: End column of affected code (a number, from 0).
+
+    - ``end_line``: End line of affected code (a number, from 1).
 
 
 .. _overrides:

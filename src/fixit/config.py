@@ -25,6 +25,7 @@ from .ftypes import (
     QualifiedRuleRegex,
     RawConfig,
 )
+from .template import template_error
 
 FIXIT_CONFIG_FILENAMES = ("fixit.toml", ".fixit.toml", "pyproject.toml")
 
@@ -350,6 +351,8 @@ def value_errors(data: dict[str, Any]) -> Iterator[str]:
             case "output-template":
                 if not isinstance(value, str):
                     yield must_be(key, "a string", value)
+                elif error := template_error(value):
+                    yield f"{key}: {error}"
             case "overrides":
                 yield from override_errors(value)
 

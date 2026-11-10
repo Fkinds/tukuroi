@@ -314,6 +314,28 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 "output-template = 1",
                 "output-template: must be a string, got an integer",
             ),
+            # The names of the fields only, checked though the format is not
+            # custom (#14). The libcst engine printed a traceback as it printed
+            # a violation, or let the template read anything.
+            (
+                "output-template = '{path.parent}'",
+                (
+                    "output-template: '{path.parent}' uses an attribute or an index,"
+                    " which is not allowed"
+                ),
+            ),
+            (
+                "output-template = '{result}'",
+                (
+                    "output-template: unknown field 'result', not one of 'end_col',"
+                    " 'end_line', 'message', 'path', 'rule_name', 'start_col',"
+                    " 'start_line'"
+                ),
+            ),
+            (
+                "output-template = '{'",
+                "output-template: Single '{' encountered in format string",
+            ),
             # [tool.fixit.overrides], not [[tool.fixit.overrides]].
             ('[tool.fixit.overrides]\npath = "sub"', f"overrides: {tables} a table"),
             ('overrides = ["sub"]', f"overrides: {tables} an array with a string"),
