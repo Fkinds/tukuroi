@@ -188,3 +188,34 @@ Debug options for validating Fixit configuration.
 .. code:: console
 
     $ fixit debug [PATH ...]
+
+
+``validate-config``
+^^^^^^^^^^^^^^^^^^^
+
+Check a configuration file, alone and as a root configuration, without linting
+any file.
+
+.. code:: console
+
+    $ fixit validate-config PATH
+
+Fixit reads the file as ``lint`` does, and stops at the first value that it
+cannot use. Then it loads every rule that the file names, in :attr:`enable`,
+:attr:`disable` and all the :ref:`overrides`, with its
+:attr:`enable-root-import`, and reports each one that cannot be loaded. A file
+without ``[tool.fixit]`` has nothing to check. As the file is checked alone, an
+:attr:`enable-root-import` that is only wrong under a parent configuration is
+not found: ``lint`` finds it.
+
+Each error goes to stderr, in the form of ``lint``:
+
+.. code:: console
+
+    $ fixit validate-config pyproject.toml
+    Error: pyproject.toml: enable: could not find rule fixit.rules:Nope
+
+The exit code is 0 when the file is valid, and 2 when it is not, as for any
+configuration that Fixit cannot use. With custom rules turned off
+(``--no-custom-rules``), only the names of custom rules are checked, with a
+warning that they are skipped; see :ref:`security`.

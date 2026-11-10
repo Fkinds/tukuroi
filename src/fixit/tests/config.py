@@ -15,6 +15,7 @@ from click.testing import CliRunner
 
 from .. import config
 from ..cli import main
+from ..core import loader
 from ..ftypes import (
     Config,
     Options,
@@ -23,6 +24,7 @@ from ..ftypes import (
     RawConfig,
 )
 from ..util import chdir
+from .core_loader import files
 
 
 class ConfigTest(TestCase):
@@ -656,132 +658,47 @@ class ConfigTest(TestCase):
                 )
 
     def test_validate_config(self) -> None:
-        with self.subTest("validate-config valid"), TemporaryDirectory() as td:
-            tdp = Path(td).resolve()
-            path = tdp / ".fixit.toml"
-            path.write_text(
-                """
-                    [tool.fixit]
-                    disable = ["fixit.rules"]
-                    root = true
-                    """
-            )
-
-            results = config.validate_config(path)
-
-            self.assertEqual(results, [])
-
-    def test_validate_config_with_override(self) -> None:
-        with (
-            self.subTest("validate-config valid with overrides"),
-            TemporaryDirectory() as td,
-        ):
-            tdp = Path(td).resolve()
-            path = tdp / ".fixit.toml"
-            (tdp / "rule/ruledir").mkdir(parents=True, exist_ok=True)
-
-            (tdp / "rule/rule.py").write_text("# Rule")
-            (tdp / "rule/ruledir/rule.py").write_text("# Rule")
-            path.write_text(
-                """
-                [tool.fixit]
-                disable = ["fixit.rules"]
-                root = true
-
-                [[tool.fixit.overrides]]
-                path = "SUPER_REAL_PATH"
-                enable = [".rule.rule"]
-
-                [[tool.fixit.overrides]]
-                path = "SUPER_REAL_PATH/BUT_ACTUALLY_REAL"
-                enable = [".rule.ruledir.rule"]
-                """
-            )
-
-            results = config.validate_config(path)
-
-            self.assertEqual(results, [])
-
-        with (
-            self.subTest("validate-config invalid config"),
-            TemporaryDirectory() as td,
-        ):
-            tdp = Path(td).resolve()
-            path = tdp / ".fixit.toml"
-            path.write_text(
-                """
-                [tool.fixit]
-                enable = ["fixit/rules:DeprecatedABCImport"]
-                disable = ["fixit.rules"]
-                root = true
-                """
-            )
-
-            results = config.validate_config(path)
-
-            # Checked as the config is read (#40).
-            self.assertEqual(
-                results,
+        # The config alone, as a root config, with the rules loaded as `lint`
+        # loads them (#100). An error is as the CLI shows a ConfigError.
+        rules = "from fixit import Rule\n\n\nclass Bad(Rule):\n    MESSAGE = 'm'\n"
+        tree = {
+            "rules.py": rules,
+            "empty.py": "# no rules\n",
+            "src/plum/__init__.py": "",
+            "src/plum/rules.py": rules,
+        }
+        sub = 'overrides (path = "sub"):'
+        override = '[[tool.fixit.overrides]]\npath = "sub"\nenable = {}\n'
+        cases = (
+            # (label, file, text, errors)
+            ("valid", "pyproject.toml", '[tool.fixit]\ndisable = ["fixit.rules"]\n', []),
+            ("local rules in an override", ".fixit.toml", "[tool.fixit]\nroot = true\n" + override.format('[".rules"]'), []),
+            # The libcst engine did not put the path on sys.path.
+            ("enable-root-import", "fixit.toml", '[tool.fixit]\nenable-root-import = "src"\nenable = ["plum.rules"]\n', []),
+            ("no [tool.fixit]", "pyproject.toml", "[tool.black]\nx = 1\n", []),
+            ("empty", "fixit.toml", "", []),
+            # The first value only: fixit.rules:Nope is not loaded (#40).
+            ("invalid value", "pyproject.toml", '[tool.fixit]\nenable = ["fixit.rules:Nope"]\n' + override.format('"fixit.rules"'), [f"pyproject.toml: {sub} enable: must be an array of strings, got a string"]),
+            ("invalid name", "pyproject.toml", '[tool.fixit]\nenable = ["fixit/rules:X"]\n', ["pyproject.toml: enable: invalid rule name 'fixit/rules:X'"]),
+            # Each rule that cannot be loaded, in the order of the file. The
+            # libcst engine did not see a module without rules.
+            (
+                "rules",
+                "pyproject.toml",
+                '[tool.fixit]\nenable = ["fixit.rules:Nope", ".empty"]\n' + override.format('[".nope"]'),
                 [
-                    "Invalid config: ConfigError: enable: invalid rule name 'fixit/rules:DeprecatedABCImport'"
+                    "pyproject.toml: enable: could not find rule fixit.rules:Nope",
+                    "pyproject.toml: enable: no rules in .empty from ROOT",
+                    f"pyproject.toml: {sub} enable: could not import rule(s) .nope from ROOT",
                 ],
-            )
-
-        with (
-            self.subTest("validate-config multiple errors"),
-            TemporaryDirectory() as td,
-        ):
-            tdp = Path(td).resolve()
-            config_path = tdp / ".fixit.toml"
-            config_path.write_text(
-                """
-                [tool.fixit]
-                enable = ["fixit.rules:DeprecatedABCImport"]
-                disable = ["fixit.rules"]
-                root = true
-
-                [[tool.fixit.overrides]]
-                path = "SUPER_REAL_PATH"
-                enable = ["fixit.rules:DeprecatedABCImport_SUPER_REAL"]
-                """
-            )
-
-            path = tdp / "file.py"
-            path.write_text("error")
-
-            results = config.validate_config(config_path)
-
-            self.assertEqual(
-                results,
-                [
-                    "Failed to import rule `fixit.rules:DeprecatedABCImport` for global enable: CollectionError: could not find rule fixit.rules:DeprecatedABCImport",
-                    "Failed to import rule `fixit.rules:DeprecatedABCImport_SUPER_REAL` for override enable: `SUPER_REAL_PATH`: CollectionError: could not find rule fixit.rules:DeprecatedABCImport_SUPER_REAL",
-                ],
-            )
-
-        with (
-            self.subTest("validate-config invalid type"),
-            TemporaryDirectory() as td,
-        ):
-            path = Path(td).resolve() / ".fixit.toml"
-            path.write_text(
-                """
-                [tool.fixit]
-                root = true
-                enable = ["fixit.rules:Nope"]
-
-                [[tool.fixit.overrides]]
-                path = "sub"
-                enable = "fixit.rules"
-                """
-            )
-
-            results = config.validate_config(path)
-
-            # The first error only: fixit.rules:Nope is not imported (#40).
-            self.assertEqual(
-                results,
-                [
-                    'Invalid config: ConfigError: overrides (path = "sub"): enable: must be an array of strings, got a string'
-                ],
-            )
+            ),
+        )  # fmt: skip
+        for label, name, text, errors in cases:
+            with self.subTest(label), files(tree) as root, chdir(root):
+                (root / name).write_text(text)
+                try:
+                    results = config.validate_config(root / name)
+                finally:
+                    loader._ROOT_IMPORTED.clear()
+                shown = [r.replace(str(root), "ROOT") for r in results]
+                self.assertEqual(shown, errors)
