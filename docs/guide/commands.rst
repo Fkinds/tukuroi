@@ -54,8 +54,9 @@ cannot use: a file that is not TOML, or an invalid value. The error goes to
 stderr, without a traceback. ``lint`` and ``fix`` read the configurations of
 the current directory and of the directory of each file to lint, or the one
 given with ``--config-file``, and load the rules that they name, before they
-lint any file, and stop at the first error. No standard defines exit codes
-other than 0 and nonzero: 2 is the code of Click and Ruff for these.
+lint any file, and stop at the first error. A rule of ``--rules`` that cannot
+be loaded is a usage error. No standard defines exit codes other than 0 and nonzero: 2 is the code
+of Click and Ruff for these.
 
 ``lint``
 ^^^^^^^^

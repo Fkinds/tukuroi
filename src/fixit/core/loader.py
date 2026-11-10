@@ -22,14 +22,12 @@ The errors keep the name and the words of the libcst engine
 (``CollectionError: could not import rule(s) .rules from <dir>``).
 
 :func:`collect_rules` turns the ``enable`` and ``disable`` of a config into
-rules. A module that cannot be imported is a warning (on the logger
-``fixit.config``, as before), given once in a process. A package imported
-through ``enable-root-import`` is not used for a file of another root: its
-module is the one of the root that imported it first.
-
-:func:`load` loads the rules of one name, and raises a :class:`CollectionError`
-for each reason that they cannot be (#40): the module cannot be imported, its
-code raises, it has no rules, or the rule is not in it.
+rules. A name whose rules cannot be loaded is a :class:`CollectionError` (#40):
+the module cannot be imported, its code raises, it has no rules, or the rule is
+not in it. A package imported through ``enable-root-import`` cannot be used for
+a file of another root: its module is the one of the root that imported it
+first. The rules skipped with custom rules turned off are a warning (on the
+logger ``fixit.config``), given once in a process.
 """
 
 import hashlib
@@ -195,11 +193,12 @@ def collect_rules(
 ) -> tuple[type[Rule], ...]:
     """
     The rules of ``enable`` without those of ``disable``, but for the rules that
-    ``enable`` names one by one, sorted by name. A module that cannot be imported
-    is a warning. ``root_import`` is the path that ``enable-root-import`` adds to
-    ``sys.path``. With ``custom_rules`` false, only the built-in rules are
-    imported: the others in ``enable`` are skipped with a warning, those in
-    ``disable`` and ``root_import`` silently.
+    ``enable`` names one by one, sorted by name. A name whose rules cannot be
+    loaded raises a :class:`CollectionError` (see :func:`load`). ``root_import``
+    is the path that ``enable-root-import`` adds to ``sys.path``. With
+    ``custom_rules`` false, only the built-in rules are imported: the others in
+    ``enable`` are skipped with a warning, those in ``disable`` and
+    ``root_import`` silently.
     """
     if not custom_rules:
         root_import = None
@@ -212,17 +211,12 @@ def collect_rules(
                 _warn(f"Skipped rules '{name}': custom rules are turned off")
                 continue
             rules = _load(name, root_import)
-            if rules is not None and not rules and name.name is None:
-                _warn(
-                    f"No rules in '{name}'"
-                    + (f" from {name.root}" if name.local else "")
-                )
-            enabled.update(rules or ())
+            enabled.update(rules)
             if name.name is not None:
-                named.update(rules or ())
+                named.update(rules)
         for name in disable:
             if custom_rules or is_builtin(name):
-                disabled.update(_load(name, root_import) or ())
+                disabled.update(_load(name, root_import))
     rules = enabled - (disabled - named)
     return tuple(sorted(rules, key=lambda r: (r.name(), r.__module__)))
 
@@ -230,9 +224,17 @@ def collect_rules(
 def load(name: RuleName, root_import: Path | None = None) -> tuple[type[Rule], ...]:
     """
     The rules of ``name``, with ``root_import`` on ``sys.path``, as
-    :func:`collect_rules` loads them. Raises a :class:`CollectionError` for each
-    reason that they cannot be loaded, with the exception of the code of the
-    module in the message; ``--debug`` logs its traceback.
+    :func:`collect_rules` loads them. Raises a :class:`CollectionError`.
+    """
+    with _on_path(root_import):
+        return _load(name, root_import)
+
+
+def _load(name: RuleName, root_import: Path | None) -> tuple[type[Rule], ...]:
+    """
+    The rules of ``name``. Raises a :class:`CollectionError` for each reason
+    that they cannot be loaded, with the exception of the code of the module in
+    the message; ``--debug`` logs its traceback.
     """
     top = name.module.partition(".")[0]
     if not name.local and top in _ROOT_IMPORTED and _ROOT_IMPORTED[top] != root_import:
@@ -240,37 +242,17 @@ def load(name: RuleName, root_import: Path | None = None) -> tuple[type[Rule], .
         message = f"could not import rule(s) {name}: imported from another root, {path}"
         raise CollectionError(message)
     where = f" from {name.root}" if name.local else ""
-    with _on_path(root_import):
-        try:
-            rules = import_rules(name)
-        except CollectionError:
-            raise
-        # Importing a rule runs its code, which can raise any exception.
-        except Exception as e:
-            log.debug("Exception while importing %s", name, exc_info=e)
-            message = f"could not import rule(s) {name}{where}: {type(e).__name__}: {e}"
-            raise CollectionError(message) from e
-    if not rules:
-        raise CollectionError(f"no rules in {name}{where}")
-    if root_import is not None and not name.local and _is_under(top, root_import):
-        _ROOT_IMPORTED.setdefault(top, root_import)
-    return rules
-
-
-def _load(name: RuleName, root_import: Path | None) -> tuple[type[Rule], ...] | None:
-    """The rules of ``name``, or ``None`` after a warning."""
-    top = name.module.partition(".")[0]
-    if not name.local and top in _ROOT_IMPORTED and _ROOT_IMPORTED[top] != root_import:
-        path = _ROOT_IMPORTED[top]
-        message = f"could not import rule(s) {name}: imported from another root, {path}"
-        _warn(f"Failed to load rules '{name.module}': CollectionError: {message}")
-        return None
     try:
         rules = import_rules(name)
+    except CollectionError:
+        raise
     # Importing a rule runs its code, which can raise any exception.
-    except Exception as e:  # noqa: BLE001
-        _warn(f"Failed to load rules '{name.module}': {type(e).__name__}: {e}")
-        return None
+    except Exception as e:
+        log.debug("Exception while importing %s", name, exc_info=e)
+        message = f"could not import rule(s) {name}{where}: {type(e).__name__}: {e}"
+        raise CollectionError(message) from e
+    if not rules:
+        raise CollectionError(f"no rules in {name}{where}")
     if root_import is not None and not name.local and _is_under(top, root_import):
         _ROOT_IMPORTED.setdefault(top, root_import)
     return rules

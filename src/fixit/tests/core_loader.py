@@ -307,6 +307,23 @@ class CollectRulesTest(TestCase):
         warnings = [r.getMessage().replace(str(root), "ROOT") for r in logs.records[1:]]
         return [r.name() for r in rules], warnings
 
+    def error(
+        self,
+        root: Path,
+        enable: Sequence[str],
+        disable: Sequence[str] = (),
+        **options: object,
+    ) -> str:
+        """The message of the CollectionError that collecting the rules raises."""
+        parse = lambda text: RuleName.parse(text, root)
+        with self.assertRaises(CollectionError) as caught:
+            collect_rules(
+                [parse(t) for t in enable],
+                [parse(t) for t in disable],
+                **options,  # type: ignore[arg-type]
+            )
+        return str(caught.exception).replace(str(root), "ROOT")
+
     def test_enable_and_disable(self) -> None:
         cases = (
             # (label, enable, disable, rules)
@@ -322,21 +339,20 @@ class CollectRulesTest(TestCase):
             with self.subTest(label), files({"rules.py": BOTH}) as root:
                 self.assertEqual(self.collect(root, enable, disable), (expected, []))
 
-    def test_warnings(self) -> None:
+    def test_errors(self) -> None:
+        # Each was a warning, and the other rules were collected (#40).
         cases = (
-            # (label, files, enable, disable, rules, warnings)
-            ("no module", {"rules.py": BOTH}, [".nope", ".rules:NoBadName"], [], ["NoBadName"], ["Failed to load rules '.nope': CollectionError: could not import rule(s) .nope from ROOT"]),
-            ("raises", {"rules.py": 'raise RuntimeError("boom")\n'}, [".rules"], [], [], ["Failed to load rules '.rules': RuntimeError: boom"]),
-            ("no rules in it", {"rules.py": "x = 1\n"}, [".rules"], [], [], ["No rules in '.rules' from ROOT"]),
-            ("no rules, 1 rule named", {"rules.py": "x = 1\n"}, [".rules:X"], [], [], ["Failed to load rules '.rules': CollectionError: could not find rule .rules:X in ROOT"]),
-            ("disable a module that fails", {"rules.py": BOTH}, [".rules"], [".nope"], ["NoBadName", "NoUglyName"], ["Failed to load rules '.nope': CollectionError: could not import rule(s) .nope from ROOT"]),
+            # (label, files, enable, disable, error)
+            ("no module", {"rules.py": BOTH}, [".nope", ".rules:NoBadName"], [], "could not import rule(s) .nope from ROOT"),
+            ("raises", {"rules.py": 'raise RuntimeError("boom")\n'}, [".rules"], [], "could not import rule(s) .rules from ROOT: RuntimeError: boom"),
+            ("no rules in it", {"rules.py": "x = 1\n"}, [".rules"], [], "no rules in .rules from ROOT"),
+            ("no rules, 1 rule named", {"rules.py": "x = 1\n"}, [".rules:X"], [], "could not find rule .rules:X in ROOT"),
+            ("disable a module that fails", {"rules.py": BOTH}, [".rules"], [".nope"], "could not import rule(s) .nope from ROOT"),
+            ("disable a module with no rules", {"rules.py": BOTH, "empty.py": ""}, [".rules"], [".empty"], "no rules in .empty from ROOT"),
         )  # fmt: skip
-        for label, tree, enable, disable, expected, warnings in cases:
+        for label, tree, enable, disable, error in cases:
             with self.subTest(label), files(tree) as root:
-                self.setUp()
-                self.assertEqual(
-                    self.collect(root, enable, disable), (expected, warnings)
-                )
+                self.assertEqual(self.error(root, enable, disable), error)
 
     def test_sorted_by_name(self) -> None:
         names = [f"Rule{c}" for c in "HGFEDCBA"]
@@ -358,9 +374,9 @@ class CollectRulesTest(TestCase):
             self.assertEqual(self.collect(root, ["cookie.rules"]), (rules, []))
 
     def test_a_warning_once(self) -> None:
-        with files({}) as root:
-            first = self.collect(root, [".nope"])
-            again = self.collect(root, [".nope"])
+        with files({"rules.py": BOTH}) as root:
+            first = self.collect(root, [".rules"], custom_rules=False)
+            again = self.collect(root, [".rules"], custom_rules=False)
         self.assertEqual((len(first[1]), again[1]), (1, []))
 
     def test_custom_rules_turned_off(self) -> None:
@@ -404,8 +420,8 @@ class CollectRulesTest(TestCase):
             self.assertEqual(sys.path, path)
         with files(KETTLE) as root:
             self.setUp()
-            warning = "Failed to load rules 'kettle.rules': CollectionError: could not import rule(s) kettle.rules"
-            self.assertEqual(self.collect(root, ["kettle.rules"]), ([], [warning]))
+            error = "could not import rule(s) kettle.rules"
+            self.assertEqual(self.error(root, ["kettle.rules"]), error)
 
     def test_package_of_another_root(self) -> None:
         tree = {f"a/{k}": v for k, v in KETTLE.items()} | {
@@ -417,14 +433,13 @@ class CollectRulesTest(TestCase):
                 self.collect(root / "a", ["kettle.rules"], root_import=a),
                 (["NoBadName"], []),
             )
-            other = f"Failed to load rules 'kettle.rules': CollectionError: could not import rule(s) kettle.rules: imported from another root, {a}"
-            self.assertEqual(
-                self.collect(root / "b", ["kettle.rules"], root_import=b), ([], [other])
-            )
+            other = f"could not import rule(s) kettle.rules: imported from another root, {a}"
+            error = self.error(root / "b", ["kettle.rules"], root_import=b)
+            self.assertEqual(error, other)
             self.assertEqual(
                 self.collect(root / "a", ["kettle.rules"], root_import=a),
                 (["NoBadName"], []),
             )
             self.setUp()
             loader._ROOT_IMPORTED["kettle"] = a
-            self.assertEqual(self.collect(root / "b", ["kettle.rules"]), ([], [other]))
+            self.assertEqual(self.error(root / "b", ["kettle.rules"]), other)

@@ -665,11 +665,21 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
     def test_fixit_test_without_tests(self) -> None:
         # `fixit test` exits with 5 when no test ran, as unittest and pytest do
         # (#21). The libcst engine exited with 0.
+        no_cases = HEAD + "\n\nclass NoCases(Rule):\n    MESSAGE = 'No cases.'\n"
+        result = run({"rules.py": no_cases}, ["test", ".rules"])
+        # No line of a test above the footer.
+        stderr = TIME.sub(r"\1", result.stderr)
+        self.assertEqual(stderr, "\n" + footer(0, "NO TESTS RAN"))
+        self.assertEqual(result.exit_code, 5)
+
+    def test_fixit_test_of_an_unknown_rule(self) -> None:
+        # An error, without the config: the rules are named on the command line
+        # (#40). It was a warning, and no test ran.
         result = run({"rules.py": BOTH_PY}, ["test", ".rules:Nope"])
         error = no_rule(".rules:Nope", IN_ROOT).format(root=result.root)
-        warning = f"WARNING:fixit.config:Failed to load rules '.rules': CollectionError: {error}\n"
-        self.assertEqual(outcome(result.stderr), ([warning], footer(0, "NO TESTS RAN")))
-        self.assertEqual(result.exit_code, 5)
+        self.assertEqual(result.stderr, f"Error: {error}\n")
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.exit_code, 2)
 
     def test_fixit_test_reads_the_config(self) -> None:
         # `fixit test` reads the config of the current directory (#21), so
