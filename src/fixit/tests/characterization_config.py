@@ -40,6 +40,9 @@ ROOT = "root = true"
 ALL = '"fixit.rules"'
 NA_ = f'"fixit.rules:{NA}"'
 SI_ = f'"fixit.rules:{SI}"'
+# The modules of the two rules, in fixit.rules.
+NA_MODULE = '"fixit.rules.no_assert_true_for_comparison"'
+SI_MODULE = '"fixit.rules.no_static_if_condition"'
 
 
 def toml(*lines: str) -> str:
@@ -98,11 +101,23 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 toml(ROOT, f"disable = [{ALL}, {NA_}]", f"enable = [{NA_}, {SI_}]"),
                 (SI,),
             ),
-            # A rule named in `enable` stays on when its module is disabled.
+            # The more specific name wins (#40): a rule over a module, and a
+            # module over the package that it is in.
             (
                 "enable 1, disable module",
                 toml(ROOT, f"enable = [{NA_}]", f"disable = [{ALL}]"),
                 (NA,),
+            ),
+            (
+                "enable a module of a package disabled",
+                toml(ROOT, f"disable = [{ALL}]", f"enable = [{NA_MODULE}]"),
+                (NA,),
+            ),
+            ("disable a module", toml(ROOT, f"disable = [{NA_MODULE}]"), (SI,)),
+            (
+                "disable 1 rule of a module enabled",
+                toml(ROOT, f"disable = [{ALL}, {NA_}]", f"enable = [{NA_MODULE}]"),
+                (),
             ),
         )
         self.assert_reported(
@@ -178,6 +193,13 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
             ("enable, outside", files(enable_na), "t.py", (SI,)),
             ("enable, prefix only", files(enable_na), "subx/t.py", (SI,)),
             ("disable", files(override("sub", f"disable = [{SI_}]")), "sub/t.py", ()),
+            # An override is nearer than the top level, and wins (#40).
+            (
+                "disable module",
+                files(override("sub", f"disable = [{ALL}]")),
+                "sub/t.py",
+                (),
+            ),
             (
                 "file path",
                 files(override("sub/t.py", f"enable = [{NA_}]")),
@@ -269,12 +291,22 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 "sub/t.py",
                 (NA, SI),
             ),
-            # NOTE: the later override wins, even when its path is less deep.
+            # The deeper override wins, wherever it is in the file (#40); the
+            # libcst engine took the later one.
             (
                 "deeper first",
                 files(
                     override("sub/deep", f"disable = [{SI_}]"),
                     override("sub", f"enable = [{SI_}]"),
+                ),
+                "sub/deep/t.py",
+                (),
+            ),
+            (
+                "deeper first, same path",
+                files(
+                    override("sub/deep", f"disable = [{SI_}]"),
+                    override("./sub/deep", f"enable = [{SI_}]"),
                 ),
                 "sub/deep/t.py",
                 (SI,),
@@ -533,11 +565,43 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 "sub/t.py",
                 (),
             ),
-            # NOTE: the parent's rule stays on, though the docs say `disable`
-            # overrides the rules enabled further up.
+            # The nearer config wins (#40): the libcst engine kept the rule that
+            # the parent named on.
             (
                 "child disables module",
                 {"sub/pyproject.toml": toml(f"disable = [{ALL}]")},
+                "sub/t.py",
+                (),
+            ),
+            # The module that sub enables is in the package that deep disables.
+            (
+                "child disables the package of a module enabled",
+                {
+                    "sub/pyproject.toml": toml(f"enable = [{NA_MODULE}]"),
+                    "sub/deep/pyproject.toml": toml(
+                        f"disable = [{ALL}]", f"enable = [{SI_}]"
+                    ),
+                },
+                "sub/deep/t.py",
+                (SI,),
+            ),
+            (
+                "child enables a module of a package disabled",
+                {"sub/pyproject.toml": toml(f"enable = [{NA_MODULE}]")},
+                "sub/t.py",
+                (NA, SI),
+            ),
+            (
+                "child disables module, enables 1",
+                {"sub/pyproject.toml": toml(f"disable = [{ALL}]", f"enable = [{NA_}]")},
+                "sub/t.py",
+                (NA,),
+            ),
+            # The names alone tell what a module has: the parent names the rule
+            # by its package, fixit.rules, so a module of it does not.
+            (
+                "child disables the module of a rule by name",
+                {"sub/pyproject.toml": toml(f"disable = [{NA_MODULE}, {SI_MODULE}]")},
                 "sub/t.py",
                 (SI,),
             ),

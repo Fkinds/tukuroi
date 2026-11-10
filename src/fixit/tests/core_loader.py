@@ -339,6 +339,29 @@ class CollectRulesTest(TestCase):
             with self.subTest(label), files({"rules.py": BOTH}) as root:
                 self.assertEqual(self.collect(root, enable, disable), (expected, []))
 
+    def test_more_specific_name_wins(self) -> None:
+        # A rule over a module, and a module over its package (#40). The
+        # libcst engine told a rule from a module only.
+        tree = {
+            "rules/__init__.py": "",
+            "rules/bad.py": HEAD + rule("NoBadName"),
+            "rules/ugly.py": HEAD + rule("NoUglyNameRule"),
+        }
+        cases = (
+            # (label, enable, disable, rules)
+            ("a module over its package", [".rules.bad"], [".rules"], ["NoBadName"]),
+            ("a package under a module", [".rules"], [".rules.bad"], ["NoUglyName"]),
+            ("a rule over its module", [".rules.bad:NoBadName"], [".rules.bad"], ["NoBadName"]),
+            ("a module under a rule", [".rules.bad"], [".rules.bad:NoBadName"], []),
+            # As specific: `disable` wins.
+            ("the same module", [".rules.bad"], [".rules.bad"], []),
+            ("a rule by its package and by its module", [".rules:NoBadName"], [".rules.bad:NoBadName"], []),
+            ("the most specific name of each", [".rules", ".rules.bad:NoBadName"], [".rules.bad", ".rules"], ["NoBadName"]),
+        )  # fmt: skip
+        for label, enable, disable, expected in cases:
+            with self.subTest(label), files(tree) as root:
+                self.assertEqual(self.collect(root, enable, disable), (expected, []))
+
     def test_errors(self) -> None:
         # Each was a warning, and the other rules were collected (#40).
         cases = (

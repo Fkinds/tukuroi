@@ -490,80 +490,67 @@ def parse_rule(rule: str, root: Path, config: RawConfig | None = None) -> Qualif
 
 
 def merge_configs(
-    path: Path, raw_configs: list[RawConfig], root: Path | None = None
+    path: Path,
+    raw_configs: list[RawConfig],
+    root: Path | None = None,
+    *,
+    config_file: bool = False,
 ) -> Config:
     """
     Given multiple raw configs, merge them in priority order.
 
     Assumes raw_configs are given in order from highest to lowest priority.
+    Their levels (see :func:`levels`) are merged from the farthest to the
+    nearest, and a nearer level wins (#40): the rules that it names take the
+    place of the same rules in the farther levels (see :func:`contains`). With
+    ``config_file``, ``raw_configs`` is the config of ``--config-file``.
     """
 
-    config: RawConfig
     enable_root_import: bool | Path = Config.enable_root_import
     enable_rules: set[QualifiedRule] = {QualifiedRule("fixit.rules")}
     disable_rules: set[QualifiedRule] = set()
     output_format: OutputFormat = OutputFormat.fixit
     output_template: str = ""
 
-    def process_subpath(
-        subpath: Path,
-        *,
-        enable: Sequence[str] = (),
-        disable: Sequence[str] = (),
-    ) -> None:
-        subpath = subpath.resolve()
-        try:
-            path.relative_to(subpath)
-        except ValueError:  # not relative to subpath
-            return
-
-        config_dir = config.path.parent
-        for rule in enable:
-            qual_rule = parse_rule(rule, config_dir, config)
-            enable_rules.add(qual_rule)
-            disable_rules.discard(qual_rule)
-
-        for rule in disable:
-            qual_rule = parse_rule(rule, config_dir, config)
-            enable_rules.discard(qual_rule)
-            disable_rules.add(qual_rule)
-
     for config in reversed(raw_configs):
         if root is None:
             root = config.path.parent
 
-        # A copy: the configs are left as they were read, for check_rules.
-        data = dict(config.data)
-        if data.pop("root", False):
+        data = config.data
+        if data.get("root", False):
             root = config.path.parent
 
         # The values are checked as the config is read (read_configs), but where
         # the root is depends on the configs that are merged.
-        if value := data.pop("enable-root-import", False):
+        if value := data.get("enable-root-import", False):
             if root != config.path.parent:
                 raise ConfigError(
                     "enable-root-import: only allowed in a root config", config=config
                 )
             enable_root_import = Path(value) if isinstance(value, str) else True
 
-        if value := data.pop("output-format", ""):
+        if value := data.get("output-format", ""):
             output_format = OUTPUT_FORMATS[value.lower()]
 
-        if value := data.pop("output-template", ""):
+        if value := data.get("output-template", ""):
             output_template = value
 
-        process_subpath(
-            config.path.parent,
-            enable=data.pop("enable", ()),
-            disable=data.pop("disable", ()),
-        )
-
-        for override in data.pop("overrides", ()):
-            process_subpath(
-                config.path.parent / override["path"],
-                enable=override.get("enable", ()),
-                disable=override.get("disable", ()),
-            )
+        directory = config.path.parent
+        for level in levels(path, config, config_file=config_file):
+            disable = {
+                parse_rule(r, directory, config) for r in level.get("disable", ())
+            }
+            # A name in both: `disable` wins.
+            enable = {parse_rule(r, directory, config) for r in level.get("enable", ())}
+            enable -= disable
+            enable_rules -= {
+                r for r in enable_rules if any(contains(d, r) for d in disable)
+            }
+            disable_rules -= {
+                r for r in disable_rules if any(contains(e, r) for e in enable)
+            }
+            enable_rules |= enable
+            disable_rules |= disable
 
     return Config(
         path=path,
@@ -574,6 +561,46 @@ def merge_configs(
         output_format=output_format,
         output_template=output_template,
     )
+
+
+def levels(
+    path: Path, config: RawConfig, *, config_file: bool = False
+) -> Iterator[dict[str, Any]]:
+    """
+    The tables of ``config`` that apply to ``path``, each a level of the
+    hierarchy, from the farthest to the nearest (#40): the top level, then the
+    overrides, the shallowest path first, and in the order of the file for the
+    same depth. The top level of the config of ``--config-file``
+    (``config_file``) applies to ``path`` wherever it is; the paths of its
+    overrides are in the directory of the config, as in any other.
+    """
+    directory = config.path.parent.resolve()
+    if config_file or path.is_relative_to(directory):
+        yield config.data
+    overrides = []
+    for override in config.data.get("overrides", ()):
+        subpath = (directory / override["path"]).resolve()
+        if path.is_relative_to(subpath):
+            overrides.append((len(subpath.parts), override))
+    # sorted() is stable: the order of the file stays for the same depth.
+    for _, override in sorted(overrides, key=lambda item: item[0]):
+        yield override
+
+
+def contains(name: QualifiedRule, other: QualifiedRule) -> bool:
+    """
+    Whether ``name`` gives the rules of ``other``, by the names alone (#40):
+    ``other`` is ``name``, or ``name`` is a module and ``other`` is the module,
+    a module in it, or a rule of one of them. A module in it is one level down,
+    as the rules of a package are its own and those of its modules. A rule named
+    by another module, as a package names the rules of its modules
+    (``fixit.rules:NoStaticIfCondition``), is not told apart.
+    """
+    if name.root != other.root:
+        return False
+    if name.name is not None:
+        return name == other
+    return name.module in (other.module, other.module.rpartition(".")[0])
 
 
 def generate_config(
@@ -599,7 +626,8 @@ def generate_config(
         config_paths = locate_configs(path, root=root)
 
     raw_configs = read_configs(config_paths)
-    config = merge_configs(path, raw_configs, root=root)
+    config_file = bool(options and options.config_file)
+    config = merge_configs(path, raw_configs, root=root, config_file=config_file)
 
     if options:
         config.custom_rules = options.custom_rules

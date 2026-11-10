@@ -14,7 +14,8 @@ When determining the configuration to use for a given path, Fixit will continue
 looking upward in the filesystem until it reaches either the root of the
 repository, or a configuration file is found with :attr:`root` set to ``True``.
 Fixit will then read configuration values from each file, from further to
-nearest, and merge or override values as appropriate.
+nearest, and merge or override values as appropriate. For :attr:`enable` and
+:attr:`disable`, the nearer wins: see :ref:`rule-selection`.
 
 The root of the repository is the nearest directory with ``.git`` (a directory,
 or a file in a worktree or a submodule) or ``.hg``. Outside a repository, Fixit
@@ -86,7 +87,8 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
             ".rules:HollywoodName",  # single lint rule by name
         ]
 
-    Overrides disabled rules from any configuration further up the hierarchy.
+    Wins over :attr:`disable` further up the hierarchy, for the rules that it
+    names. See :ref:`rule-selection`.
 
     Fixit will enable the built-in :mod:`fixit.rules` lint rules by default.
 
@@ -106,8 +108,9 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
     List of modules or individual rules to disable when linting files covered
     by this configuration.
 
-    Overrides enabled rules from this file, as well any configuration files
-    further up the hierarchy.
+    Wins over :attr:`enable` further up the hierarchy, for the rules that it
+    names, and over :attr:`enable` in the same table for a name as specific or
+    less. See :ref:`rule-selection`.
 
     See :attr:`enable` for details on referencing lint rules.
 
@@ -224,6 +227,55 @@ defining the subpath it applies to, along with :attr:`enable` and
 
 Each table needs ``path``, a string that is not empty. Fixit checks every
 table, whether or not it applies to the file being linted.
+
+An override applies to the files under its path, relative to the directory of
+the configuration file. It wins over the top level of the file, and a deeper
+path wins over a shallower one, wherever they are in the file: see
+:ref:`rule-selection`.
+
+
+.. _rule-selection:
+
+Which rules run
+^^^^^^^^^^^^^^^
+
+The :attr:`enable` and :attr:`disable` of a file come in levels, from the
+farthest to the nearest: the root configuration, then each configuration nearer
+to the file. Within a configuration, the top level comes first, then the
+:ref:`overrides` that apply to the file, the shallowest path first, and in the
+order of the file for the same path. With ``--config-file``, that configuration
+is the only one, and its top level applies to every file, wherever it is.
+
+A nearer level wins. The rules that a level enables are enabled, though a
+level further up disables them, and the other way round:
+
+.. code-block:: toml
+
+    # pyproject.toml
+    [tool.fixit]
+    root = true
+    enable = ["fixit.rules:UseAssertIn"]
+
+    # tests/fixit.toml
+    [tool.fixit]
+    disable = ["fixit.rules"]  # UseAssertIn too, in tests/
+
+A module names its own rules, and if it is a package, those of the modules in
+it: one level down, not those of its packages. ``module:Rule`` names one rule.
+Fixit tells the rules that a name gives by the names alone. A package such as
+:mod:`fixit.rules` names the rules of its modules as its own, so
+``fixit.rules.use_assert_in`` and ``fixit.rules:UseAssertIn`` do not name the
+same rule for it: name a rule the same way at every level.
+
+Within one level, the more specific name wins: a rule over a module, and a
+module over the package that it is in. For two names as specific, such as one
+name in both :attr:`enable` and :attr:`disable`, the rule is disabled:
+
+.. code-block:: toml
+
+    [tool.fixit]
+    disable = ["fixit.rules"]
+    enable = ["fixit.rules:UseAssertIn"]  # UseAssertIn only
 
 
 .. _security:

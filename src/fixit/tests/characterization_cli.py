@@ -664,14 +664,16 @@ class CliCharacterizationTest(CharacterizationTestCase):
             ("no tool.fixit", c, {"c.toml": "[tool.black]\n"}, "t.py", both),
             ("sub config", c, {"c.toml": config(SI), **sub}, "sub/t.py", si),
             ("overrides", c, {"c.toml": config(SI) + override}, "sub/t.py", both),
-            # NOTE: `enable` and `disable` of a config file in another directory
-            # are not used; the default rules run.
+            # `enable` and `disable` apply to a file outside the directory of the
+            # config too (#40); the libcst engine ran the default rules.
+            ("other dir", ["-c", "cfg/c.toml"], {"cfg/c.toml": config(SI)}, "t.py", si),
+            # The path of an override is in the directory of the config: cfg/sub.
             (
-                "other dir",
+                "other dir, overrides",
                 ["-c", "cfg/c.toml"],
-                {"cfg/c.toml": config(SI)},
-                "t.py",
-                both,
+                {"cfg/c.toml": config(SI) + override},
+                "sub/t.py",
+                si,
             ),
         )
         for label, options, files, path, reported in cases:

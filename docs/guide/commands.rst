@@ -18,6 +18,9 @@ The following options are available for all commands:
 
     Override the normal hierarchical configuration and use the configuration
     from the specified path, ignoring all other configuration files entirely.
+    Its :attr:`enable` and :attr:`disable` apply to every file, wherever it is.
+    The paths of its :ref:`overrides`, and its local rules, are relative to the
+    directory of the configuration file, as in any other.
 
 .. attribute:: --custom-rules / --no-custom-rules
 
