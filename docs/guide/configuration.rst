@@ -81,6 +81,11 @@ stops at the first error.
     :ref:`security` for the configurations to trust, and for turning off the
     rules that do not come with Fixit.
 
+    A name whose rules cannot be loaded is a configuration error, in
+    :attr:`disable` too: the module cannot be imported, its code raises an
+    exception, it has no rules, or the rule is not in it. With ``--rules``,
+    the names in the configuration are not used, and not loaded.
+
 .. attribute:: disable
     :type: list[str]
     :value: []
@@ -207,8 +212,10 @@ Configuration files can run code. Fixit imports the rules that a configuration
 enables, which runs their code with the permissions of the user running Fixit.
 That includes custom rules: local rules in the repo (see :attr:`enable`), the
 modules found through :attr:`enable-root-import`, and rules from any package
-other than Fixit. Rules named in :attr:`disable`, and the rules checked by
-``fixit validate-config``, are imported too.
+other than Fixit. Before it lints any file, Fixit imports every rule that the
+configurations name: in :attr:`disable` and in all the :ref:`overrides` too,
+whether or not they apply to a file. The rules checked by
+``fixit validate-config`` are imported too.
 
 Fixit looks for configuration files from each linted file up to the root of the
 filesystem (unless a file sets :attr:`root`), so a configuration file in a

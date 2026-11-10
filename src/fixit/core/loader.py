@@ -26,6 +26,10 @@ rules. A module that cannot be imported is a warning (on the logger
 ``fixit.config``, as before), given once in a process. A package imported
 through ``enable-root-import`` is not used for a file of another root: its
 module is the one of the root that imported it first.
+
+:func:`load` loads the rules of one name, and raises a :class:`CollectionError`
+for each reason that they cannot be (#40): the module cannot be imported, its
+code raises, it has no rules, or the rule is not in it.
 """
 
 import hashlib
@@ -221,6 +225,36 @@ def collect_rules(
                 disabled.update(_load(name, root_import) or ())
     rules = enabled - (disabled - named)
     return tuple(sorted(rules, key=lambda r: (r.name(), r.__module__)))
+
+
+def load(name: RuleName, root_import: Path | None = None) -> tuple[type[Rule], ...]:
+    """
+    The rules of ``name``, with ``root_import`` on ``sys.path``, as
+    :func:`collect_rules` loads them. Raises a :class:`CollectionError` for each
+    reason that they cannot be loaded, with the exception of the code of the
+    module in the message; ``--debug`` logs its traceback.
+    """
+    top = name.module.partition(".")[0]
+    if not name.local and top in _ROOT_IMPORTED and _ROOT_IMPORTED[top] != root_import:
+        path = _ROOT_IMPORTED[top]
+        message = f"could not import rule(s) {name}: imported from another root, {path}"
+        raise CollectionError(message)
+    where = f" from {name.root}" if name.local else ""
+    with _on_path(root_import):
+        try:
+            rules = import_rules(name)
+        except CollectionError:
+            raise
+        # Importing a rule runs its code, which can raise any exception.
+        except Exception as e:
+            log.debug("Exception while importing %s", name, exc_info=e)
+            message = f"could not import rule(s) {name}{where}: {type(e).__name__}: {e}"
+            raise CollectionError(message) from e
+    if not rules:
+        raise CollectionError(f"no rules in {name}{where}")
+    if root_import is not None and not name.local and _is_under(top, root_import):
+        _ROOT_IMPORTED.setdefault(top, root_import)
+    return rules
 
 
 def _load(name: RuleName, root_import: Path | None) -> tuple[type[Rule], ...] | None:

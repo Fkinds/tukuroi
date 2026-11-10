@@ -27,6 +27,7 @@ from ..core.loader import (
     collect_rules,
     import_rules,
     is_builtin,
+    load,
 )
 
 HEAD = "import ast\n\nfrom fixit.core.rule import Rule\n"
@@ -222,6 +223,59 @@ class ImportRulesTest(TestCase):
 
 
 KETTLE = {"src/kettle/__init__.py": "", "src/kettle/rules.py": HEAD + rule("NoBadName")}
+
+
+class LoadTest(TestCase):
+    """``load``: the rules of one name, or why they cannot be loaded (#40)."""
+
+    def setUp(self) -> None:
+        loader._ROOT_IMPORTED.clear()
+
+    def tearDown(self) -> None:
+        self.setUp()
+
+    def error(self, root: Path, text: str, root_import: Path | None = None) -> str:
+        """The message of the CollectionError that loading ``text`` raises."""
+        with self.assertRaises(CollectionError) as caught:
+            load(RuleName.parse(text, root), root_import)
+        return str(caught.exception).replace(str(root), "ROOT")
+
+    def test_rules(self) -> None:
+        with files({"rules.py": BOTH}) as root:
+            rules = load(RuleName.parse(".rules", root))
+        self.assertEqual([r.name() for r in rules], ["NoBadName", "NoUglyName"])
+
+    def test_errors(self) -> None:
+        cases = (
+            # (label, files, name, error)
+            ("no module", {}, ".nope", "could not import rule(s) .nope from ROOT"),
+            ("no rule of the name", {"rules.py": BOTH}, ".rules:X", "could not find rule .rules:X in ROOT"),
+            ("raises", {"rules.py": 'raise RuntimeError("boom")\n'}, ".rules", "could not import rule(s) .rules from ROOT: RuntimeError: boom"),
+            ("no rules in it", {"rules.py": "x = 1\n"}, ".rules", "no rules in .rules from ROOT"),
+            ("installed, no module", {}, "nope.rules", "could not import rule(s) nope.rules"),
+        )  # fmt: skip
+        for label, tree, text, error in cases:
+            with self.subTest(label), files(tree) as root:
+                self.assertEqual(self.error(root, text), error)
+
+    def test_traceback_in_the_debug_log(self) -> None:
+        with (
+            files({"rules.py": 'raise RuntimeError("boom")\n'}) as root,
+            self.assertLogs("fixit.config", "DEBUG") as logs,
+        ):
+            self.error(root, ".rules")
+        [record] = logs.records
+        self.assertEqual(record.getMessage(), "Exception while importing .rules")
+        self.assertIsNotNone(record.exc_info)
+
+    def test_enable_root_import(self) -> None:
+        with files(KETTLE) as root:
+            path = list(sys.path)
+            rules = load(RuleName.parse("kettle.rules", root), root / "src")
+            self.assertEqual([r.name() for r in rules], ["NoBadName"])
+            self.assertEqual(sys.path, path)
+            other = "could not import rule(s) kettle.rules: imported from another root, ROOT/src"
+            self.assertEqual(self.error(root, "kettle.rules", root / "b"), other)
 
 
 class CollectRulesTest(TestCase):

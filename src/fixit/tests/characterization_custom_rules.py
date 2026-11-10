@@ -155,17 +155,27 @@ def found(rule: str, path: str = "t.py") -> str:
     return f"{path}@{POSITION[rule]} {rule}: {PRINTED[rule]}\n"
 
 
-def failed(rule: str, error: str) -> str:
-    return f"WARNING:fixit.config:Failed to load rules '{rule}': {error}\n"
+# Why the rules of a name cannot be loaded. Each was a warning that named the
+# module, and the other rules ran. It is an error of the config that names it,
+# before any file is linted (#40): see stops().
+
+
+def failed(rule: str, error: str, where: str = "") -> str:
+    """The module of ``rule`` raises ``error`` as it is imported."""
+    return f"could not import rule(s) {rule}{where}: {error}"
 
 
 def no_import(rule: str, where: str = "") -> str:
-    return failed(rule, f"CollectionError: could not import rule(s) {rule}{where}")
+    return f"could not import rule(s) {rule}{where}"
 
 
 def no_rule(rule: str, where: str = "") -> str:
-    error = f"CollectionError: could not find rule {rule}{where}"
-    return failed(rule.partition(":")[0], error)
+    return f"could not find rule {rule}{where}"
+
+
+def stops(error: str, key: str = "enable", config: str = "pyproject.toml") -> str:
+    """The error of a rule that ``key`` of ``config`` names: it stops fixit."""
+    return f"Error: {config}: {key}: {error}\n"
 
 
 def summary(rules: Collection[str]) -> str:
@@ -286,8 +296,16 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
     def assert_lint(
         self, result: Run, rules: Sequence[str], warning: str = "", path: str = "t.py"
     ) -> None:
-        self.assertEqual(records(result.stdout), sorted(found(r, path) for r in rules))
+        """
+        ``rules`` report ``path``, after ``warning``. Or ``warning`` is the
+        error (see :func:`stops`), and no file is linted.
+        """
         warning = warning.format(root=result.root)
+        if warning.startswith("Error: "):
+            self.assertEqual((result.stdout, result.stderr), ("", warning))
+            self.assertEqual(result.exit_code, 2)
+            return
+        self.assertEqual(records(result.stdout), sorted(found(r, path) for r in rules))
         self.assertEqual(result.stderr, warning + summary(rules))
         self.assertEqual(result.exit_code, 1 if rules else 0)
 
@@ -318,7 +336,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         only_root, r, no_sub = (
             {"rules.py": BAD_PY},
             root(".rules"),
-            no_import(".rules", FROM_SUB),
+            stops(no_import(".rules", FROM_SUB), config="sub/pyproject.toml"),
         )
         cases = (
             # (label, config, files, path, rules, warning)
@@ -343,7 +361,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         in_root = {"rules.py": BAD_PY, "sub/rules.py": UGLY_PY}
         sub_off = {"sub/pyproject.toml": toml(names("disable", ".rules"))}
         only_root, r = {"rules.py": BAD_PY}, root(".rules")
-        no_sub = no_import(".rules", FROM_SUB)
+        no_sub = stops(no_import(".rules", FROM_SUB), "disable", "sub/pyproject.toml")
         cases = (
             # (label, config, files, path, rules, warning)
             ("root and sub", r, sub | in_root, "sub/t.py", (BAD, UGLY), ""),
@@ -370,19 +388,19 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
 
     def test_relative_import_above_the_config_directory(self) -> None:
         # The new loader stops ".." at the config directory (#21): the import
-        # fails, the rules do not load, and a warning tells why. The libcst
-        # engine let ".." reach the `fixit` package.
+        # fails, and the error tells why. The libcst engine let ".." reach the
+        # `fixit` package.
         above = importing(f"from ..core import rule\n\nMESSAGE = {MESSAGE[BAD]!r}")
         result = lint(root(".rules"), WORDING | {"rules.py": above})
         error = "ImportError: attempted relative import beyond top-level package"
-        self.assert_lint(result, (), failed(".rules", error))
+        self.assert_lint(result, (), stops(failed(".rules", error, FROM_ROOT)))
 
     def test_installed_rules(self) -> None:
         cases = (
             ("cookie.rules", (BAD, UGLY), ""),
             (f"cookie.rules:{BAD}", (BAD,), ""),
-            ("nope.rules", (), no_import("nope.rules")),
-            ("cookie.rules:Nope", (), no_rule("cookie.rules:Nope")),
+            ("nope.rules", (), stops(no_import("nope.rules"))),
+            ("cookie.rules:Nope", (), stops(no_rule("cookie.rules:Nope"))),
         )
         for enable, rules, warning in cases:
             with self.subTest(enable):
@@ -396,7 +414,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             "src/kettle/rules.py": importing("from kettle.wording import MESSAGE"),
         }
         absolute = WORDING | {"rules.py": importing("from wording import MESSAGE")}
-        no_kettle = no_import("kettle.rules")
+        no_kettle = stops(no_import("kettle.rules"))
         cases = (
             # (label, value, files, enable, rules, warning)
             ("not set", None, KETTLE, "kettle.rules", (), no_kettle),
@@ -459,43 +477,35 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
 
     def test_enable_root_import_of_another_root(self) -> None:
         result = self.run_two_roots("spoon.rules")
-        # a/ is not on sys.path for b/t.py.
-        self.assertEqual(result.stdout, found(BAD, "a/t.py"))
-        one = "1 file with errors, 1 auto-fix available, 1 fix applied"
-        self.assertEqual(result.stderr, no_import("spoon.rules") + TWO.format(one))
-        self.assertEqual(result.exit_code, 0)
+        # a/ is not on sys.path for b/t.py. No file is fixed (#40).
+        error = no_import("spoon.rules")
+        self.assert_lint(result, (), stops(error, config="b/pyproject.toml"))
+        self.assertEqual(result.files["a/t.py"], SOURCE)
 
     def test_module_imported_for_another_root(self) -> None:
         # The new loader does not use a module imported for another root (#21):
-        # b/t.py logs a warning and runs no rule. The libcst engine ran, for
+        # an error, and no file is fixed (#40). The libcst engine ran, for
         # b/t.py, the rules that a/t.py imported first.
         result = self.run_two_roots("kettle.rules")
-        self.assertEqual(result.stdout, found(BAD, "a/t.py"))
-        other = f"imported from another root, {result.root}/a"
-        one = "1 file with errors, 1 auto-fix available, 1 fix applied"
-        warning = failed(
-            "kettle.rules",
-            f"CollectionError: could not import rule(s) kettle.rules: {other}",
-        )
-        self.assertEqual(result.stderr, warning + TWO.format(one))
-        self.assertEqual(result.exit_code, 0)
+        error = failed("kettle.rules", "imported from another root, {root}/a")
+        self.assert_lint(result, (), stops(error, config="b/pyproject.toml"))
+        self.assertEqual(result.files["a/t.py"], SOURCE)
 
     def test_rules_in_the_repo_that_fail_to_load(self) -> None:
         broken, boom = "def f(:\n", 'raise RuntimeError("boom")\n'
         nope = no_rule(".rules:Nope", IN_ROOT)
-        syntax = failed(".rules", syntax_error(broken, "rules.py"))
+        syntax = failed(".rules", syntax_error(broken, "rules.py"), FROM_ROOT)
         cases = (
-            # (label, rules.py, enable, warning)
+            # (label, rules.py, enable, error)
             ("no module", None, ".nope", no_import(".nope", FROM_ROOT)),
             ("no rule of the name", BOTH_PY, ".rules:Nope", nope),
-            ("raises", boom, ".rules", failed(".rules", "RuntimeError: boom")),
+            ("raises", boom, ".rules", failed(".rules", "RuntimeError: boom", FROM_ROOT)),
             ("syntax error", broken, ".rules", syntax),
-        )
-        for label, module, enable, warning in cases:
+        )  # fmt: skip
+        for label, module, enable, error in cases:
             with self.subTest(label):
                 result = lint(root(enable), {"rules.py": module} if module else {})
-                # NOTE: a rule that fails to load only logs a warning.
-                self.assert_lint(result, (), warning)
+                self.assert_lint(result, (), stops(error))
 
     def test_why_rules_in_the_repo_fail_to_load(self) -> None:
         dependency = "import nope_dependency\n" + BAD_PY
@@ -503,9 +513,9 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
 
         def missing(module: str) -> str:
             error = f"ModuleNotFoundError: No module named {module!r}"
-            return no_import(".rules", f"{FROM_ROOT}: {error}")
+            return stops(no_import(".rules", f"{FROM_ROOT}: {error}"))
 
-        no_rules = "WARNING:fixit.config:No rules in '.rules'" + FROM_ROOT + "\n"
+        no_rules = stops(f"no rules in .rules{FROM_ROOT}")
         # The libcst engine did not find the name that its output shows, gave
         # no error of the import that failed, and nothing for a module without
         # rules (#21).
@@ -656,7 +666,8 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         # `fixit test` exits with 5 when no test ran, as unittest and pytest do
         # (#21). The libcst engine exited with 0.
         result = run({"rules.py": BOTH_PY}, ["test", ".rules:Nope"])
-        warning = no_rule(".rules:Nope", IN_ROOT).format(root=result.root)
+        error = no_rule(".rules:Nope", IN_ROOT).format(root=result.root)
+        warning = f"WARNING:fixit.config:Failed to load rules '.rules': CollectionError: {error}\n"
         self.assertEqual(outcome(result.stderr), ([warning], footer(0, "NO TESTS RAN")))
         self.assertEqual(result.exit_code, 5)
 

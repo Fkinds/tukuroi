@@ -112,49 +112,57 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         )
 
     def test_unknown_rule_name(self) -> None:
-        log = "WARNING:fixit.config:Failed to load rules"
-        nope = f"{log} 'fixit.rules': CollectionError: could not find rule fixit.rules:Nope\n"
+        # An error of the config that names the rule, with the key, before any
+        # file is linted (#40). It was a warning that named the module, and
+        # the other rules ran.
+        nope = "could not find rule fixit.rules:Nope"
+        sub = 'overrides (path = "sub"):'
         cases = (
-            (
-                "enable",
-                (f"disable = [{ALL}]", f'enable = [{SI_}, "fixit.rules:Nope"]'),
-                nope,
-                (SI,),
-            ),
-            (
-                "enable only it",
-                (f"disable = [{ALL}]", 'enable = ["fixit.rules:Nope"]'),
-                nope,
-                (),
-            ),
-            (
-                "disable",
-                (f'disable = [{ALL}, "fixit.rules:Nope"]', f"enable = [{SI_}]"),
-                nope,
-                (SI,),
-            ),
-            (
-                "Rule suffix",
-                (f"disable = [{ALL}]", f'enable = [{SI_}, "fixit.rules:{NA}Rule"]'),
-                f"{log} 'fixit.rules': CollectionError: could not find rule fixit.rules:{NA}Rule\n",
-                (SI,),
-            ),
-            (
-                "module",
-                (f"disable = [{ALL}]", f'enable = [{SI_}, "fixit.nope"]'),
-                f"{log} 'fixit.nope': CollectionError: could not import rule(s) fixit.nope\n",
-                (SI,),
-            ),
-        )
-        for label, lines, warning, rules in cases:
+            # (label, lines of pyproject.toml, error)
+            ("enable", (f"disable = [{ALL}]", f'enable = [{SI_}, "fixit.rules:Nope"]'), f"enable: {nope}"),
+            ("enable only it", (f"disable = [{ALL}]", 'enable = ["fixit.rules:Nope"]'), f"enable: {nope}"),
+            ("disable", (f'disable = [{ALL}, "fixit.rules:Nope"]', f"enable = [{SI_}]"), f"disable: {nope}"),
+            ("Rule suffix", (f'enable = ["fixit.rules:{NA}Rule"]',), f"enable: could not find rule fixit.rules:{NA}Rule"),
+            ("module", (f'enable = [{SI_}, "fixit.nope"]',), "enable: could not import rule(s) fixit.nope"),
+            # The override does not apply to t.py, but its rules are loaded.
+            ("override", (override("sub", 'disable = ["fixit.rules:Nope"]'),), f"{sub} disable: {nope}"),
+            # The first error, in the order of the file.
+            ("first", ('disable = ["fixit.nope"]', 'enable = ["fixit.rules:Nope"]'), "disable: could not import rule(s) fixit.nope"),
+        )  # fmt: skip
+        for label, lines, error in cases:
             with self.subTest(label):
                 files = {"pyproject.toml": toml(ROOT, *lines), "t.py": SOURCE}
                 result = invoke(files, ["lint", "t.py"])
-                expected = "".join(line("t.py", r, POSITION[r]) for r in rules)
-                self.assertEqual(result.stdout, expected)
-                # NOTE: an unknown rule only logs a warning, and the other rules run.
-                self.assertEqual(result.stderr, warning + SUMMARY[rules])
-                self.assertEqual(result.exit_code, 1 if rules else 0)
+                self.assertEqual(result.stderr, f"Error: pyproject.toml: {error}\n")
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.exit_code, 2)
+
+    def test_unknown_rule_name_in_the_configs_of_the_files(self) -> None:
+        # The configs of all the files are loaded before any file is linted
+        # (#40): in the order of the files, and for a file, from the root
+        # config inward.
+        root = toml(ROOT, 'enable = ["fixit.rules:Nope"]')
+        sub = toml('enable = ["fixit.nope"]')
+        nope = "pyproject.toml: enable: could not find rule fixit.rules:Nope"
+        sub_nope = "sub/pyproject.toml: enable: could not import rule(s) fixit.nope"
+        cases = (
+            # (label, configs, paths, error)
+            ("root config, then sub", {"pyproject.toml": root, "sub/pyproject.toml": sub}, ["sub/t.py"], nope),
+            ("a file in sub", {"pyproject.toml": ONLY_SI, "sub/pyproject.toml": sub}, ["t.py", "sub/t.py"], sub_nope),
+            ("the first file first", {"pyproject.toml": ONLY_SI, "sub/pyproject.toml": sub, "a/pyproject.toml": root}, ["sub/t.py", "a/t.py"], sub_nope),
+        )  # fmt: skip
+        for label, configs, paths, error in cases:
+            with self.subTest(label):
+                files = {
+                    **configs,
+                    "t.py": SOURCE,
+                    "a/t.py": SOURCE,
+                    "sub/t.py": SOURCE,
+                }
+                result = invoke(files, ["lint", *paths])
+                self.assertEqual(result.stderr, f"Error: {error}\n")
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.exit_code, 2)
 
     def test_overrides(self) -> None:
         base = toml(ROOT, f"disable = [{ALL}]", f"enable = [{SI_}]")

@@ -13,8 +13,9 @@ from typing import (
     Any,
 )
 
-from .core.loader import RuleName, import_rules
+from .core.loader import CollectionError, RuleName, import_rules
 from .core.loader import collect_rules as collect_core_rules
+from .core.loader import load as load_core_rules
 from .core.rule import Rule
 from .ftypes import (
     Config,
@@ -71,19 +72,84 @@ def load_rules(config: Config) -> tuple[type[Rule], ...]:
     """
     The rules that ``config`` enables, sorted by name: the built-in rules in
     ``fixit.rules``, and the custom rules. A module that cannot be imported is a
-    warning.
+    warning: :func:`check_rules` makes it an error of the config that names it.
     """
-    root_import = None
-    if config.enable_root_import:
-        root_import = config.root
-        if isinstance(config.enable_root_import, Path):
-            root_import = config.root / config.enable_root_import
     return collect_core_rules(
         [rule_name(rule) for rule in config.enable],
         [rule_name(rule) for rule in config.disable],
-        root_import=root_import,
+        root_import=root_import_of(config),
         custom_rules=config.custom_rules,
     )
+
+
+def root_import_of(config: Config) -> Path | None:
+    """The path that ``enable-root-import`` of ``config`` puts on ``sys.path``."""
+    if not config.enable_root_import:
+        return None
+    if isinstance(config.enable_root_import, Path):
+        return config.root / config.enable_root_import
+    return config.root
+
+
+# The configs whose rules were loaded in this process, with how: each is
+# checked once (#40).
+_CHECKED: set[tuple[object, ...]] = set()
+
+
+def check_rules(
+    raw_configs: Sequence[RawConfig], config: Config, options: Options | None = None
+) -> None:
+    """
+    Load the rules that each of ``raw_configs``, the configs merged into
+    ``config``, names, from the root config inward, and the first one that
+    cannot be loaded raises a :class:`ConfigError` that names the key (#40).
+    The rules of all the overrides are loaded, whether or not they apply to the
+    file. With ``--rules``, the rules of the configs are not used, and not
+    loaded. The rules skipped with custom rules turned off are not loaded.
+    """
+    if options and options.rules:
+        return
+    how = (root_import_of(config), config.custom_rules)
+    for raw in reversed(raw_configs):
+        if (*how, raw.path, repr(raw.data)) in _CHECKED:
+            continue
+        for key, names in named_rules(raw.data):
+            for name in names:
+                rule = parse_rule(name, raw.path.parent, raw)
+                if error := load_error(rule, config):
+                    raise ConfigError(f"{key}: {error}", config=raw)
+        _CHECKED.add((*how, raw.path, repr(raw.data)))
+
+
+def load_error(rule: QualifiedRule, config: Config) -> str | None:
+    """Why the rules of ``rule`` cannot be loaded for ``config``, if they cannot."""
+    if not config.custom_rules:
+        if not rule.builtin:
+            return None
+        root_import = None  # As collect_rules: for custom rules only.
+    else:
+        root_import = root_import_of(config)
+    try:
+        load_core_rules(rule_name(rule), root_import)
+    except CollectionError as error:
+        return str(error)
+    return None
+
+
+def named_rules(data: dict[str, Any]) -> Iterator[tuple[str, list[str]]]:
+    """
+    The rules that ``data``, the table ``[tool.fixit]`` of a config, names, in
+    the order of the file: by key, with the override before the key in one.
+    """
+    for key, value in data.items():
+        if key in ("enable", "disable"):
+            yield key, value
+        elif key == "overrides":
+            for override in value:
+                where = override_where(override["path"])
+                for name, rules in override.items():
+                    if name in ("enable", "disable"):
+                        yield where + name, rules
 
 
 def rule_name(rule: QualifiedRule) -> RuleName:
@@ -302,11 +368,16 @@ def override_errors(value: object) -> Iterator[str]:
         if path == "":
             yield "overrides: path: must not be an empty string"
             return
-        # A JSON string is a TOML basic string.
-        where = f"overrides (path = {json.dumps(path, ensure_ascii=False)}): "
+        where = override_where(path)
         for key, rules in override.items():
             if key in ("enable", "disable"):
                 yield from (where + error for error in rule_errors(key, rules))
+
+
+def override_where(path: str) -> str:
+    """The start of a message about the override of ``path``, as TOML writes it."""
+    # A JSON string is a TOML basic string.
+    return f"overrides (path = {json.dumps(path, ensure_ascii=False)}): "
 
 
 def parse_rule(rule: str, root: Path, config: RawConfig | None = None) -> QualifiedRule:
@@ -370,7 +441,8 @@ def merge_configs(
         if root is None:
             root = config.path.parent
 
-        data = config.data
+        # A copy: the configs are left as they were read, for check_rules.
+        data = dict(config.data)
         if data.pop("root", False):
             root = config.path.parent
 
@@ -421,9 +493,12 @@ def generate_config(
     root: Path | None = None,
     *,
     options: Options | None = None,
+    check: bool = False,
 ) -> Config:
     """
-    Given a file path, walk upwards looking for and applying cascading configs
+    Given a file path, walk upwards looking for and applying cascading configs.
+    With ``check``, the rules that the configs name are loaded, and the first one
+    that cannot be raises a :class:`ConfigError` (see :func:`check_rules`).
     """
     path = (path or Path.cwd()).resolve()
 
@@ -451,15 +526,18 @@ def generate_config(
         if options.output_template:
             config.output_template = options.output_template
 
+    if check:
+        check_rules(raw_configs, config, options)
+
     return config
 
 
 def check_configs(paths: Sequence[Path], options: Options | None = None) -> None:
     """
     Read the config of the directory of each file in ``paths``, in their order
-    and once for each directory, before any file is linted: the first error is
-    raised as a :class:`ConfigError` (#40). With ``--config-file``, that config
-    is read once.
+    and once for each directory, and load the rules that it names, before any
+    file is linted: the first error is raised as a :class:`ConfigError` (#40).
+    With ``--config-file``, that config is read once.
     """
     if options and options.config_file:
         paths = paths[:1]
@@ -468,7 +546,7 @@ def check_configs(paths: Sequence[Path], options: Options | None = None) -> None
         directory = path.resolve().parent
         if directory not in seen:
             seen.add(directory)
-            generate_config(directory, options=options)
+            generate_config(directory, options=options, check=True)
 
 
 def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
