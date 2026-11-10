@@ -350,7 +350,9 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             with self.subTest(label):
                 self.assert_lint(lint(config, files, path), rules, warning, path)
         with self.subTest("root config, cwd sub"):
-            result = lint(r, in_root, cwd="sub")
+            # In a repository: the search goes above the current directory up
+            # to its root, not further (#13).
+            result = lint(r, in_root | {".git": "gitdir: elsewhere\n"}, cwd="sub")
             self.assert_lint(result, (BAD,))
 
     def test_rules_in_the_repo_of_root_and_sub_configs(self) -> None:

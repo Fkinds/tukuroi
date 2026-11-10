@@ -12,9 +12,15 @@ over values from files "further" away.
 
 When determining the configuration to use for a given path, Fixit will continue
 looking upward in the filesystem until it reaches either the root of the
-filesystem, or a configuration file is found with :attr:`root` set to ``True``.
+repository, or a configuration file is found with :attr:`root` set to ``True``.
 Fixit will then read configuration values from each file, from further to
 nearest, and merge or override values as appropriate.
+
+The root of the repository is the nearest directory with ``.git`` (a directory,
+or a file in a worktree or a submodule) or ``.hg``. Outside a repository, Fixit
+looks up to the current directory if the path is in it, or else only in the
+directory of the path. A configuration file above that is not read: pass it
+with ``--config-file`` to use it.
 
 This behavior enables a monorepo to provide a baseline configuration, while
 individual projects can choose to either add to that baseline, or define their
@@ -40,7 +46,8 @@ stops at the first error.
     Marks this file as a root of the configuration hierarchy.
 
     If set to ``true``, Fixit will not visit any configuration files further up
-    the filesystem hierarchy.
+    the filesystem hierarchy. Fixit does not look above the root of the
+    repository in any case.
 
 .. attribute:: enable
     :type: list[str]
@@ -218,8 +225,9 @@ whether or not they apply to a file. The rules checked by
 ``fixit validate-config`` are imported too.
 
 Fixit looks for configuration files from each linted file up to the root of the
-filesystem (unless a file sets :attr:`root`), so a configuration file in a
-parent directory of the repo can also enable rules.
+repository, or outside one, up to the current directory. A configuration file
+in a parent directory of the repo, which someone else may have written, is not
+read.
 
 Only run Fixit with custom rules on code whose configuration you trust. For
 other code, turn custom rules off with ``--no-custom-rules``, or with the

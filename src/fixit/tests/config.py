@@ -35,6 +35,8 @@ class ConfigTest(TestCase):
         self.outer = self.tdp / "outer"
         self.inner = self.tdp / "outer" / "inner"
         self.inner.mkdir(parents=True)
+        # The root of a repository: the configs are searched up to it (#13).
+        (self.tdp / ".git").mkdir()
 
         (self.tdp / "pyproject.toml").write_text(
             dedent(
@@ -146,6 +148,42 @@ class ConfigTest(TestCase):
             with self.subTest(name):
                 actual = config.locate_configs(path, root)
                 self.assertListEqual(expected, actual)
+
+    def test_search_root(self) -> None:
+        # The nearest root of a repository; outside one, the current directory
+        # if the path is in it, or else the directory itself (#13).
+        cases = (
+            # (label, marker, cwd, root)
+            (".git directory", ".git/", ".", "a"),
+            (".git file", ".git", ".", "a"),
+            (".hg", ".hg/", ".", "a"),
+            ("no repository, in cwd", None, "a", "a"),
+            ("no repository, cwd deeper", None, "a/b/c", "a/b/c"),
+            ("no repository, not in cwd", None, "elsewhere", "a/b/c"),
+        )
+        for label, marker, cwd, root in cases:
+            with self.subTest(label), TemporaryDirectory() as td:
+                top = Path(td).resolve()
+                (top / "a/b/c").mkdir(parents=True)
+                (top / "elsewhere").mkdir()
+                if marker and marker.endswith("/"):
+                    (top / "a" / marker).mkdir()
+                elif marker:
+                    (top / "a" / marker).write_text("gitdir: elsewhere\n")
+                with chdir(top / cwd):
+                    self.assertEqual(config.search_root(top / "a/b/c"), top / root)
+
+    def test_locate_configs_up_to_the_search_root(self) -> None:
+        # A config above the root of the repository is not found (#13).
+        with TemporaryDirectory() as td:
+            top = Path(td).resolve()
+            (top / "repo/sub").mkdir(parents=True)
+            (top / "repo/.git").mkdir()
+            for config_dir in (top, top / "repo", top / "repo/sub"):
+                (config_dir / "pyproject.toml").write_text("[tool.fixit]\n")
+            found = config.locate_configs(top / "repo/sub/t.py")
+            expected = [top / "repo/sub/pyproject.toml", top / "repo/pyproject.toml"]
+            self.assertEqual(found, expected)
 
     def test_read_configs(self) -> None:
         # in-out priority order
