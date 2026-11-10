@@ -3,7 +3,9 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import errno
 import logging
+import os
 import sys
 import time
 import traceback
@@ -14,7 +16,6 @@ from pathlib import Path
 import click
 import trailrunner
 from moreorless import unified_diff
-from moreorless.click import echo_color_precomputed_diff
 
 from . import pool
 from .config import ConfigError, check_configs, generate_config, load_rules
@@ -120,7 +121,7 @@ def print_result(
         click.secho(line, fg="yellow", err=stderr)
 
         if show_diff and result.violation.diff:
-            echo_color_precomputed_diff(result.violation.diff)
+            _echo_diff(result.violation.diff, err=stderr)
         return True
 
     elif result.error:
@@ -138,6 +139,25 @@ def print_result(
     else:
         LOG.debug("%s: clean", path)
         return False
+
+
+# The color and boldness of the lines of a diff, as moreorless.click prints
+# them; it prints to stdout only, which is the fixed source of `fix -` (#40).
+_DIFF_STYLES = (
+    ("---", None, True),
+    ("+++", None, True),
+    ("@@", "cyan", None),
+    ("-", "red", None),
+    ("+", "green", None),
+)
+
+
+def _echo_diff(diff: str, *, err: bool = False) -> None:
+    """``diff`` in colors, on stderr if ``err``."""
+    for line in diff.splitlines(True):
+        styles = (s[1:] for s in _DIFF_STYLES if line.startswith(s[0]))
+        fg, bold = next(styles, (None, None))
+        click.secho(line, nl=False, err=err, fg=fg, bold=bold)
 
 
 def fixit_bytes(
@@ -235,7 +255,8 @@ def _violation(path: Path, source: Source, report: Report) -> Violation:
     diff = ""
     if report.edits:
         after = apply_fixes(source.text, [report.edits]).text
-        diff = unified_diff(source.text, after, path.name, n=1)
+        # The path as the violation shows it (#40), with "/" as a diff has it.
+        diff = unified_diff(source.text, after, _shown(path).as_posix(), n=1)
     where = Range(report.position, end)
     return Violation(report.rule, where, report.message, bool(report.edits), diff)
 
@@ -373,6 +394,10 @@ def fixit_paths(
     another path is skipped with a warning. The CLI refuses both, as usage
     errors (#40).
 
+    A path that does not exist raises a :class:`FileNotFoundError` before the
+    first result. A file given by name is linted though ``.gitignore`` has it,
+    and a file given twice, by name or in a directory, is linted once (#40).
+
     .. note::
 
         Currently does not support applying individual fixes when ``parallel=True``,
@@ -405,8 +430,18 @@ def fixit_paths(
                 stdin_path = path
             else:
                 raise ValueError("too many stdin paths")
+        elif not path.exists():
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(path))
+        elif path.is_file():
+            expanded_paths.append(path)
         else:
             expanded_paths.extend(trailrunner.walk(path))
+
+    # Each file once, where it comes first.
+    unique: dict[Path, Path] = {}
+    for path in expanded_paths:
+        unique.setdefault(path.resolve(), path)
+    expanded_paths = list(unique.values())
 
     check_configs([stdin_path] if is_stdin else expanded_paths, options)
 

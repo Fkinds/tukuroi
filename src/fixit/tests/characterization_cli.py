@@ -752,10 +752,12 @@ class CliCharacterizationTest(CharacterizationTestCase):
             ("file, dir", ["a.py", "sub/deep"], ".", ("a.py", "sub/deep/c.py"), two),
             ("named .txt", ["d.txt"], ".", ("d.txt",), one),
             ("named, no suffix", ["f"], ".", ("f",), one),
-            ("missing, file", ["nope.py", "a.py"], ".", ("a.py",), one),
-            # NOTE: a file given twice is reported twice but counted once.
-            ("same file twice", ["a.py", "a.py"], ".", ("a.py", "a.py"), one),
-            ("file in dir", ["sub", "sub/b.py"], ".", (*sub, "sub/b.py"), two),
+            # A file given twice is linted once (#40); the libcst engine
+            # reported it twice, and counted it once.
+            ("same file twice", ["a.py", "a.py"], ".", ("a.py",), one),
+            ("same file, 2 names", ["a.py", "./sub/../a.py"], ".", ("a.py",), one),
+            ("file in dir", ["sub", "sub/b.py"], ".", sub, two),
+            ("dir, then file", ["sub/b.py", "sub"], ".", sub, two),
         )
         for label, paths, cwd, reported, summary in cases:
             with self.subTest(label):
@@ -764,15 +766,26 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stderr, f"🛠️  {summary} 🛠️\n")
                 self.assertEqual(result.exit_code, 1)
 
-    def test_missing_path_is_skipped(self) -> None:
+    def test_missing_path_is_a_usage_error(self) -> None:
+        # Before any file is linted, as with `debug` (#40). The libcst engine
+        # skipped it without a message.
+        cases = (
+            ("missing", ["nope.py"]),
+            ("missing, file", ["nope.py", "a.py"]),
+            ("file, missing", ["a.py", "nope.py"]),
+        )
         for command in (["lint"], ["fix", "--automatic"]):
-            with self.subTest(command[0]):
-                files = {"pyproject.toml": CONFIG, "a.py": UNFIXABLE}
-                result = invoke(files, [*command, "nope.py"])
-                # NOTE: a missing path is skipped without a message.
-                self.assertEqual(result.stdout, "")
-                self.assertEqual(result.stderr, NONE)
-                self.assertEqual(result.exit_code, 0)
+            for label, paths in cases:
+                with self.subTest(command[0], paths=label):
+                    files = {"pyproject.toml": CONFIG, "a.py": FIXABLE}
+                    result = invoke(files, [*command, *paths])
+                    # The usage lines above it come from click.
+                    error = "Path 'nope.py' does not exist."
+                    error = f"\nError: Invalid value for '[PATHS]...': {error}\n"
+                    self.assertTrue(result.stderr.endswith(error), result.stderr)
+                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(result.exit_code, 2)
+                    self.assertEqual(result.files, files)
 
     def test_paths_in_gitignore(self) -> None:
         files = {
@@ -784,9 +797,12 @@ class CliCharacterizationTest(CharacterizationTestCase):
         }
         cases = (
             (".", line("a.py", SI), DIRTY, 1),
-            # NOTE: a file given by name is skipped without a message too.
-            ("ign.py", "", NONE, 0),
-            ("build/x.py", "", NONE, 0),
+            # A file given by name is linted (#40); the libcst engine skipped
+            # it without a message.
+            ("ign.py", line("ign.py", SI), DIRTY, 1),
+            ("build/x.py", line("build/x.py", SI), DIRTY, 1),
+            # A directory is walked as before: build/ and what is in it match.
+            ("build", "", NONE, 0),
         )
         for path, stdout, stderr, exit_code in cases:
             with self.subTest(path):

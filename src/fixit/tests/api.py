@@ -15,12 +15,16 @@ process of it that ends.
 import io
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from ..api import fixit_bytes, fixit_file, fixit_paths
+import click
+from click.testing import CliRunner
+from moreorless.click import echo_color_precomputed_diff
+
+from ..api import _echo_diff, fixit_bytes, fixit_file, fixit_paths
 from ..config import ConfigError, RulesOptionError, generate_config
 from ..core import loader
 from ..core.loader import load as load_core_rules
@@ -48,8 +52,10 @@ NOPE = '[tool.fixit]\nroot = true\nenable = ["fixit.rules:Nope"]\n'
 
 SOURCE = "x = 1\nself.assertTrue(a in b)\nif True:\n    pass\n"
 FIXED = "x = 1\nself.assertIn(a, b)\nif True:\n    pass\n"
+# The path of the file as the violation shows it, relative to the current
+# directory (#40).
 DIFF = (
-    "--- a/t.py\n+++ b/t.py\n@@ -1,3 +1,3 @@\n x = 1\n"
+    "--- a/repo/t.py\n+++ b/repo/t.py\n@@ -1,3 +1,3 @@\n x = 1\n"
     "-self.assertTrue(a in b)\n+self.assertIn(a, b)\n if True:\n"
 )
 # A rule whose fix never converges: each round adds a line at the start.
@@ -162,7 +168,7 @@ class FixitBytesTest(TestCase):
         loader._WARNED.clear()
 
     def test_violations(self) -> None:
-        root = Path("/repo")
+        root = Path.cwd() / "repo"
         results, returned = run(config(root, UI, SI), SOURCE)
         message = MESSAGES[UI].removesuffix(" (has autofix)")
         ui = Violation(UI, Range(Position(2, 0), Position(2, 23)), message, True, DIFF)
@@ -413,6 +419,18 @@ class CommandTest(TestCase):
                 self.assertEqual(last, summary.format(counts))
                 self.assertEqual(code, exit_code)
 
+    def test_diff_colors(self) -> None:
+        # The colors of moreorless.click, which prints to stdout only: on
+        # stderr too, for `fix --diff -` (#40).
+        def run(echo: Callable[[], None]) -> tuple[str, str]:
+            result = CliRunner().invoke(click.command()(echo), color=True)
+            return result.stdout, result.stderr
+
+        colored, _ = run(lambda: echo_color_precomputed_diff(DIFF))
+        self.assertIn("\x1b[31m-self.assertTrue(a in b)", colored)
+        self.assertEqual(run(lambda: _echo_diff(DIFF)), (colored, ""))
+        self.assertEqual(run(lambda: _echo_diff(DIFF, err=True)), ("", colored))
+
 
 class FixitPathsTest(TestCase):
     def test_invalid_config(self) -> None:
@@ -446,6 +464,35 @@ class FixitPathsTest(TestCase):
                 results = list(fixit_file(Path("sub/t.py")))
                 error = Error("fixit.config.ConfigError", shown)
                 self.assertEqual(results, [Result(root / "sub/t.py", None, error)])
+
+    def test_paths(self) -> None:
+        # (#40) A missing path raises before the first result, a file given by
+        # name is linted though .gitignore has it, and a file given twice is
+        # linted once, where it comes first.
+        tree = {
+            "pyproject.toml": "[tool.fixit]\nroot = true\n",
+            ".gitignore": "ign.py\n",
+            "a/t.py": SOURCE,
+            "a/u.py": SOURCE,
+            "ign.py": SOURCE,
+        }
+        with files(tree) as root, chdir(root):
+            results = fixit_paths([Path("a/t.py"), Path("nope.py")], parallel=False)
+            with self.assertRaises(FileNotFoundError) as caught:
+                next(results)
+            self.assertEqual(caught.exception.filename, "nope.py")
+
+            def linted(*paths: str) -> list[Path]:
+                results = fixit_paths(map(Path, paths), parallel=False)
+                return list(dict.fromkeys(r.path for r in results))
+
+            self.assertEqual(linted("ign.py"), [root / "ign.py"])
+            # In a directory, .gitignore is used, and the order is that of the
+            # file system.
+            self.assertEqual(sorted(linted(".")), [root / "a/t.py", root / "a/u.py"])
+            t, u = root / "a/t.py", root / "a/u.py"
+            self.assertEqual(linted("a/u.py", "a", "./a/t.py"), [u, t])
+            self.assertEqual(linted("a/t.py", "a/u.py", "a/t.py"), [t, u])
 
     def test_configs_read_once_for_each_directory(self) -> None:
         tree = {

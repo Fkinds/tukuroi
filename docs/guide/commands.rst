@@ -71,13 +71,20 @@ first path, then the second given path will be used for configuration lookup
 and error messages, and the input read from STDIN. No other path may follow,
 and "-" after another path is a usage error.
 
+A path that does not exist is a usage error, before any file is linted. A
+directory is walked for Python files, without the files that ``.gitignore``
+has. A file given by name is linted, though ``.gitignore`` has it. A file
+given twice, by name or in a directory, is linted once.
+
 .. code:: console
 
     $ fixit lint [--diff] [PATH ...]
 
 .. attribute:: --diff / -d
 
-    Show suggested fixes, in unified diff format, when available.
+    Show suggested fixes, in unified diff format, when available. The diff
+    names the file as the lint error does: relative to the current directory,
+    or absolute outside it.
 
 The exit code is 0 when no file has a lint error, 1 when a file has one, and 2
 when Fixit could not lint a file (a syntax error, an exception in a rule, or a
@@ -90,7 +97,9 @@ configuration of the file that Fixit cannot use); 3 for both.
 Lint one or more paths, and apply suggested fixes. If "-" is given as the
 first path, then the second given path will be used for configuration lookup,
 the input read from STDIN, and the fixed output printed to STDOUT (ignoring
-:attr:`--interactive`). As with ``lint``, no other path may follow.
+:attr:`--interactive`); the lint errors, and the diffs of ``--diff``, go to
+STDERR. As with ``lint``, no other path may follow, and the paths are found the
+same way.
 
 .. code:: console
 

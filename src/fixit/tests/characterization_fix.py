@@ -359,8 +359,11 @@ ONE_CLASS = (
 DIFF_SOURCE = "x = 1\nself.assertTrue(a in b)\ny = 2\n"
 
 
-def diff(*lines: str) -> str:
-    return "--- a/t.py\n+++ b/t.py\n" + "".join(f"{x}\n" for x in lines)
+def diff(*lines: str, path: str = "t.py") -> str:
+    head = f"--- a/{path}\n+++ b/{path}\n"
+    if path.startswith("/"):
+        head = f"--- {path}\n+++ {path}\n"
+    return head + "".join(f"{x}\n" for x in lines)
 
 
 DIFF = diff(
@@ -629,12 +632,28 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 1)
                 self.assertEqual(result.files, files)
 
-    def test_diff_of_file_in_sub_directory(self) -> None:
+    def test_diff_names_the_file_as_the_violation(self) -> None:
+        # The path of the violation (#40): the libcst engine gave the name of
+        # the file only ("a/t.py").
+        lines = DIFF.splitlines()[2:]
         files = {"pyproject.toml": config(UI), "sub/t.py": DIFF_SOURCE}
-        result = invoke(files, ["lint", "--diff", "sub/t.py"])
-        # NOTE: the diff names the file "t.py", not "sub/t.py".
-        self.assertEqual(result.stdout, line("sub/t.py", UI, "2:0") + DIFF)
-        self.assertEqual(result.exit_code, 1)
+        cases = (
+            # (label, cwd, args, path)
+            ("in a directory", ".", ["sub/t.py"], "sub/t.py"),
+            ("stdin", ".", ["-", "sub/u.py"], "sub/u.py"),
+            # Outside the current directory: absolute, without a/ and b/.
+            ("outside", "sub/deep", ["../t.py"], None),
+        )
+        for label, cwd, args, path in cases:
+            with self.subTest(label):
+                before = {**files, "sub/deep/x": ""}
+                result = invoke(
+                    before, ["lint", "--diff", *args], cwd=cwd, stdin=DIFF_SOURCE
+                )
+                path = path or f"{result.root}/sub/t.py"
+                expected = line(path, UI, "2:0") + diff(*lines, path=path)
+                self.assertEqual(result.stdout, expected)
+                self.assertEqual(result.exit_code, 1)
 
     def test_fix_with_diff(self) -> None:
         result = fix((UI,), DIFF_SOURCE, "--diff")
@@ -692,9 +711,10 @@ class FixCharacterizationTest(CharacterizationTestCase):
     def test_fix_stdin_with_diff(self) -> None:
         files = {"pyproject.toml": config(UI)}
         result = invoke(files, ["fix", "--diff", "-", "t.py"], stdin=DIFF_SOURCE)
-        # NOTE: the diff goes to stdout, before the fixed source.
-        self.assertEqual(result.stdout, DIFF + "x = 1\nself.assertIn(a, b)\ny = 2\n")
-        self.assertEqual(result.stderr, line("t.py", UI, "2:0") + DIRTY_F)
+        # The diff goes to stderr, with the violation (#40): the libcst engine
+        # printed it to stdout, before the fixed source.
+        self.assertEqual(result.stdout, "x = 1\nself.assertIn(a, b)\ny = 2\n")
+        self.assertEqual(result.stderr, line("t.py", UI, "2:0") + DIFF + DIRTY_F)
         self.assertEqual(result.exit_code, 0)
 
     def test_fix_formats_the_whole_file(self) -> None:
