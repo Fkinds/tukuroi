@@ -24,7 +24,6 @@ from .characterization_cli import (
     CharacterizationTestCase,
     invoke,
     line,
-    records,
     toml_error,
 )
 
@@ -327,33 +326,35 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 2)
 
     def test_invalid_value_in_the_config_of_a_file(self) -> None:
-        # An error of the file, without a traceback (#40). The other files are
-        # linted, in the process pool.
+        # The configs of the directories of all the files are read before any
+        # file is linted, and the first error stops there (#40). The libcst
+        # engine linted the other files, and gave sub/t.py the traceback.
         cases = (
             ('enable = ["fixit rules"]', "enable: invalid rule name 'fixit rules'"),
             ("enable = [", toml_error(toml("enable = ["))),
         )
         for value, message in cases:
-            with self.subTest(value):
-                files = {
-                    "pyproject.toml": ONLY_SI,
-                    "sub/pyproject.toml": toml(value),
-                    "t.py": SOURCE,
-                    "sub/t.py": SOURCE,
-                }
-                result = invoke(files, ["lint", "t.py", "sub/t.py"])
-                error = f"sub/t.py: EXCEPTION: sub/pyproject.toml: {message}\n"
-                found = [line("t.py", SI, POSITION[SI]), error]
-                self.assertEqual(records(result.stdout), sorted(found))
-                summary = "🛠️  2 files checked, 2 files with errors 🛠️\n"
-                self.assertEqual(result.stderr, summary)
-                self.assertEqual(result.exit_code, 3)
+            for paths in (["t.py", "sub/t.py"], ["."], ["-", "sub/t.py"]):
+                with self.subTest(value, paths=paths):
+                    files = {
+                        "pyproject.toml": ONLY_SI,
+                        "sub/pyproject.toml": toml(value),
+                        "t.py": SOURCE,
+                        "sub/t.py": SOURCE,
+                    }
+                    result = invoke(files, ["lint", *paths], stdin=SOURCE)
+                    error = f"Error: sub/pyproject.toml: {message}\n"
+                    self.assertEqual(result.stderr, error)
+                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(result.exit_code, 2)
 
     def test_unknown_key(self) -> None:
         warning = "WARNING:fixit.config:unknown configuration option 'bogus'\n"
         cases = (
-            # NOTE: the warning is logged twice.
-            ("in [tool.fixit]", "bogus = 1\n", warning * 2),
+            # NOTE: the warning is logged three times: as the config of the
+            # current directory is read, as the configs are checked before
+            # any file is linted (#40), and as t.py is linted.
+            ("in [tool.fixit]", "bogus = 1\n", warning * 3),
             # NOTE: an unknown key in an override is ignored without a warning.
             ("in overrides", '[[tool.fixit.overrides]]\npath = "."\nbogus = 1\n', ""),
         )

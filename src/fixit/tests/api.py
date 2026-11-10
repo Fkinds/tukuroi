@@ -20,10 +20,20 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from ..api import fixit_bytes, fixit_paths
+from ..api import fixit_bytes, fixit_file, fixit_paths
+from ..config import ConfigError, generate_config
 from ..core import loader
 from ..core.text import Position, Range
-from ..ftypes import STDIN, Config, Error, Metrics, QualifiedRule, Result, Violation
+from ..ftypes import (
+    STDIN,
+    Config,
+    Error,
+    Metrics,
+    Options,
+    QualifiedRule,
+    Result,
+    Violation,
+)
 from ..util import capture, chdir
 from .characterization_cli import invoke, toml_error
 from .characterization_custom_rules import run as run_cli
@@ -393,22 +403,58 @@ class FixitPathsTest(TestCase):
     def test_invalid_config(self) -> None:
         # The config is wrong, not fixit: no traceback (#40).
         cases = (
-            ('enable = ["fixit rules"]', "invalid rule name 'fixit rules'"),
+            ('enable = ["fixit rules"]', "enable: invalid rule name 'fixit rules'"),
             ("enable = [", toml_error("[tool.fixit]\nenable = [\n")),
         )
         for value, message in cases:
-            tree = {"sub/pyproject.toml": f"[tool.fixit]\n{value}\n", "sub/t.py": ""}
-            for paths in (["sub/t.py"], ["-", "sub/t.py"]):
+            tree = {
+                "pyproject.toml": "[tool.fixit]\nroot = true\n",
+                "sub/pyproject.toml": f"[tool.fixit]\n{value}\n",
+                "sub/t.py": "",
+                "t.py": "",
+            }
+            shown = f"sub/pyproject.toml: {message}"
+            for paths in (["t.py", "sub/t.py"], ["."], ["-", "sub/t.py"]):
                 with (
                     self.subTest(value, paths=paths),
                     files(tree) as root,
                     chdir(root),
                     patch("sys.stdin", io.TextIOWrapper(io.BytesIO(b"x = 1\n"))),
                 ):
-                    results = list(fixit_paths(map(Path, paths)))
-                    shown = f"sub/pyproject.toml: {message}"
-                    error = Error("fixit.config.ConfigError", shown)
-                    self.assertEqual(results, [Result(root / "sub/t.py", None, error)])
+                    results = fixit_paths(map(Path, paths))
+                    # Before any file is linted, t.py too.
+                    with self.assertRaises(ConfigError) as caught:
+                        next(results)
+                    self.assertEqual(caught.exception.describe(), shown)
+            # A file linted alone: the error is its result.
+            with self.subTest(value, alone=True), files(tree) as root, chdir(root):
+                results = list(fixit_file(Path("sub/t.py")))
+                error = Error("fixit.config.ConfigError", shown)
+                self.assertEqual(results, [Result(root / "sub/t.py", None, error)])
+
+    def test_configs_read_once_for_each_directory(self) -> None:
+        tree = {
+            "pyproject.toml": "[tool.fixit]\nroot = true\n",
+            "a/t.py": "",
+            "a/u.py": "",
+            "b/t.py": "",
+        }
+        with (
+            files(tree) as root,
+            chdir(root),
+            patch("fixit.config.generate_config", wraps=generate_config) as checked,
+            patch("fixit.api.generate_config", wraps=generate_config) as linted,
+        ):
+            list(fixit_paths([Path("a"), Path("b/t.py")], parallel=False))
+            directories = [call.args[0] for call in checked.call_args_list]
+            self.assertEqual(directories, [root / "a", root / "b"])
+            # And then for each file, as it is linted.
+            self.assertEqual(linted.call_count, 3)
+            # With --config-file, that config is read once.
+            checked.reset_mock()
+            options = Options(config_file=root / "pyproject.toml")
+            list(fixit_paths([Path("a"), Path("b")], options=options, parallel=False))
+            self.assertEqual(checked.call_count, 1)
 
     def test_stdin_paths(self) -> None:
         # The CLI refuses these as usage errors (#40). The API warns about "-"

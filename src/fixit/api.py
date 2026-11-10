@@ -17,7 +17,7 @@ from moreorless import unified_diff
 from moreorless.click import echo_color_precomputed_diff
 
 from . import pool
-from .config import ConfigError, generate_config, load_rules
+from .config import ConfigError, check_configs, generate_config, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
 from .core.rule import Report, Rule
@@ -370,6 +370,11 @@ def fixit_paths(
 
     When a rule ends the process that lints a file (``os._exit``, a crash, a
     kill), that file gets an error, and the other files their results (#94).
+
+    Before the first result, the config of the directory of each file is read
+    (:func:`~fixit.config.check_configs`): a config that fixit cannot use raises
+    a :class:`~fixit.config.ConfigError`, and no file is linted (#40). A file
+    linted alone (:func:`fixit_file`) gets such an error as its result.
     """
     if not paths:
         return
@@ -390,6 +395,8 @@ def fixit_paths(
                 raise ValueError("too many stdin paths")
         else:
             expanded_paths.extend(trailrunner.walk(path))
+
+    check_configs([stdin_path] if is_stdin else expanded_paths, options)
 
     if is_stdin:
         yield from fixit_stdin(

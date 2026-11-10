@@ -51,11 +51,11 @@ The following options are available for all commands:
 
 Any command exits with 2 on a usage error, and on a configuration that Fixit
 cannot use: a file that is not TOML, or an invalid value. The error goes to
-stderr, without a traceback. ``lint`` and ``fix`` read the configuration of the
-current directory, or the one given with ``--config-file``, before any file,
-and stop there. An error in the configuration of a file in another directory is
-an error of that file. No standard defines exit codes other than 0 and nonzero:
-2 is the code of Click and Ruff for these.
+stderr, without a traceback. ``lint`` and ``fix`` read the configurations of
+the current directory and of the directory of each file to lint, or the one
+given with ``--config-file``, before they lint any file, and stop at the first
+error. No standard defines exit codes other than 0 and nonzero: 2 is the code
+of Click and Ruff for these.
 
 ``lint``
 ^^^^^^^^
