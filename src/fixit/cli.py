@@ -79,20 +79,26 @@ def parse_rules(
         raise click.BadParameter(str(error), ctx, param) from error
 
 
-def check_stdin(
+def check_paths(
     ctx: click.Context, param: click.Parameter, value: tuple[Path, ...]
 ) -> tuple[Path, ...]:
     """
     "-" (stdin) comes first, and then at most the name of its file: anything
     else is a usage error. ``fixit_paths`` warns about the one, and raises a
-    ValueError on the other (#40).
+    ValueError on the other (#40). A path that does not exist is a usage error
+    too, as with ``debug`` (#40); the name of the file of stdin is a name only.
     """
     if STDIN in value[1:]:
         message = "'-' (stdin) must be the first path"
         raise click.BadParameter(message, ctx, param)
-    if value[:1] == (STDIN,) and len(value) > 2:
-        message = "only one path may follow '-' (stdin): the name of its file"
-        raise click.BadParameter(message, ctx, param)
+    if value[:1] == (STDIN,):
+        if len(value) > 2:
+            message = "only one path may follow '-' (stdin): the name of its file"
+            raise click.BadParameter(message, ctx, param)
+        return value
+    exists = click.Path(exists=True)
+    for path in value:
+        exists.convert(str(path), param, ctx)
     return value
 
 
@@ -208,7 +214,7 @@ def main(
 @click.pass_context
 @click.option("--diff", "-d", is_flag=True, help="Show diff of suggested changes")
 @click.argument(
-    "paths", nargs=-1, type=click.Path(path_type=Path), callback=check_stdin
+    "paths", nargs=-1, type=click.Path(path_type=Path), callback=check_paths
 )
 def lint(
     ctx: click.Context,
@@ -263,7 +269,7 @@ def lint(
 )
 @click.option("--diff", "-d", is_flag=True, help="show diff even with --automatic")
 @click.argument(
-    "paths", nargs=-1, type=click.Path(path_type=Path), callback=check_stdin
+    "paths", nargs=-1, type=click.Path(path_type=Path), callback=check_paths
 )
 def fix(
     ctx: click.Context,
