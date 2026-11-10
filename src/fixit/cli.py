@@ -17,6 +17,7 @@ from fixit import __version__
 from .api import fixit_paths, print_result
 from .config import (
     ConfigError,
+    RulesOptionError,
     generate_config,
     load_rules,
     parse_rule,
@@ -116,6 +117,9 @@ class _FixitGroup(click.Group):
     def invoke(self, ctx: click.Context) -> Any:
         try:
             return super().invoke(ctx)
+        # As an invalid name in --rules (#40).
+        except RulesOptionError as error:
+            raise click.BadParameter(str(error), ctx, param_hint="'--rules'") from error
         except ConfigError as error:
             raise ConfigFailure(error.describe()) from error
 

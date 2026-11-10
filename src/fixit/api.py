@@ -164,9 +164,16 @@ def fixit_bytes(
     It runs the new engine (#21). The fixes that ``autofix`` takes are applied
     round after round; those sent back to the generator, in one round. The fixed
     text is formatted with ``ruff format``.
+
+    A rule of ``config`` that cannot be loaded is the error of the file, without
+    a traceback, and no rule runs (#40).
     """
     try:
         rules = load_rules(config)
+    except ConfigError as error:
+        yield Result(path, violation=None, error=_error(error))
+        return None
+    try:
         if not rules:
             yield Result(path, violation=None)
             return None

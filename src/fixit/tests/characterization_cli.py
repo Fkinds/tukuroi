@@ -533,32 +533,26 @@ class CliCharacterizationTest(CharacterizationTestCase):
             self.assertEqual(result.exit_code, 1)
 
     def test_rules_option_with_unknown_name(self) -> None:
-        find = "'fixit.rules': CollectionError: could not find rule"
+        find = "could not find rule"
         cases = (
             ("fixit.rules:Nope", f"{find} fixit.rules:Nope"),
-            (
-                "fixit.nope",
-                "'fixit.nope': CollectionError: could not import rule(s) fixit.nope",
-            ),
-            (
-                "fixit.rules:nostaticifcondition",
-                f"{find} fixit.rules:nostaticifcondition",
-            ),
-            (
-                "fixit.rules:NoStaticIfConditionRule",
-                f"{find} fixit.rules:NoStaticIfConditionRule",
-            ),
-        )
-        for rules, warning in cases:
-            with self.subTest(rules):
-                files = {"pyproject.toml": CONFIG, "t.py": FIXABLE + UNFIXABLE}
-                result = invoke(files, ["--rules", rules, "lint", "t.py"])
-                # NOTE: an unknown rule only logs a warning; no rule runs, and the
-                # file is reported clean.
-                self.assertEqual(result.stdout, "")
-                log = f"WARNING:fixit.config:Failed to load rules {warning}\n"
-                self.assertEqual(result.stderr, log + CLEAN)
-                self.assertEqual(result.exit_code, 0)
+            ("fixit.nope", "could not import rule(s) fixit.nope"),
+            ("fixit.rules:nostaticifcondition", f"{find} fixit.rules:nostaticifcondition"),
+            ("fixit.rules:NoStaticIfConditionRule", f"{find} fixit.rules:NoStaticIfConditionRule"),
+        )  # fmt: skip
+        for rules, message in cases:
+            for command in (["lint", "t.py"], ["fix", "-a", "t.py"]):
+                with self.subTest(rules, command=command[0]):
+                    files = {"pyproject.toml": CONFIG, "t.py": FIXABLE + UNFIXABLE}
+                    result = invoke(files, ["--rules", rules, *command])
+                    # A usage error, as an invalid name, before any file is
+                    # linted (#40). It was a warning, and no rule ran: the file
+                    # was reported clean.
+                    error = f"\nError: Invalid value for '--rules': {message}\n"
+                    self.assertTrue(result.stderr.endswith(error), result.stderr)
+                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(result.files["t.py"], FIXABLE + UNFIXABLE)
+                    self.assertEqual(result.exit_code, 2)
 
     def test_rules_option_over_unknown_names_in_the_config(self) -> None:
         # The rules of the config are not used, and not loaded (#40).

@@ -63,6 +63,16 @@ class ConfigError(ValueError):
         return f"{shown}: {self}"
 
 
+class RulesOptionError(ConfigError):
+    """
+    A rule of ``--rules`` (:attr:`Options.rules`) that cannot be loaded. The
+    CLI makes it a usage error of the option (#40).
+    """
+
+    def describe(self) -> str:
+        return f"--rules: {self}"
+
+
 def log_skipped(rule: QualifiedRule) -> None:
     """Warn that ``rule``, a custom rule, is not imported."""
     log.warning(f"Skipped rules '{rule}': custom rules are turned off")
@@ -71,15 +81,19 @@ def log_skipped(rule: QualifiedRule) -> None:
 def load_rules(config: Config) -> tuple[type[Rule], ...]:
     """
     The rules that ``config`` enables, sorted by name: the built-in rules in
-    ``fixit.rules``, and the custom rules. A module that cannot be imported is a
-    warning: :func:`check_rules` makes it an error of the config that names it.
+    ``fixit.rules``, and the custom rules. A rule that cannot be loaded is a
+    :class:`ConfigError` (#40), without the config that names it: see
+    :func:`check_rules` for that.
     """
-    return collect_core_rules(
-        [rule_name(rule) for rule in config.enable],
-        [rule_name(rule) for rule in config.disable],
-        root_import=root_import_of(config),
-        custom_rules=config.custom_rules,
-    )
+    try:
+        return collect_core_rules(
+            [rule_name(rule) for rule in config.enable],
+            [rule_name(rule) for rule in config.disable],
+            root_import=root_import_of(config),
+            custom_rules=config.custom_rules,
+        )
+    except CollectionError as error:
+        raise ConfigError(str(error)) from error
 
 
 def root_import_of(config: Config) -> Path | None:
@@ -91,8 +105,8 @@ def root_import_of(config: Config) -> Path | None:
     return config.root
 
 
-# The configs whose rules were loaded in this process, with how: each is
-# checked once (#40).
+# The configs, and the names of --rules, whose rules were loaded in this
+# process, with how: each is checked once (#40).
 _CHECKED: set[tuple[object, ...]] = set()
 
 
@@ -104,12 +118,19 @@ def check_rules(
     ``config``, names, from the root config inward, and the first one that
     cannot be loaded raises a :class:`ConfigError` that names the key (#40).
     The rules of all the overrides are loaded, whether or not they apply to the
-    file. With ``--rules``, the rules of the configs are not used, and not
-    loaded. The rules skipped with custom rules turned off are not loaded.
+    file. With ``--rules``, only its rules are loaded, and the error is a
+    :class:`RulesOptionError`. The rules skipped with custom rules turned off
+    are not loaded.
     """
+    root_import = root_import_of(config)
+    how = (root_import, config.custom_rules)
     if options and options.rules:
+        if (*how, tuple(options.rules)) not in _CHECKED:
+            for rule in options.rules:
+                if error := load_error(rule, config):
+                    raise RulesOptionError(error)
+            _CHECKED.add((*how, tuple(options.rules)))
         return
-    how = (root_import_of(config), config.custom_rules)
     for raw in reversed(raw_configs):
         if (*how, raw.path, repr(raw.data)) in _CHECKED:
             continue

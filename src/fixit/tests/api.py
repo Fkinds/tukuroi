@@ -21,7 +21,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from ..api import fixit_bytes, fixit_file, fixit_paths
-from ..config import ConfigError, generate_config
+from ..config import ConfigError, RulesOptionError, generate_config
 from ..core import loader
 from ..core.loader import load as load_core_rules
 from ..core.text import Position, Range
@@ -187,6 +187,19 @@ class FixitBytesTest(TestCase):
                 results, returned = run(config_, "x = 1\n", autofix=True)
                 self.assertEqual(results, [Result(root / "t.py", None)])
                 self.assertIsNone(returned)
+
+    def test_rule_that_cannot_be_loaded(self) -> None:
+        # The error of the file, without a traceback: the config is not known
+        # here, only its rules (#40). No rule runs.
+        root = Path("/repo")
+        nope = QualifiedRule("fixit.rules", "Nope")
+        config_ = Config(path=root / "t.py", root=root, enable=[nope])
+        results, returned = run(config_, SOURCE, autofix=True)
+        error = Error(
+            "fixit.config.ConfigError", "could not find rule fixit.rules:Nope"
+        )
+        self.assertEqual(results, [Result(root / "t.py", None, error)])
+        self.assertIsNone(returned)
 
     def test_fixes_applied(self) -> None:
         root = Path("/repo")
@@ -469,6 +482,20 @@ class FixitPathsTest(TestCase):
             # A file linted alone: the error is its result, and no rule runs.
             error = Error("fixit.config.ConfigError", shown)
             results = list(fixit_file(Path("t.py")))
+            self.assertEqual(results, [Result(root / "t.py", None, error)])
+
+    def test_rule_of_the_rules_option_that_cannot_be_loaded(self) -> None:
+        tree = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "t.py": ""}
+        options = Options(rules=[QualifiedRule("fixit.rules", "Nope")])
+        with files(tree) as root, chdir(root):
+            with self.assertRaises(RulesOptionError) as caught:
+                next(fixit_paths([Path("t.py")], options=options))
+            self.assertEqual(
+                str(caught.exception), "could not find rule fixit.rules:Nope"
+            )
+            shown = "--rules: could not find rule fixit.rules:Nope"
+            error = Error("fixit.config.RulesOptionError", shown)
+            results = list(fixit_file(Path("t.py"), options=options))
             self.assertEqual(results, [Result(root / "t.py", None, error)])
 
     def test_rules_of_a_config_loaded_once(self) -> None:
