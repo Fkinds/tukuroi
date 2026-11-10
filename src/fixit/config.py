@@ -31,9 +31,34 @@ log = logging.getLogger(__name__)
 
 
 class ConfigError(ValueError):
-    def __init__(self, msg: str, config: RawConfig | None = None):
+    """
+    A config that fixit cannot use. ``path`` is the file, when the error is in
+    one: that of ``config``, or a file that is not TOML.
+    """
+
+    def __init__(
+        self,
+        msg: str,
+        config: RawConfig | None = None,
+        *,
+        path: Path | None = None,
+    ) -> None:
         super().__init__(msg)
         self.config = config
+        self.path = config.path if config else path
+
+    def describe(self) -> str:
+        """
+        The message after the path of the file, relative to the current
+        directory if it is under it: how the CLI shows the error (#40).
+        """
+        if self.path is None:
+            return str(self)
+        try:
+            shown = self.path.relative_to(Path.cwd())
+        except ValueError:
+            shown = self.path
+        return f"{shown}: {self}"
 
 
 def log_skipped(rule: QualifiedRule) -> None:
@@ -112,13 +137,18 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
     Stops early at any config with `root = true`.
 
     Maintains the same order as given in paths, minus any skipped files.
+    A file that is not TOML is a :class:`ConfigError`, with the message of
+    :mod:`tomllib`.
     """
     configs: list[RawConfig] = []
 
     for path in paths:
         path = path.resolve()
         content = path.read_text()
-        data = tomllib.loads(content)
+        try:
+            data = tomllib.loads(content)
+        except tomllib.TOMLDecodeError as error:
+            raise ConfigError(str(error), path=path) from error
         fixit_data = data.get("tool", {}).get("fixit", {})
 
         if fixit_data:
@@ -240,12 +270,15 @@ def merge_configs(
                 enable_root_import = True
 
         if value := data.pop("output-format", ""):
-            try:
-                output_format = OutputFormat(value)
-            except ValueError as e:
+            # In any case, as the option (#40).
+            formats = {o.value: o for o in OutputFormat}
+            if not isinstance(value, str) or value.lower() not in formats:
+                choices = ", ".join(map(repr, formats))
                 raise ConfigError(
-                    "output-format: unknown value {value!r}", config=config
-                ) from e
+                    f"output-format: unknown value {value!r}, not one of {choices}",
+                    config=config,
+                )
+            output_format = formats[value.lower()]
 
         if value := data.pop("output-template", ""):
             output_template = value

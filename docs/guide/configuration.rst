@@ -131,7 +131,7 @@ The main configuration table.
     This option is inferred based on the current working directory or from
     an explicity specified config file -- subpath overrides will be ignored.
 
-    Can be one of:
+    Can be one of, in any letter case as with ``--output-format``:
 
     - ``custom``: Specify your own format using the :attr:`output-template`
       option below.

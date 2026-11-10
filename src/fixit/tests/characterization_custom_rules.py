@@ -28,7 +28,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from ..config import ConfigError
 from .characterization_cli import (
     CLEAN,
     DIRTY,
@@ -423,8 +422,9 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             sub = {"sub/pyproject.toml": toml("enable-root-import = true")}
             result = lint(root(), sub, "sub/t.py")
             error = "enable-root-import not allowed in non-root configs"
-            text = result.stdout.partition("Traceback (most recent call last):\n")[0]
-            self.assertEqual(text, f"sub/t.py: EXCEPTION: {error}\n")
+            # With the path of the config, without a traceback (#40).
+            where = "sub/t.py: EXCEPTION: sub/pyproject.toml"
+            self.assertEqual(result.stdout, f"{where}: {error}\n")
             self.assertEqual(result.stderr, DIRTY)
             self.assertEqual(result.exit_code, 2)
         cases = (
@@ -437,11 +437,10 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         for value, message in cases:
             with self.subTest(value):
                 result = lint(root(lines=[f"enable-root-import = {value}"]), {})
-                # NOTE: the exception is not caught; a traceback is printed.
-                self.assertIs(type(result.exception), ConfigError)
-                self.assertEqual(str(result.exception), message)
+                # Without a traceback, before any file is linted (#40).
+                self.assertEqual(result.stderr, f"Error: pyproject.toml: {message}\n")
                 self.assertEqual(result.stdout, "")
-                self.assertEqual(result.exit_code, 1)
+                self.assertEqual(result.exit_code, 2)
 
     def run_two_roots(self, enable: str) -> Run:
         """``fix`` a/t.py, which imports kettle.rules, then b/t.py with ``enable``."""
@@ -524,11 +523,11 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
     def test_invalid_name_of_a_rule_in_the_repo(self) -> None:
         # The name of the parent of the config directory, as in `from .. import`.
         result = lint(root("..rules"), {"rules.py": BOTH_PY})
-        # NOTE: the exception is not caught; a traceback is printed.
-        self.assertIs(type(result.exception), ConfigError)
-        self.assertEqual(str(result.exception), "invalid rule name '..rules'")
+        # Without a traceback, before any file is linted (#40).
+        error = "Error: pyproject.toml: invalid rule name '..rules'\n"
+        self.assertEqual(result.stderr, error)
         self.assertEqual(result.stdout, "")
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 2)
 
     def test_custom_rule_with_a_built_in_rule(self) -> None:
         result = lint(root(f"fixit.rules:{SI}", f".rules:{BAD}"), {"rules.py": BOTH_PY})

@@ -16,6 +16,7 @@ output that the new engine is known to change.
 
 import logging
 import re
+import tomllib
 import warnings
 from collections.abc import Generator, Iterable, Mapping, Sequence
 from contextlib import contextmanager
@@ -60,7 +61,6 @@ DIRTY_A = "🛠️  1 file checked, 1 file with errors, 1 auto-fix available �
 DIRTY_F = (
     "🛠️  1 file checked, 1 file with errors, 1 auto-fix available, 1 fix applied 🛠️\n"
 )
-MIX = "WARNING:fixit.api:Cannot mix stdin ('-') with normal paths, ignoring\n"
 
 # A violation starts a line with "<path>@<line>:<col> <rule>: " ("<path>:..."
 # with vscode), and an exception with "<path>: EXCEPTION: ".
@@ -142,6 +142,15 @@ def records(stdout: str) -> list[str]:
 
 def line(path: str, rule: str, position: str = "1:0", sep: str = "@") -> str:
     return f"{path}{sep}{position} {rule}: {MESSAGES[rule]}\n"
+
+
+def toml_error(text: str) -> str:
+    """The message of the error in ``text``, as tomllib words it."""
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        return str(e)
+    raise AssertionError(f"no TOMLDecodeError in {text!r}")
 
 
 class CharacterizationTestCase(TestCase):
@@ -331,7 +340,6 @@ class CliCharacterizationTest(CharacterizationTestCase):
             ("sub config", ["sub/t.py"], sub, both, "sub/t.py", DIRTY_A, 1),
             # The file on disk is not read.
             ("on disk", ["t.py"], {"t.py": UNFIXABLE}, FIXABLE, "t.py", DIRTY_A, 1),
-            ("2nd -", ["-"], {}, FIXABLE, "stdin", MIX + DIRTY_A, 1),
         )
         for label, paths, files, stdin, path, stderr, exit_code in cases:
             with self.subTest(label):
@@ -342,30 +350,28 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, exit_code)
                 self.assertEqual(result.files, before)
 
-    def test_stdin_after_a_path_is_ignored(self) -> None:
+    def test_stdin_paths_that_are_usage_errors(self) -> None:
+        # Usage errors (#40). The libcst engine skipped a "-" after a path with
+        # a warning, and printed the traceback of a ValueError for 2 paths
+        # after "-"; `fixit_paths` still does.
+        first = "'-' (stdin) must be the first path"
+        one = "only one path may follow '-' (stdin): the name of its file"
         cases = (
-            (["lint"], DIRTY_A, {}, 1),
-            (["fix", "--automatic"], DIRTY_F, {"t.py": FIXED}, 0),
+            ("after a path", ["t.py", "-"], first),
+            ("2nd -", ["-", "-"], first),
+            ("2 paths after", ["-", "t.py", "u.py"], one),
         )
-        for command, summary, changed, exit_code in cases:
-            with self.subTest(command[0]):
-                before = {"pyproject.toml": CONFIG, "t.py": FIXABLE}
-                result = invoke(before, [*command, "t.py", "-"], stdin=UNFIXABLE)
-                self.assertEqual(result.stdout, line("t.py", NA))
-                self.assertEqual(result.stderr, MIX + summary)
-                self.assertEqual(result.exit_code, exit_code)
-                self.assertEqual(result.files, before | changed)
-
-    def test_stdin_with_two_paths_raises(self) -> None:
-        for command in ("lint", "fix"):
-            with self.subTest(command):
-                args = [command, "-", "t.py", "u.py"]
-                result = invoke({"pyproject.toml": CONFIG}, args, stdin=FIXABLE)
-                # NOTE: the exception is not caught; a traceback is printed.
-                self.assertIsInstance(result.exception, ValueError)
-                self.assertEqual(str(result.exception), "too many stdin paths")
-                self.assertEqual(result.stdout, "")
-                self.assertEqual(result.exit_code, 1)
+        for command in (["lint"], ["fix", "--automatic"]):
+            for label, paths, message in cases:
+                with self.subTest(command[0], paths=label):
+                    before = {"pyproject.toml": CONFIG, "t.py": FIXABLE}
+                    result = invoke(before, [*command, *paths], stdin=FIXABLE)
+                    # The usage lines above it come from click.
+                    error = f"\nError: Invalid value for '[PATHS]...': {message}\n"
+                    self.assertTrue(result.stderr.endswith(error), result.stderr)
+                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(result.exit_code, 2)
+                    self.assertEqual(result.files, before)
 
     def test_fix_stdin_paths(self) -> None:
         cases = (
@@ -400,6 +406,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
 
     def test_output_format(self) -> None:
         vscode = {"pyproject.toml": CONFIG + 'output-format = "vscode"\n'}
+        upper = {"pyproject.toml": CONFIG + 'output-format = "VSCode"\n'}
         sub = {"sub/pyproject.toml": '[tool.fixit]\noutput-format = "vscode"\n'}
         override = '[[tool.fixit.overrides]]\npath = "."\noutput-format = "vscode"\n'
         overrides = {"pyproject.toml": CONFIG + override}
@@ -409,6 +416,8 @@ class CliCharacterizationTest(CharacterizationTestCase):
             ("-o", ["-o", "vscode"], {}, ".", "t.py", ":"),
             ("any case", ["--output-format", "VSCode"], {}, ".", "t.py", ":"),
             ("config", [], vscode, ".", "t.py", ":"),
+            # As the option (#40).
+            ("config, any case", [], upper, ".", "t.py", ":"),
             ("option over config", ["-o", "fixit"], vscode, ".", "t.py", "@"),
             # The config of the current directory is used, not of the file.
             ("config of the file", [], sub, ".", "sub/t.py", "@"),
@@ -457,17 +466,20 @@ class CliCharacterizationTest(CharacterizationTestCase):
             self.assertTrue(result.stderr.endswith(error))
             self.assertEqual(result.stdout, "")
             self.assertEqual(result.exit_code, 2)
-        # NOTE: the exception is not caught, and its message keeps "{value!r}"
-        # as is. Unlike the option, the config does not accept other cases.
-        for value in ("bogus", "VSCODE"):
+        # As the option, without the usage lines (#40). The libcst engine
+        # printed a traceback, and "{value!r}" as is.
+        for value, shown in (('"json"', "'json'"), ("1", "1")):
             with self.subTest("config", value=value):
-                toml = CONFIG + f'output-format = "{value}"\n'
+                toml = CONFIG + f"output-format = {value}\n"
                 files = {"pyproject.toml": toml, "t.py": FIXABLE}
                 result = invoke(files, ["lint", "t.py"])
-                message = "output-format: unknown value {value!r}"
-                self.assertEqual(str(result.exception), message)
+                error = (
+                    f"Error: pyproject.toml: output-format: unknown value {shown},"
+                    " not one of 'custom', 'fixit', 'vscode'\n"
+                )
+                self.assertEqual(result.stderr, error)
                 self.assertEqual(result.stdout, "")
-                self.assertEqual(result.exit_code, 1)
+                self.assertEqual(result.exit_code, 2)
 
     def test_rules_option_replaces_enable_and_disable(self) -> None:
         none = '[tool.fixit]\nroot = true\ndisable = ["fixit.rules"]\n'
@@ -543,10 +555,35 @@ class CliCharacterizationTest(CharacterizationTestCase):
     def test_rules_option_with_invalid_name(self) -> None:
         files = {"pyproject.toml": CONFIG, "t.py": FIXABLE}
         result = invoke(files, ["--rules", "fixit rules", "lint", "t.py"])
-        # NOTE: the exception is not caught; a traceback is printed.
-        self.assertEqual(str(result.exception), "invalid rule name 'fixit rules'")
+        # A usage error (#40); the libcst engine printed a traceback. The usage
+        # lines above it come from click.
+        error = (
+            "\nError: Invalid value for '--rules': invalid rule name 'fixit rules'\n"
+        )
+        self.assertTrue(result.stderr.endswith(error), result.stderr)
         self.assertEqual(result.stdout, "")
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 2)
+
+    def test_config_error_in_each_command(self) -> None:
+        # Printed without a traceback, before any file is linted (#40).
+        broken = CONFIG + "output-format =\n"
+        message = toml_error(broken)
+        cases = (
+            # (label, args, the path of the config shown)
+            ("lint", ["lint", "t.py"], "pyproject.toml"),
+            ("lint stdin", ["lint", "-", "t.py"], "pyproject.toml"),
+            ("fix", ["fix", "--automatic", "t.py"], "pyproject.toml"),
+            ("debug", ["debug", "t.py"], "pyproject.toml"),
+            ("test", ["test", f"fixit.rules:{SI}"], "pyproject.toml"),
+            ("--config-file", ["-c", "c.toml", "lint", "t.py"], "c.toml"),
+        )
+        for label, args, shown in cases:
+            with self.subTest(label):
+                before = {"pyproject.toml": broken, "c.toml": broken, "t.py": FIXABLE}
+                result = invoke(before, args, stdin=FIXABLE)
+                self.assertEqual(result.stderr, f"Error: {shown}: {message}\n")
+                self.assertEqual(result.exit_code, 2)
+                self.assertEqual(result.files, before)
 
     def test_config_file_option(self) -> None:
         override = (

@@ -49,12 +49,21 @@ The following options are available for all commands:
 
     Override the python formatting template to use with ``output-format = 'custom'``.
 
+Any command exits with 2 on a usage error, and on a configuration that Fixit
+cannot use: a file that is not TOML, or an invalid value. The error goes to
+stderr, without a traceback. ``lint`` and ``fix`` read the configuration of the
+current directory, or the one given with ``--config-file``, before any file,
+and stop there. An error in the configuration of a file in another directory is
+an error of that file. No standard defines exit codes other than 0 and nonzero:
+2 is the code of Click and Ruff for these.
+
 ``lint``
 ^^^^^^^^
 
 Lint one or more paths, and print a list of lint errors. If "-" is given as the
 first path, then the second given path will be used for configuration lookup
-and error messages, and the input read from STDIN.
+and error messages, and the input read from STDIN. No other path may follow,
+and "-" after another path is a usage error.
 
 .. code:: console
 
@@ -65,8 +74,8 @@ and error messages, and the input read from STDIN.
     Show suggested fixes, in unified diff format, when available.
 
 The exit code is 0 when no file has a lint error, 1 when a file has one, and 2
-when Fixit could not lint a file (a syntax error, or an exception in a rule);
-3 for both.
+when Fixit could not lint a file (a syntax error, an exception in a rule, or a
+configuration of the file that Fixit cannot use); 3 for both.
 
 
 ``fix``
@@ -75,7 +84,7 @@ when Fixit could not lint a file (a syntax error, or an exception in a rule);
 Lint one or more paths, and apply suggested fixes. If "-" is given as the
 first path, then the second given path will be used for configuration lookup,
 the input read from STDIN, and the fixed output printed to STDOUT (ignoring
-:attr:`--interactive`).
+:attr:`--interactive`). As with ``lint``, no other path may follow.
 
 .. code:: console
 
