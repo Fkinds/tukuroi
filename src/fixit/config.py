@@ -13,7 +13,7 @@ from typing import (
     Any,
 )
 
-from .core.loader import CollectionError, RuleName, import_rules
+from .core.loader import CollectionError, RuleName
 from .core.loader import collect_rules as collect_core_rules
 from .core.loader import load as load_core_rules
 from .core.rule import Rule
@@ -667,51 +667,33 @@ def check_configs(paths: Sequence[Path], options: Options | None = None) -> None
 
 def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
     """
-    Validate the config provided. The provided path is expected to be a valid toml
-    config file. The first value that fixit cannot use, as :func:`read_configs`
-    finds it, is the only exception returned (#40). Otherwise, each rule that
-    cannot be imported adds one to the list of exceptions that are returned.
+    Validate the config at ``path``, alone and as a root config (#100): its
+    values, as :func:`read_configs` checks them, and then every rule that it
+    names, loaded as ``lint`` loads them (:func:`load_error`), with its
+    ``enable-root-import``. The first value that fixit cannot use is the only
+    error returned (#40); otherwise, each rule that cannot be loaded adds one.
+    An error is as the CLI shows a :class:`ConfigError`: the file, the key, and
+    the message. A file without ``[tool.fixit]`` has nothing to check.
 
     With ``custom_rules`` false, only the names of custom rules are checked: they
     are not imported, and each one logs a warning.
     """
-    exceptions: list[str] = []
     try:
-        root = path.parent
-        configs = read_configs([path])[0]
+        raw_configs = read_configs([path])
+        if not raw_configs:
+            return []
+        config = merge_configs(path.parent, raw_configs)
+    except ConfigError as error:
+        return [error.describe()]
+    config.custom_rules = custom_rules
 
-        def validate_rules(rules: list[str], context: str) -> None:
-            for rule in rules:
-                # read_configs checked the name.
-                qualified_rule = parse_rule(rule, root, configs)
-                if not (custom_rules or qualified_rule.builtin):
-                    log_skipped(qualified_rule)
-                    continue
-                try:
-                    import_rules(rule_name(qualified_rule))
-                # Importing a rule runs its code, which can raise any exception.
-                except Exception as e:  # noqa: BLE001
-                    exceptions.append(
-                        f"Failed to import rule `{rule}` for {context}: {e.__class__.__name__}: {e}"
-                    )
-
-        data = configs.data
-        validate_rules(data.get("enable", []), "global enable")
-        validate_rules(data.get("disable", []), "global disable")
-
-        for override in data.get("overrides", []):
-            override_path = Path(override["path"])
-            validate_rules(
-                override.get("enable", []),
-                f"override enable: `{override_path}`",
-            )
-            validate_rules(
-                override.get("disable", []),
-                f"override disable: `{override_path}`",
-            )
-
-    # Report any error as a validation result instead of failing.
-    except Exception as e:  # noqa: BLE001
-        exceptions.append(f"Invalid config: {e.__class__.__name__}: {e}")
-
-    return exceptions
+    raw = raw_configs[0]
+    errors: list[str] = []
+    for key, names in named_rules(raw.data):
+        for name in names:
+            rule = parse_rule(name, raw.path.parent, raw)
+            if not (custom_rules or rule.builtin):
+                log_skipped(rule)
+            elif error := load_error(rule, config):
+                errors.append(ConfigError(f"{key}: {error}", raw).describe())
+    return errors

@@ -382,13 +382,23 @@ class CommandTest(TestCase):
         files_ = {"pyproject.toml": pyproject, "rules.py": rules}
         # `run` writes no .pyc, and forgets the modules imported.
         result = run_cli(files_, ["validate-config", "pyproject.toml"])
-        # Printed with pprint, or rich when installed: compare without the breaks.
-        printed = " ".join(result.stdout.replace("'", "").split())
-        error = "CollectionError: could not find rule .rules:Nope in"
-        expected = f"Failed to import rule `.rules:Nope` for global enable: {error}"
-        self.assertIn(expected, printed)
-        self.assertNotIn(".rules:Bad", printed)
-        self.assertEqual(result.exit_code, -1)
+        # As the other commands show an error of the config, with 2 (#100):
+        # it was printed with pprint or rich, on stdout, with -1.
+        error = f"could not find rule .rules:Nope in {result.root}"
+        self.assertEqual(result.stderr, f"Error: pyproject.toml: enable: {error}\n")
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.exit_code, 2)
+        with self.subTest("valid"):
+            files_["pyproject.toml"] = pyproject.replace(', ".rules:Nope"', "")
+            result = run_cli(files_, ["validate-config", "pyproject.toml"])
+            self.assertEqual((result.stdout, result.stderr), ("", ""))
+            self.assertEqual(result.exit_code, 0)
+        with self.subTest("directory"):
+            result = run_cli(files_, ["validate-config", "."])
+            # The usage lines above it come from click.
+            error = "\nError: Invalid value for 'PATH': File '.' is a directory.\n"
+            self.assertTrue(result.stderr.endswith(error), result.stderr)
+            self.assertEqual(result.exit_code, 2)
 
     def test_debug(self) -> None:
         files_ = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "t.py": "x = 1\n"}

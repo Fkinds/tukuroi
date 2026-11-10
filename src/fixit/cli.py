@@ -446,20 +446,17 @@ def debug(ctx: click.Context, paths: Sequence[Path]) -> None:
 
 @main.command(name="validate-config")
 @click.pass_context
-@click.argument("path", nargs=1, type=click.Path(exists=True, path_type=Path))
+@click.argument(
+    "path", nargs=1, type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
 def validate_config_command(ctx: click.Context, path: Path) -> None:
     """
     validate the config provided
     """
     options: Options = ctx.obj
-    exceptions = validate_config(path, custom_rules=options.custom_rules)
-
-    try:
-        from rich import print as pprint
-    except ImportError:
-        from pprint import pprint  # type: ignore
-
-    if exceptions:
-        for e in exceptions:
-            pprint(e)
-        sys.exit(-1)
+    errors = validate_config(path, custom_rules=options.custom_rules)
+    # As the other commands show an error of the config, with 2 (#100).
+    for error in errors:
+        click.echo(f"Error: {error}", err=True)
+    if errors:
+        ctx.exit(2)

@@ -268,12 +268,11 @@ class CustomRulesSwitchTest(TestCase):
         with self.subTest("off, invalid name"), switch(None):
             before = {"pyproject.toml": toml(names("enable", "..rules")), **RULES}
             result = run(before, args)
-            # Printed with pprint, or rich when installed: only the start is stable.
             # The name is checked as the config is read (#40).
-            error = "Invalid config: ConfigError: enable: invalid rule name '..rules'"
-            self.assertIn(error, result.stdout)
-            self.assertEqual(result.stderr, "")
-            self.assertEqual(result.exit_code, -1)
+            error = "pyproject.toml: enable: invalid rule name '..rules'"
+            self.assertEqual(result.stderr, f"Error: {error}\n")
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.exit_code, 2)
         with self.subTest("on"), switch(None):
             before = {"pyproject.toml": config, **RULES}
             result = run(before, ["validate-config", "pyproject.toml"], site=COOKIE)
@@ -290,8 +289,8 @@ class CustomRulesSwitchTest(TestCase):
         self.assertEqual(served.stderr, skipped(".rules"))
 
     def test_python_m_takes_the_current_directory_off_sys_path(self) -> None:
-        # fixit imports rich when validate-config prints. A rich.py in the
-        # current directory would run, as the first entry of sys.path.
+        # fixit imports rich when debug prints. A rich.py in the current
+        # directory would run, as the first entry of sys.path.
         rich = 'open("rich.imported", "w").close()\nraise ImportError\n'
         env = {k: v for k, v in os.environ.items() if k not in {ENV, "PYTHONSAFEPATH"}}
         with TemporaryDirectory() as td:
@@ -299,13 +298,15 @@ class CustomRulesSwitchTest(TestCase):
             (cwd / "pyproject.toml").write_text(toml("root = true"))
             (cwd / "rich.py").write_text(rich)
             result = subprocess.run(
-                [sys.executable, "-m", "fixit", "validate-config", "pyproject.toml"],
+                [sys.executable, "-m", "fixit", "debug"],
                 cwd=cwd,
                 env=env,
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            self.assertEqual((result.stdout, result.stderr), ("", ""))
+            # The config, with print, as rich cannot be imported.
+            self.assertIn(">>> ", result.stdout)
+            self.assertEqual(result.stderr, "")
             self.assertEqual(result.returncode, 0)
             self.assertFalse((cwd / "rich.imported").exists())
