@@ -8,15 +8,22 @@ import sys
 import unittest
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import click
 
 from fixit import __version__
 
 from .api import fixit_paths, print_result
-from .config import generate_config, load_rules, parse_rule, validate_config
+from .config import (
+    ConfigError,
+    generate_config,
+    load_rules,
+    parse_rule,
+    validate_config,
+)
 from .core.testing import generate_test_cases
-from .ftypes import LSPOptions, Options, OutputFormat, QualifiedRule
+from .ftypes import STDIN, LSPOptions, Options, OutputFormat, QualifiedRule
 from .util import capture
 
 
@@ -59,8 +66,45 @@ def require_builtin(ctx: click.Context, rules: Sequence[QualifiedRule]) -> None:
         )
 
 
+def parse_rules(
+    ctx: click.Context, param: click.Parameter, value: str
+) -> list[QualifiedRule]:
+    """``--rules``: names separated by commas. An invalid one is a usage error."""
+    names = (name.strip() for name in value.split(","))
+    try:
+        return sorted({parse_rule(name, Path.cwd()) for name in names if name})
+    except ConfigError as error:
+        raise click.BadParameter(str(error), ctx, param) from error
+
+
+def check_stdin(
+    ctx: click.Context, param: click.Parameter, value: tuple[Path, ...]
+) -> tuple[Path, ...]:
+    """
+    "-" (stdin) comes first, and then at most the name of its file: anything
+    else is a usage error. ``fixit_paths`` warns about the one, and raises a
+    ValueError on the other (#40).
+    """
+    if STDIN in value[1:]:
+        message = "'-' (stdin) must be the first path"
+        raise click.BadParameter(message, ctx, param)
+    if value[:1] == (STDIN,) and len(value) > 2:
+        message = "only one path may follow '-' (stdin): the name of its file"
+        raise click.BadParameter(message, ctx, param)
+    return value
+
+
+class ConfigFailure(click.ClickException):
+    """A config that fixit cannot use: exit with 2, as with a usage error."""
+
+    exit_code = 2
+
+
 class _FixitGroup(click.Group):
-    """Keep the pre-Click 8.2 behavior for an empty command line."""
+    """
+    Keep the pre-Click 8.2 behavior for an empty command line. A
+    :class:`ConfigError` in any command is printed without a traceback (#40).
+    """
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         if not args and self.no_args_is_help and not ctx.resilient_parsing:
@@ -68,6 +112,12 @@ class _FixitGroup(click.Group):
             ctx.exit()
 
         return super().parse_args(ctx, args)
+
+    def invoke(self, ctx: click.Context) -> Any:
+        try:
+            return super().invoke(ctx)
+        except ConfigError as error:
+            raise ConfigFailure(error.describe()) from error
 
 
 @click.group(cls=_FixitGroup)
@@ -87,6 +137,7 @@ class _FixitGroup(click.Group):
     "--rules",
     type=str,
     default="",
+    callback=parse_rules,
     help="Override configured rules",
 )
 @click.option(
@@ -115,7 +166,7 @@ def main(
     ctx: click.Context,
     debug: bool | None,
     config_file: Path | None,
-    rules: str,
+    rules: list[QualifiedRule],
     custom_rules: bool,
     output_format: OutputFormat | None,
     output_template: str,
@@ -126,20 +177,13 @@ def main(
         level = logging.DEBUG if debug else logging.ERROR
     logging.basicConfig(level=level, stream=sys.stderr)
 
-    qualified_rules = sorted(
-        {
-            parse_rule(r, Path.cwd())
-            for r in (rs.strip() for rs in rules.split(","))
-            if r
-        }
-    )
     if not custom_rules:
-        require_builtin(ctx, qualified_rules)
+        require_builtin(ctx, rules)
 
     ctx.obj = Options(
         debug=debug,
         config_file=config_file,
-        rules=qualified_rules,
+        rules=rules,
         output_format=output_format,
         output_template=output_template,
         print_metrics=print_metrics,
@@ -150,7 +194,9 @@ def main(
 @main.command()
 @click.pass_context
 @click.option("--diff", "-d", is_flag=True, help="Show diff of suggested changes")
-@click.argument("paths", nargs=-1, type=click.Path(path_type=Path))
+@click.argument(
+    "paths", nargs=-1, type=click.Path(path_type=Path), callback=check_stdin
+)
 def lint(
     ctx: click.Context,
     diff: bool,
@@ -203,7 +249,9 @@ def lint(
     help="how to apply fixes; interactive by default unless STDIN",
 )
 @click.option("--diff", "-d", is_flag=True, help="show diff even with --automatic")
-@click.argument("paths", nargs=-1, type=click.Path(path_type=Path))
+@click.argument(
+    "paths", nargs=-1, type=click.Path(path_type=Path), callback=check_stdin
+)
 def fix(
     ctx: click.Context,
     interactive: bool,

@@ -17,7 +17,7 @@ from moreorless import unified_diff
 from moreorless.click import echo_color_precomputed_diff
 
 from . import pool
-from .config import generate_config, load_rules
+from .config import ConfigError, generate_config, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
 from .core.rule import Report, Rule
@@ -51,6 +51,8 @@ def _describe(error: Exception) -> str:
     if isinstance(error, ParseError):
         line, column = error.position.line, error.position.column
         return f"Syntax Error @ {line}:{column}: {error.message}"
+    if isinstance(error, ConfigError):
+        return error.describe()
     try:
         return str(error)
     except Exception:  # noqa: BLE001
@@ -266,6 +268,9 @@ def fixit_stdin(
         if autofix:
             sys.stdout.buffer.write(updated or content)
 
+    except ConfigError as error:
+        # The config is wrong, not fixit: no traceback (#40).
+        yield Result(path, violation=None, error=_error(error))
     except Exception as error:
         LOG.debug("Exception while fixit_stdin", exc_info=error)
         yield Result(path, violation=None, error=_error(error, traceback.format_exc()))
@@ -302,6 +307,9 @@ def fixit_file(
             LOG.info(f"{path}: writing changes to file")
             path.write_bytes(updated)
 
+    except ConfigError as error:
+        # The config is wrong, not fixit: no traceback (#40).
+        yield Result(path, violation=None, error=_error(error))
     except Exception as error:
         LOG.debug("Exception while fixit_file", exc_info=error)
         yield Result(path, violation=None, error=_error(error, traceback.format_exc()))
@@ -349,7 +357,9 @@ def fixit_paths(
     - when printing status messages, diffs, or errors.
     If no second path argument is given, it will default to "stdin" in the current
     working directory.
-    Any further path names will result in a runtime error.
+    Any further path names will result in a runtime error. A STDIN after
+    another path is skipped with a warning. The CLI refuses both, as usage
+    errors (#40).
 
     .. note::
 

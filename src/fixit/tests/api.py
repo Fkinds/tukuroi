@@ -12,6 +12,7 @@ error, and the exceptions that ``lint`` sends back from its process pool, or a
 process of it that ends.
 """
 
+import io
 import re
 import sys
 from collections.abc import Sequence
@@ -19,12 +20,12 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from ..api import fixit_bytes
+from ..api import fixit_bytes, fixit_paths
 from ..core import loader
 from ..core.text import Position, Range
-from ..ftypes import Config, Error, Metrics, QualifiedRule, Result, Violation
+from ..ftypes import STDIN, Config, Error, Metrics, QualifiedRule, Result, Violation
 from ..util import capture, chdir
-from .characterization_cli import invoke
+from .characterization_cli import invoke, toml_error
 from .characterization_custom_rules import run as run_cli
 from .characterization_suppression import MESSAGES
 from .core_loader import HEAD, files
@@ -386,6 +387,41 @@ class CommandTest(TestCase):
                 self.assertEqual(after, fixed)
                 self.assertEqual(last, summary.format(counts))
                 self.assertEqual(code, exit_code)
+
+
+class FixitPathsTest(TestCase):
+    def test_invalid_config(self) -> None:
+        # The config is wrong, not fixit: no traceback (#40).
+        cases = (
+            ('enable = ["fixit rules"]', "invalid rule name 'fixit rules'"),
+            ("enable = [", toml_error("[tool.fixit]\nenable = [\n")),
+        )
+        for value, message in cases:
+            tree = {"sub/pyproject.toml": f"[tool.fixit]\n{value}\n", "sub/t.py": ""}
+            for paths in (["sub/t.py"], ["-", "sub/t.py"]):
+                with (
+                    self.subTest(value, paths=paths),
+                    files(tree) as root,
+                    chdir(root),
+                    patch("sys.stdin", io.TextIOWrapper(io.BytesIO(b"x = 1\n"))),
+                ):
+                    results = list(fixit_paths(map(Path, paths)))
+                    shown = f"sub/pyproject.toml: {message}"
+                    error = Error("fixit.config.ConfigError", shown)
+                    self.assertEqual(results, [Result(root / "sub/t.py", None, error)])
+
+    def test_stdin_paths(self) -> None:
+        # The CLI refuses these as usage errors (#40). The API warns about "-"
+        # after a path, and raises for 2 paths after "-".
+        tree = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "t.py": ""}
+        with files(tree) as root, chdir(root):
+            with self.assertLogs("fixit.api", "WARNING") as logs:
+                results = list(fixit_paths([Path("t.py"), STDIN]))
+            mix = "WARNING:fixit.api:Cannot mix stdin ('-') with normal paths, ignoring"
+            self.assertEqual(logs.output, [mix])
+            self.assertEqual(results, [Result(root / "t.py", None)])
+            with self.assertRaisesRegex(ValueError, "^too many stdin paths$"):
+                list(fixit_paths([STDIN, Path("t.py"), Path("u.py")]))
 
 
 class PublicNamesTest(TestCase):

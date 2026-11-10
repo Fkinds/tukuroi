@@ -17,7 +17,6 @@ Each case lints a file with SOURCE and pins which of two rules report it.
 
 from collections.abc import Mapping
 
-from ..config import ConfigError
 from .characterization_cli import (
     CLEAN,
     DIRTY,
@@ -25,6 +24,8 @@ from .characterization_cli import (
     CharacterizationTestCase,
     invoke,
     line,
+    records,
+    toml_error,
 )
 
 NA = "NoAssertTrueForComparisons"
@@ -256,46 +257,67 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         # NOTE: "got <class 'str'>" names the type of the key, not of the value.
         not_array = "must be array of values, got <class 'str'>"
         name = "invalid rule name 'fixit rules'"
-        # (one invalid value, the exception, its message)
+        # (one invalid value, the message)
         cases = (
             # Not an array.
-            ("enable = 1", ConfigError, f"'enable' {not_array}"),
+            ("enable = 1", f"'enable' {not_array}"),
             # A string is a sequence in Python, but not an array.
-            ('enable = "fixit.rules"', ConfigError, f"'enable' {not_array}"),
-            ('disable = "fixit.rules"', ConfigError, f"'disable' {not_array}"),
-            # An element that is not a string. The message comes from `re`.
-            ("enable = [1]", TypeError, None),
-            ("disable = [1]", TypeError, None),
+            ('enable = "fixit.rules"', f"'enable' {not_array}"),
+            ('disable = "fixit.rules"', f"'disable' {not_array}"),
             # A string that is not a rule name.
-            ('enable = ["fixit rules"]', ConfigError, name),
-            ('disable = ["fixit rules"]', ConfigError, name),
+            ('enable = ["fixit rules"]', name),
+            ('disable = ["fixit rules"]', name),
             # [tool.fixit.overrides], not [[tool.fixit.overrides]].
-            (
-                '[tool.fixit.overrides]\npath = "sub"',
-                ConfigError,
-                f"'overrides' {not_array}",
-            ),
-            (
-                'overrides = ["sub"]',
-                ConfigError,
-                "'overrides' requires array of tables",
-            ),
+            ('[tool.fixit.overrides]\npath = "sub"', f"'overrides' {not_array}"),
+            ('overrides = ["sub"]', "'overrides' requires array of tables"),
             (
                 f"[[tool.fixit.overrides]]\nenable = [{NA_}]",
-                ConfigError,
                 "'overrides' table requires 'path' value",
             ),
+            # Not TOML: the message of tomllib.
+            ("enable = [", toml_error(toml(ROOT, "enable = ["))),
         )
-        for value, error, message in cases:
+        for value, message in cases:
+            with self.subTest(value):
+                files = {"pyproject.toml": toml(ROOT, value), "t.py": SOURCE}
+                result = invoke(files, ["lint", "t.py"])
+                # Without a traceback, before any file is linted (#40). The
+                # libcst engine printed the traceback of the exception.
+                self.assertEqual(result.stderr, f"Error: pyproject.toml: {message}\n")
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.exit_code, 2)
+        # An element that is not a string. The message comes from `re`.
+        for value in ("enable = [1]", "disable = [1]"):
             with self.subTest(value):
                 files = {"pyproject.toml": toml(ROOT, value), "t.py": SOURCE}
                 result = invoke(files, ["lint", "t.py"])
                 # NOTE: the exception is not caught; a traceback is printed.
-                self.assertIs(type(result.exception), error)
-                if message is not None:
-                    self.assertEqual(str(result.exception), message)
+                self.assertIs(type(result.exception), TypeError)
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 1)
+
+    def test_invalid_value_in_the_config_of_a_file(self) -> None:
+        # An error of the file, without a traceback (#40). The other files are
+        # linted, in the process pool.
+        cases = (
+            ('enable = ["fixit rules"]', "invalid rule name 'fixit rules'"),
+            ("enable = [", toml_error(toml("enable = ["))),
+        )
+        for value, message in cases:
+            with self.subTest(value):
+                files = {
+                    "pyproject.toml": ONLY_SI,
+                    "sub/pyproject.toml": toml(value),
+                    "t.py": SOURCE,
+                    "sub/t.py": SOURCE,
+                }
+                result = invoke(files, ["lint", "t.py", "sub/t.py"])
+                error = f"sub/t.py: EXCEPTION: sub/pyproject.toml: {message}\n"
+                found = [line("t.py", SI, POSITION[SI]), error]
+                self.assertEqual(records(result.stdout), sorted(found))
+                summary = "🛠️  2 files checked, 2 files with errors 🛠️\n"
+                self.assertEqual(result.stderr, summary)
+                self.assertEqual(result.exit_code, 3)
 
     def test_unknown_key(self) -> None:
         warning = "WARNING:fixit.config:unknown configuration option 'bogus'\n"
