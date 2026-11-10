@@ -46,14 +46,11 @@ class ConfigTest(TestCase):
                 enable-root-import = true
                 enable = ["more.rules"]
                 disable = ["fixit.rules.SomethingSpecific"]
-                python-version = "3.8"
 
                 [[tool.fixit.overrides]]
                 path = "other"
                 enable = ["other.stuff", ".globalrules"]
                 disable = ["fixit.rules"]
-                options = {"other.stuff.Whatever"={key="value"}}
-                python-version = "3.10"
                 """
             )
         )
@@ -81,7 +78,6 @@ class ConfigTest(TestCase):
                 root = true
                 enable = ["fake8", "make8"]
                 disable = ["foo.bar"]
-                unknown = "hello"
                 """
             )
         )
@@ -203,7 +199,6 @@ class ConfigTest(TestCase):
                             "root": True,
                             "enable": ["fake8", "make8"],
                             "disable": ["foo.bar"],
-                            "unknown": "hello",
                         },
                     )
                 ],
@@ -222,16 +217,11 @@ class ConfigTest(TestCase):
                             "enable-root-import": True,
                             "enable": ["more.rules"],
                             "disable": ["fixit.rules.SomethingSpecific"],
-                            "python-version": "3.8",
                             "overrides": [
                                 {
                                     "path": "other",
                                     "enable": ["other.stuff", ".globalrules"],
                                     "disable": ["fixit.rules"],
-                                    "options": {
-                                        "other.stuff.Whatever": {"key": "value"}
-                                    },
-                                    "python-version": "3.10",
                                 },
                             ],
                         },
@@ -252,16 +242,11 @@ class ConfigTest(TestCase):
                             "enable-root-import": True,
                             "enable": ["more.rules"],
                             "disable": ["fixit.rules.SomethingSpecific"],
-                            "python-version": "3.8",
                             "overrides": [
                                 {
                                     "path": "other",
                                     "enable": ["other.stuff", ".globalrules"],
                                     "disable": ["fixit.rules"],
-                                    "options": {
-                                        "other.stuff.Whatever": {"key": "value"}
-                                    },
-                                    "python-version": "3.10",
                                 },
                             ],
                         },
@@ -279,16 +264,11 @@ class ConfigTest(TestCase):
                             "enable-root-import": True,
                             "enable": ["more.rules"],
                             "disable": ["fixit.rules.SomethingSpecific"],
-                            "python-version": "3.8",
                             "overrides": [
                                 {
                                     "path": "other",
                                     "enable": ["other.stuff", ".globalrules"],
                                     "disable": ["fixit.rules"],
-                                    "options": {
-                                        "other.stuff.Whatever": {"key": "value"}
-                                    },
-                                    "python-version": "3.10",
                                 },
                             ],
                         },
@@ -529,16 +509,21 @@ class ConfigTest(TestCase):
                 self.assertEqual(config.toml_type(parsed), expected)
 
     def test_removed_keys(self) -> None:
-        # #21 removed these settings: they warn as any unknown key does.
-        (self.tdp / "pyproject.toml").write_text(
-            "[tool.fixit]\nroot = true\npython-version = '3.10'\n"
-            "formatter = 'ufmt'\ntags = 'x'\n\n[tool.fixit.options]\nX = {a = 1}\n"
+        # #21 removed these settings. A config that sets one is an error that
+        # says so (#40); it was a warning, as of any unknown key.
+        cases = (
+            ("python-version = '3.10'", "python-version"),
+            ("formatter = 'ufmt'", "formatter"),
+            ("tags = 'x'", "tags"),
+            ("[tool.fixit.options]\nX = {a = 1}", "options"),
         )
-        with self.assertLogs("fixit.config", "WARNING") as logs:
-            config.generate_config(self.tdp / "foo.py")
-        keys = ["python-version", "formatter", "tags", "options"]
-        expected = [f"unknown configuration option {key!r}" for key in keys]
-        self.assertEqual([r.getMessage() for r in logs.records], expected)
+        for value, key in cases:
+            with self.subTest(key):
+                text = f"[tool.fixit]\nroot = true\n{value}\n"
+                (self.tdp / "pyproject.toml").write_text(text)
+                with self.assertRaises(config.ConfigError) as caught:
+                    config.generate_config(self.tdp / "foo.py")
+                self.assertEqual(str(caught.exception), f"{key}: no longer supported")
 
     def test_format_output(self) -> None:
         with chdir(self.tdp):

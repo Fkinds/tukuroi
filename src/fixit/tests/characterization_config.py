@@ -407,22 +407,54 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                     self.assertEqual(result.exit_code, 2)
 
     def test_unknown_key(self) -> None:
-        warning = "WARNING:fixit.config:unknown configuration option 'bogus'\n"
+        # A config error, before any file is linted (#40). The libcst engine
+        # logged a warning (three times, with the checks of #40), and ignored
+        # the keys of an override without one.
+        keys = "'disable', 'enable', 'enable-root-import', 'output-format',"
+        keys += " 'output-template', 'overrides', 'root'"
+        where = 'overrides (path = "."):'
+        override = '[[tool.fixit.overrides]]\npath = "."\n'
         cases = (
-            # NOTE: the warning is logged three times: as the config of the
-            # current directory is read, as the configs are checked before
-            # any file is linted (#40), and as t.py is linted.
-            ("in [tool.fixit]", "bogus = 1\n", warning * 3),
-            # NOTE: an unknown key in an override is ignored without a warning.
-            ("in overrides", '[[tool.fixit.overrides]]\npath = "."\nbogus = 1\n', ""),
-        )
-        for label, key, logged in cases:
+            # (label, lines, error)
+            ("in [tool.fixit]", "bogus = 1\n", f"bogus: unknown key, not one of {keys}"),
+            ("removed by #21", "tags = ['x']\n", "tags: no longer supported"),
+            ("in overrides", f"{override}bogus = 1\n", f"{where} bogus: unknown key, not one of 'disable', 'enable', 'path'"),
+            ("not in an override", f"{override}output-format = 'vscode'\n", f"{where} output-format: not allowed in an override"),
+            ("removed, in overrides", f"{override}options = {{}}\n", f"{where} options: no longer supported"),
+        )  # fmt: skip
+        for label, lines, error in cases:
             with self.subTest(label):
-                files = {"pyproject.toml": ONLY_SI + key, "t.py": SOURCE}
+                files = {"pyproject.toml": ONLY_SI + lines, "t.py": SOURCE}
                 result = invoke(files, ["lint", "t.py"])
-                self.assertEqual(result.stdout, line("t.py", SI, POSITION[SI]))
-                self.assertEqual(result.stderr, logged + DIRTY)
-                self.assertEqual(result.exit_code, 1)
+                self.assertEqual(result.stderr, f"Error: pyproject.toml: {error}\n")
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.exit_code, 2)
+
+    def test_keys_outside_the_table(self) -> None:
+        # fixit.toml and .fixit.toml are read under [tool.fixit] only: a key or
+        # a table outside it is a config error (#40). The libcst engine skipped
+        # them without a message. A pyproject.toml has the keys of other tools.
+        no_table = ONLY_NA.removeprefix("[tool.fixit]\n")
+        cases = (
+            # (label, file, text, error)
+            ("fixit.toml, no table", "fixit.toml", no_table, "root: must be under [tool.fixit]"),
+            (".fixit.toml, no table", ".fixit.toml", no_table, "root: must be under [tool.fixit]"),
+            ("another tool", "fixit.toml", ONLY_NA + "[tool.black]\nline-length = 80\n", "tool.black: must be under [tool.fixit]"),
+        )  # fmt: skip
+        for label, name, text, error in cases:
+            with self.subTest(label):
+                files = {f"sub/{name}": text, "t.py": SOURCE, "sub/t.py": SOURCE}
+                result = invoke(
+                    {"pyproject.toml": ONLY_SI, **files}, ["lint", "sub/t.py"]
+                )
+                self.assertEqual(result.stderr, f"Error: sub/{name}: {error}\n")
+                self.assertEqual(result.exit_code, 2)
+        with self.subTest("pyproject.toml"):
+            text = ONLY_NA + "[tool.black]\nline-length = 80\n"
+            files = {"pyproject.toml": "[project]\nname = 'x'\n" + text, "t.py": SOURCE}
+            result = invoke(files, ["lint", "t.py"])
+            self.assertEqual(result.stdout, line("t.py", NA, POSITION[NA]))
+            self.assertEqual(result.exit_code, 1)
 
     def test_config_file_names(self) -> None:
         cases = (
@@ -430,13 +462,6 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
             (".fixit.toml", {"sub/.fixit.toml": ONLY_NA}, (NA,)),
             ("pyproject.toml", {"sub/pyproject.toml": ONLY_NA}, (NA,)),
             ("other name", {"sub/fixit.cfg.toml": ONLY_NA}, (SI,)),
-            # NOTE: in fixit.toml too, the keys must be under [tool.fixit];
-            # the keys outside it are skipped without a message.
-            (
-                "fixit.toml, no table",
-                {"sub/fixit.toml": ONLY_NA.removeprefix("[tool.fixit]\n")},
-                (SI,),
-            ),
             # These have no [tool.fixit]; the parent's config is used.
             (
                 "no tool.fixit",
