@@ -113,12 +113,10 @@ class Options:
 @dataclass
 class LSPOptions:
     """
-    Command-line options to affect LSP runtime behavior
+    Command-line options to affect LSP runtime behavior. The server talks over
+    stdio only (#15).
     """
 
-    tcp: int | None
-    ws: int | None
-    stdio: bool = True
     debounce_interval: float = 0.5
 
 

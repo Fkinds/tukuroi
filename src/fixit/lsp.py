@@ -180,14 +180,11 @@ class LSP:
 
     def start(self) -> None:
         """
-        Effect: occupies the specified I/O channels.
+        Effect: occupies stdin and stdout. The server talks over stdio only: it
+        had TCP and WebSocket too, which anyone on the machine could connect to
+        (#15).
         """
-        if self.lsp_options.ws:
-            self.lsp.start_ws("localhost", self.lsp_options.ws)
-        if self.lsp_options.tcp:
-            self.lsp.start_tcp("localhost", self.lsp_options.tcp)
-        if self.lsp_options.stdio:
-            self.lsp.start_io()
+        self.lsp.start_io()
 
 
 VoidFunction = TypeVar("VoidFunction", bound=Callable[..., None])

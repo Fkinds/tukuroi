@@ -32,6 +32,8 @@ from tempfile import TemporaryDirectory
 from typing import Any
 from unittest.mock import patch
 
+from click.testing import CliRunner
+
 from .. import __version__
 from ..cli import main
 from ..lsp import BOM
@@ -159,8 +161,13 @@ class Stdout(io.BytesIO):
         pass
 
 
-def serve(files: Mapping[str, str], messages: Sequence[Json]) -> Served:
-    """Write ``files`` to a new directory and send ``messages`` to ``fixit lsp``."""
+def serve(
+    files: Mapping[str, str], messages: Sequence[Json], args: Sequence[str] = ()
+) -> Served:
+    """
+    Write ``files`` to a new directory and send ``messages`` to ``fixit lsp``,
+    with ``args``.
+    """
     with TemporaryDirectory() as td:
         root = Path(td).resolve()
         for name, text in files.items():
@@ -183,7 +190,8 @@ def serve(files: Mapping[str, str], messages: Sequence[Json]) -> Served:
         ):
             warnings.simplefilter("ignore", DeprecationWarning)
             try:
-                main.main(["lsp", "--debounce-interval", "0"], prog_name="fixit")
+                argv = ["lsp", "--debounce-interval", "0", *args]
+                main.main(argv, prog_name="fixit")
             except SystemExit as e:
                 exit_code = e.code
         data, received = stdout.getvalue(), []
@@ -319,6 +327,24 @@ class LspCharacterizationTest(CharacterizationTestCase):
                 result = {"capabilities": capabilities, "serverInfo": info}
                 self.assertEqual(served.responses[1], {"result": result})
                 self.assertEqual(served.stderr, stderr)
+
+    def test_stdio_only(self) -> None:
+        # --stdio is taken without a value, for the clients that pass it: the
+        # same server (#15). It took a value, so that `fixit lsp --stdio` was a
+        # usage error.
+        files = {"pyproject.toml": config(UI)}
+        messages = session(did_open(f"{CALL}\n"), formatting())
+        flag, default = serve(files, messages, ["--stdio"]), serve(files, messages)
+        self.assertEqual(flag.responses, default.responses)
+        self.assertEqual(in_order(flag.published), in_order(default.published))
+        self.assertEqual((flag.exit_code, flag.stderr), (default.exit_code, ""))
+        # TCP and WebSocket are gone, with no authentication (#15).
+        for option in ("--tcp", "--ws"):
+            with self.subTest(option):
+                result = CliRunner().invoke(main, ["lsp", option, "8080"])
+                error = f"\nError: No such option '{option}'.\n"
+                self.assertTrue(result.output.endswith(error), result.output)
+                self.assertEqual(result.exit_code, 2)
 
     def test_every_message_has_the_content_type_header(self) -> None:
         files = {"pyproject.toml": config(UI)}
