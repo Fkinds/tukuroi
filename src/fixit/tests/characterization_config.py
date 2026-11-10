@@ -16,6 +16,7 @@ Each case lints a file with SOURCE and pins which of two rules report it.
 """
 
 from collections.abc import Mapping
+from pathlib import Path
 
 from .characterization_cli import (
     CLEAN,
@@ -222,6 +223,33 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
             ),
         )
         self.assert_reported(cases)
+
+    def test_search_stops_at_the_root_of_the_repository(self) -> None:
+        # The configs are searched up to the root of the repository, or outside
+        # one, up to the current directory (#13). ONLY_NA above it is not read:
+        # the default rules report the file. The libcst engine searched up to
+        # the root of the filesystem.
+        above = {"pyproject.toml": ONLY_NA}
+        cases = (
+            # (label, files, cwd, path, rules)
+            (".git directory", {"repo/.git/HEAD": ""}, ".", "repo/t.py", (NA, SI)),
+            (".git file", {"repo/.git": "gitdir: elsewhere\n"}, ".", "repo/t.py", (NA, SI)),
+            (".hg", {"repo/.hg/requires": ""}, ".", "repo/t.py", (NA, SI)),
+            ("no repository, cwd", {}, "sub", "t.py", (NA, SI)),
+            ("no repository, not in cwd", {"a/x.py": ""}, "a", "../b/t.py", (NA, SI)),
+            # Up to there, the configs are merged as before.
+            ("in the repository", {".git/HEAD": ""}, "sub", "t.py", (NA,)),
+            ("no repository, in cwd", {}, ".", "sub/t.py", (NA,)),
+        )  # fmt: skip
+        for label, files, cwd, path, rules in cases:
+            with self.subTest(label):
+                where = (Path(cwd) / path).as_posix().removeprefix("./")
+                result = invoke(
+                    {**above, **files, where: SOURCE}, ["lint", path], cwd=cwd
+                )
+                reported = {rule for rule in (NA, SI) if f" {rule}: " in result.stdout}
+                self.assertEqual(reported, set(rules), result.stdout)
+                self.assertEqual(result.exit_code, 1)
 
     def test_two_overrides(self) -> None:
         def files(*overrides: str) -> dict[str, str]:

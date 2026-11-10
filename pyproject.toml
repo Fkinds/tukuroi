@@ -73,6 +73,7 @@ ignored_authors = ["dependabot"]
 "__init__.py" = ["F401"]
 
 [tool.fixit]
+root = true
 enable = ["fixit.rules"]
 
 [[tool.fixit.overrides]]

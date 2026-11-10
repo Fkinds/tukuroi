@@ -182,6 +182,26 @@ def rule_name(rule: QualifiedRule) -> RuleName:
     return RuleName(rule.module, rule.name, root)
 
 
+# What marks the root of a repository: the search for configs stops there (#13).
+# .git is a file in a worktree and in a submodule.
+REPOSITORY_MARKERS = (".git", ".hg")
+
+
+def search_root(directory: Path) -> Path:
+    """
+    Where the search for the configs of ``directory`` stops at the latest (#13):
+    the nearest root of a repository, a directory with one of
+    :data:`REPOSITORY_MARKERS`. Outside a repository, the current directory if
+    ``directory`` is in it, or else ``directory`` itself. A config above it, which
+    someone else may have put there, is not read.
+    """
+    for parent in (directory, *directory.parents):
+        if any((parent / marker).exists() for marker in REPOSITORY_MARKERS):
+            return parent
+    cwd = Path.cwd().resolve()
+    return cwd if directory.is_relative_to(cwd) else directory
+
+
 def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
     """
     Given a file path, locate all relevant config files in priority order.
@@ -191,7 +211,8 @@ def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
 
     If root is given, only return configs between path and root (inclusive), ignoring
     any paths outside of root, even if they would contain relevant configs.
-    If given, root must contain path.
+    If given, root must contain path. Without it, the search stops at
+    :func:`search_root` (#13).
 
     Returns a list of config paths in priority order, from highest priority to lowest.
     """
@@ -200,7 +221,8 @@ def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
     if not path.is_dir():
         path = path.parent
 
-    root = root.resolve() if root is not None else Path(path.anchor)
+    root = root.resolve() if root is not None else search_root(path.resolve())
+    path = path.resolve()
     path.relative_to(root)  # enforce path being inside root
 
     while True:
