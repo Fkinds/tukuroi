@@ -62,7 +62,8 @@ Examples of client setup:
 pre-commit
 ^^^^^^^^^^
 
-Fixit can be included as a hook for `pre-commit <https://pre-commit.com>`_.
+Fixit can be included as a hook for `pre-commit <https://pre-commit.com>`_,
+or for `prek <https://prek.j178.dev>`_, which reads the same configuration.
 
 Once you `install it <https://pre-commit.com/#installation>`_, you can add
 Fixit's pre-commit hook to the ``.pre-commit-config.yaml`` file in

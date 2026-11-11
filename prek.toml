@@ -1,0 +1,53 @@
+# The checks to run before each commit (#9). Install the Git hook once with
+# `uv run prek install`, and run every check on every file with
+# `uv run prek run --all-files`. The local hooks run the tools of uv.lock, on
+# the files that `make lint` checks.
+minimum_prek_version = "0.5.10"
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "ruff-check"
+name = "ruff check --fix"
+entry = "uv run --locked ruff check --fix"
+language = "system"
+types = ["python"]
+files = "^(src/fixit|scripts)/"
+
+[[repos.hooks]]
+id = "ruff-format"
+name = "ruff format"
+entry = "uv run --locked ruff format"
+language = "system"
+types = ["python"]
+files = "^(src/fixit|scripts)/"
+
+[[repos.hooks]]
+id = "fixit-lint"
+name = "fixit lint"
+entry = "uv run --locked fixit lint"
+language = "system"
+types = ["python"]
+files = "^(src/fixit|scripts)/"
+
+[[repos.hooks]]
+id = "copyright"
+name = "copyright header"
+entry = "uv run --locked python scripts/check_copyright.py"
+language = "system"
+types_or = ["python", "shell"]
+
+# Built into prek: no download, and no environment to install.
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "trailing-whitespace" },
+    { id = "end-of-file-fixer" },
+    { id = "mixed-line-ending" },
+    { id = "check-toml" },
+    { id = "check-yaml" },
+    { id = "check-merge-conflict" },
+    { id = "check-added-large-files" },
+    { id = "detect-private-key" },
+]

@@ -394,5 +394,3 @@ Built-in Rules
             import typing as t
 
             x: t.Callable[..., int] = ...
-
-    

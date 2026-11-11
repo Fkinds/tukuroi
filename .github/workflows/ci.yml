@@ -41,7 +41,7 @@ jobs:
         run: make SYNC="--extra lsp" install
       - name: Test
         run: make SYNC="--extra lsp" test
-  
+
   pyrefly:
     runs-on: ubuntu-latest
     steps:
@@ -69,6 +69,9 @@ jobs:
         run: make SYNC= install
       - name: Lint
         run: make SYNC= lint
+      - name: Hooks
+        # The checks of prek.toml, for the commits made without the hook (#9).
+        run: uv run prek run --all-files
 
   docs:
     runs-on: ubuntu-latest

@@ -29,8 +29,13 @@ def tracked_files() -> Iterable[Path]:
 
 
 def main():
+    # The files given, as the hook of prek.toml gives them (#9), or else every
+    # tracked file.
+    paths = [Path(arg) for arg in sys.argv[1:]] or tracked_files()
     error = False
-    for path in tracked_files():
+    for path in paths:
+        if path.suffix not in (".py", ".sh"):
+            continue
         content = path.read_text("utf-8")
         if EXPECTED_HEADER not in content:
             print(f"Missing or incomplete copyright in {path}")
