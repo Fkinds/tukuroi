@@ -87,8 +87,14 @@ $ make
 The dependencies are in `pyproject.toml`: those of the package, its extras
 (`lsp`, `pretty`), and the dependency groups for developing (`dev`, `docs`),
 which are not part of the package. After changing them, update `uv.lock` with
-`uv lock`, and commit both. CI installs from `uv.lock`, and fails when it does
+`make lock`, and commit both. CI installs from `uv.lock`, and fails when it does
 not match `pyproject.toml`.
+
+The release build of CI takes the build backend (`[build-system]` of
+`pyproject.toml`) from `build-constraints.txt`, with hashes, which `make lock`
+writes from `build-constraints.in`. `make lock` keeps the versions that the
+files have; pass `--upgrade` to `uv lock` and `uv pip compile` for newer ones.
+CI uses the version of uv in `UV_VERSION` of its workflows.
 
 
 ## Submitting PRs

@@ -74,6 +74,10 @@ signed_tags = true
 version_file = false
 ignored_authors = ["dependabot"]
 
+# The uv to develop with (#18): CI uses the one of UV_VERSION in its workflows.
+[tool.uv]
+required-version = ">=0.13.5"
+
 # `make coverage` (#10): the lines and branches of the package that the tests
 # run, in the processes of the pool of `lint` and in subprocesses too.
 [tool.coverage.run]

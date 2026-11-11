@@ -13,6 +13,8 @@ permissions:
 env:
   # uv installs what uv.lock has, and fails if it does not match pyproject.toml.
   UV_LOCKED: "1"
+  # The uv of CI, which builds the release too (#18).
+  UV_VERSION: "0.13.5"
 
 jobs:
   test:
@@ -32,6 +34,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
+          version: ${{ env.UV_VERSION }}
           enable-cache: true
           cache-dependency-glob: uv.lock
           cache-suffix: ${{ matrix.python-version }}
@@ -49,6 +52,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
+          version: ${{ env.UV_VERSION }}
           python-version: "3.14"
           activate-environment: true
       - name: Install
@@ -68,6 +72,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
+          version: ${{ env.UV_VERSION }}
           python-version: "3.14"
           activate-environment: true
       - name: Install
@@ -82,6 +87,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
+          version: ${{ env.UV_VERSION }}
           python-version: "3.14"
           activate-environment: true
       - name: Install
@@ -99,6 +105,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
+          version: ${{ env.UV_VERSION }}
           python-version: "3.14"
           activate-environment: true
       - name: Install
@@ -115,11 +122,17 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
+          version: ${{ env.UV_VERSION }}
+          # Nothing that an earlier run left goes into the release (#18).
+          enable-cache: false
           python-version: '3.14'
       - name: Build
-        run: uv build
+        # The build backend of build-constraints.txt, checked by its hashes: a
+        # preview feature of uv 0.13.5, whose version CI fixes (UV_VERSION).
+        run: >-
+          uv build --no-cache
+          --build-constraints build-constraints.txt --require-build-hashes
+          --preview-features build-dependency-hashes
       - name: Upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -1,0 +1,4 @@
+# The build backend of pyproject.toml ([build-system]), for the release build
+# of CI (#18). `make lock` writes build-constraints.txt from it, with hashes.
+hatchling
+hatch-vcs
