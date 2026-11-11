@@ -28,6 +28,10 @@
   vulnerabilityAlerts: {
     labels: ["dependencies", "security"],
   },
+  // And of those that osv.dev has (#25), for what Renovate reads: the
+  // dependencies of pyproject.toml, build-constraints.txt, which `make audit`
+  // does not check, and uv. An experimental feature of Renovate.
+  osvVulnerabilityAlerts: true,
   // The build backend of the release build, which `make lock` writes with
   // `uv pip compile` (#18).
   "pip-compile": {

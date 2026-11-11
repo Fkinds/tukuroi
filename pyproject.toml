@@ -79,6 +79,13 @@ ignored_authors = ["dependabot"]
 [tool.uv]
 required-version = ">=0.13.5"
 
+# The vulnerabilities that `make audit` leaves out (#25): each with its reason
+# and its issue, in a comment. `ignore-until-fixed` only while no release fixes
+# the vulnerability.
+[tool.uv.audit]
+ignore = []
+ignore-until-fixed = []
+
 # `make coverage` (#10): the lines and branches of the package that the tests
 # run, in the processes of the pool of `lint` and in subprocesses too.
 [tool.coverage.run]

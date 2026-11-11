@@ -1,0 +1,84 @@
+name: Audit
+# The known vulnerabilities of the dependencies and of the actions, each day:
+# they come out with no change to this repository (#25). A run that finds one
+# fails, and GitHub notifies whoever last changed the cron line below.
+on:
+  schedule:
+    # 09:17 in Asia/Tokyo, off the hour, when GitHub has fewer runs to start.
+    - cron: "17 0 * * *"
+  # A pull request that changes the dependencies is checked before it is
+  # merged, and one that changes this workflow runs it.
+  pull_request:
+    paths:
+      - uv.lock
+      - build-constraints.txt
+      - pyproject.toml
+      - .github/workflows/audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels the run of the one before.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  UV_LOCKED: "1"
+  # The uv of CI, which builds the release too (#18).
+  UV_VERSION: "0.13.5"
+
+jobs:
+  dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+          python-version: "3.14"
+      - name: Audit
+        # What uv.lock pins, with every extra and group, against osv.dev.
+        # bash, for pipefail: the step fails with make, not with tee.
+        shell: bash
+        run: make audit 2>&1 | tee audit.txt
+      - name: Summary
+        # The report, on the page of the run.
+        if: always()
+        run: |
+          {
+            echo '```'
+            cat audit.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  workflows:
+    # The actions are pinned to commit SHAs, for which GitHub sends no alerts:
+    # zizmor checks them against the advisories of GitHub. On pull requests,
+    # the lint job of CI runs it.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+          python-version: "3.14"
+      - name: Install
+        run: make SYNC= install
+      - name: Workflows
+        # The token reads public repositories only.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run zizmor --format=github .github/workflows
