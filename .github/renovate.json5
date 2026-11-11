@@ -1,0 +1,75 @@
+// Renovate keeps the dependencies up to date (#7), in place of Dependabot.
+// The Renovate app of Mend runs it: CONTRIBUTING.md has what it updates.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    // Commits and titles as Conventional Commits (#24): "chore(deps): ...".
+    ":semanticCommits",
+    // The actions stay pinned to full commit SHAs, with the version in a
+    // comment (#16).
+    "helpers:pinGitHubActionDigests",
+  ],
+  timezone: "Asia/Tokyo",
+  schedule: ["before 9am on monday"],
+  // A version only once it has been public for 7 days: most of the bad ones
+  // are taken down by then (#7, as #18).
+  minimumReleaseAge: "7 days",
+  labels: ["dependencies"],
+  dependencyDashboard: true,
+  automerge: false,
+  // uv.lock and build-constraints.txt, with the versions of what they pin
+  // that pyproject.toml does not name.
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 9am on the first day of the month"],
+  },
+  // The fixes of the vulnerabilities that GitHub finds: not Dependabot's.
+  vulnerabilityAlerts: {
+    labels: ["dependencies", "security"],
+  },
+  // The build backend of the release build, which `make lock` writes with
+  // `uv pip compile` (#18).
+  "pip-compile": {
+    managerFilePatterns: ["/(^|/)build-constraints\\.txt$/"],
+  },
+  customManagers: [
+    {
+      customType: "regex",
+      description: "The uv of CI, in UV_VERSION of the workflows (#18).",
+      managerFilePatterns: ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      matchStrings: ['UV_VERSION: "(?<currentValue>[^"]+)"'],
+      depNameTemplate: "uv",
+      datasourceTemplate: "pypi",
+    },
+  ],
+  packageRules: [
+    // One pull request for the updates that are not major, of each kind; a
+    // major update has one of its own.
+    {
+      matchManagers: ["pep621"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "Python dependencies",
+    },
+    {
+      matchManagers: ["github-actions"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      groupName: "GitHub Actions",
+    },
+    {
+      matchManagers: ["pip-compile", "custom.regex"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "build tools",
+    },
+    // Lower bounds that the project chooses, not versions to keep up with:
+    // the versions of Python (.python-version, requires-python).
+    {
+      matchManagers: ["pyenv"],
+      enabled: false,
+    },
+    {
+      matchDepTypes: ["requires-python"],
+      enabled: false,
+    },
+  ],
+}
