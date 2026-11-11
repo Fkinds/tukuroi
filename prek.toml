@@ -40,6 +40,16 @@ entry = "uv run --locked python scripts/check_copyright.py"
 language = "system"
 types_or = ["python", "shell"]
 
+# The workflows, by zizmor (#28): offline, with no token. CI runs it with the
+# checks that ask GitHub too.
+[[repos.hooks]]
+id = "zizmor"
+name = "zizmor"
+entry = "uv run --locked zizmor --offline"
+language = "system"
+types = ["yaml"]
+files = '^\.github/workflows/'
+
 # Conventional Commits, as `[tool.commitizen]` of pyproject.toml has them.
 [[repos.hooks]]
 id = "commit-message"

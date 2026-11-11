@@ -40,12 +40,13 @@ To measure which lines and branches of Fixit the tests run, with coverage.py:
 $ make coverage
 ```
 
-It lists the lines and branches that no test runs, and fails when the total
-goes below `fail_under` in `pyproject.toml`: 100%. CI runs it too, and shows the
-table on the page of the run. Code that cannot run by its design, such as the
-last branch of a check of every case, raises `AssertionError` with the reason,
-or calls `typing.assert_never`; coverage leaves those lines out. Do not leave
-out code that a test can run.
+It lists the lines and branches that no test runs, and fails when the total goes
+below `fail_under` in `pyproject.toml`: 100%. CI runs the tests this way, on
+each version of Python and each system that it tests, and shows the table on the
+page of the run. Code that cannot run by its design, such as the last branch of
+a check of every case, raises `AssertionError` with the reason, or calls
+`typing.assert_never`; coverage leaves those lines out. Do not leave out code
+that a test can run.
 
 To format code and sort imports:
 
@@ -54,10 +55,11 @@ $ make format
 ```
 
 [prek][] runs the checks of `prek.toml` before each commit: ruff, `fixit lint`
-and the copyright header on the files that `make lint` checks, and its built-in
-checks (whitespace, line endings, TOML and YAML syntax, large files, private
-keys) on every file. It checks the commit message too (see below). `make
-install` installs prek; install its Git hooks once:
+and the copyright header on the files that `make lint` checks, [zizmor][] on the
+workflows of `.github/workflows`, and its built-in checks (whitespace, line
+endings, TOML and YAML syntax, large files, private keys) on every file. It
+checks the commit message too (see below). `make install` installs prek; install
+its Git hooks once:
 
 ```shell-session
 $ uv run prek install
@@ -68,6 +70,11 @@ To run every check on every file, as CI does:
 ```shell-session
 $ uv run prek run --all-files
 ```
+
+zizmor runs offline here, with no token. CI runs it with the checks that ask
+GitHub too: that each action is pinned to a commit of its own repository, that
+the comment next to it has the version of that commit, and that no action has a
+known vulnerability.
 
 Documentation is built using sphinx. You can generate and view the documentation
 locally in your browser:
@@ -90,11 +97,12 @@ which are not part of the package. After changing them, update `uv.lock` with
 `make lock`, and commit both. CI installs from `uv.lock`, and fails when it does
 not match `pyproject.toml`.
 
-The release build of CI takes the build backend (`[build-system]` of
-`pyproject.toml`) from `build-constraints.txt`, with hashes, which `make lock`
-writes from `build-constraints.in`. `make lock` keeps the versions that the
-files have; pass `--upgrade` to `uv lock` and `uv pip compile` for newer ones.
-CI uses the version of uv in `UV_VERSION` of its workflows.
+CI builds the package as the release will be built: it takes the build backend
+(`[build-system]` of `pyproject.toml`) from `build-constraints.txt`, with
+hashes, which `make lock` writes from `build-constraints.in`. `make lock` keeps
+the versions that the files have; pass `--upgrade` to `uv lock` and `uv pip
+compile` for newer ones. CI uses the version of uv in `UV_VERSION` of its
+workflows.
 
 [Renovate][] keeps them up to date, as `.github/renovate.json5` says. Each
 Monday morning (Asia/Tokyo) it opens pull requests for the versions released at
@@ -279,6 +287,7 @@ $ ghstack land $PR_URL
 [Renovate]: https://docs.renovatebot.com/
 [ruff]: https://docs.astral.sh/ruff/
 [uv]: https://docs.astral.sh/uv/
+[zizmor]: https://docs.zizmor.sh/
 
 ## Supported Python versions
 
@@ -287,7 +296,8 @@ their free-threaded builds. As of November 2026, these are 3.14 and 3.15
 (and 3.14t and 3.15t).
 
 - Any patch release of a supported minor version is supported. CI tests the
-  latest patch release of each.
+  latest patch release of each on Ubuntu, and of the builds with the GIL on
+  macOS too. Whether to support Windows is open (#124).
 - When a new minor version is released, add it once CI passes on it, and drop
   the oldest supported minor version in the same change, so that exactly two
   remain.

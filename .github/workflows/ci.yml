@@ -1,14 +1,21 @@
 name: CI
+# Checks each change: it publishes nothing. The release gets a workflow of its
+# own, without the caches of these jobs (#28).
 on:
   push:
     branches:
       - main
-    tags:
-      - v*
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# A new push to a pull request cancels the run of the one before; the runs of
+# main all finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # uv installs what uv.lock has, and fails if it does not match pyproject.toml.
@@ -19,19 +26,27 @@ env:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-24.04]
         python-version:
           - "3.14"
           - "3.14t"
           - "3.15"
           - "3.15t"
-        os: [ubuntu-latest]
+        include:
+          - os: macos-15
+            python-version: "3.14"
+          - os: macos-15
+            python-version: "3.15"
 
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: ${{ env.UV_VERSION }}
@@ -39,75 +54,75 @@ jobs:
           cache-dependency-glob: uv.lock
           cache-suffix: ${{ matrix.python-version }}
           python-version: ${{ matrix.python-version }}
-          activate-environment: true
       - name: Install
         run: make SYNC="--extra lsp" install
       - name: Test
-        run: make SYNC="--extra lsp" test
-
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: "3.14"
-          activate-environment: true
-      - name: Install
-        run: make SYNC="--extra lsp" install
-      - name: Coverage
-        # Fails below fail_under of pyproject.toml (#10).
+        # The tests, measured: fails below fail_under of pyproject.toml (#10),
+        # on each version and system.
         run: make SYNC="--extra lsp" coverage
       - name: Summary
         # The table, on the page of the run: the data is not sent anywhere.
         if: always()
-        run: uv run coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"
+        run: uv run --no-sync coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"
 
   pyrefly:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.14"
-          activate-environment: true
       - name: Install
         run: make SYNC= install
       - name: Pyrefly
         run: uv run pyrefly check -c pyproject.toml
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.14"
-          activate-environment: true
       - name: Install
         run: make SYNC= install
-      - name: Lint
-        run: make SYNC= lint
       - name: Hooks
-        # The checks of prek.toml, for the commits made without the hook (#9).
+        # The checks of prek.toml, which has those of `make lint` too (#9), for
+        # the commits made without the hook. zizmor runs in the next step.
+        env:
+          SKIP: zizmor
         run: uv run prek run --all-files
+      - name: Workflows
+        # zizmor of prek.toml, with the checks that ask GitHub too: that each
+        # action is pinned to a commit of its own repository, that the comment
+        # has the version of the commit, and that no action has a known
+        # vulnerability (#28). The token reads public repositories only.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run zizmor --format=github .github/workflows
 
   docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.14"
-          activate-environment: true
       - name: Install
         run: make SYNC="--group docs" install
       - name: Docs
@@ -116,16 +131,20 @@ jobs:
         run: git diff --exit-code
 
   build:
-    needs: test
-    runs-on: ubuntu-latest
+    # That the package builds, as the release will build it.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: ${{ env.UV_VERSION }}
-          # Nothing that an earlier run left goes into the release (#18).
+          # Nothing that an earlier run left goes into the build (#18).
           enable-cache: false
-          python-version: '3.14'
+          python-version: "3.14"
       - name: Build
         # The build backend of build-constraints.txt, checked by its hashes: a
         # preview feature of uv 0.13.5, whose version CI fixes (UV_VERSION).
@@ -133,22 +152,3 @@ jobs:
           uv build --no-cache
           --build-constraints build-constraints.txt --require-build-hashes
           --preview-features build-dependency-hashes
-      - name: Upload
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: sdist
-          path: dist
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    # Fkinds/Fixit never publishes anywhere. Only upstream publishes to PyPI.
-    if: github.repository == 'Instagram/Fixit' && startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: sdist
-          path: dist
-      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
