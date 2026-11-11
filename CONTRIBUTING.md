@@ -2,34 +2,28 @@
 
 ## Setup
 
-Fixit requires Python 3.9 or newer. We recommend using [uv][] to install Python:
+Fixit supports the two newest series of Python: 3.14 and 3.15. It uses [uv][]
+to manage its environment. Once uv is installed, create the environment from
+`uv.lock`, with every extra and dependency group of `pyproject.toml`:
 
 ```shell-session
-$ uv python install 3.13
-
-$ uv python pin 3.13
+$ make install
 ```
 
-You can then use `make` to create a new environment and install dependencies:
+uv takes the version of Python from `.python-version` (3.14), and installs it
+when needed. To use another version, set `UV_PYTHON`:
 
 ```shell-session
-$ make venv
-```
-
-Once created, activate the environment:
-
-```shell-session
-$ source .venv/bin/activate
-
-(fixit) $
+$ UV_PYTHON=3.15 make install
 ```
 
 ## Developing
 
-Once activated, Fixit can be run locally:
+`make` runs each command with `uv run`, in the environment of `uv.lock`, so the
+environment needs no activation. To run Fixit from the checkout:
 
 ```shell-session
-(fixit) $ fixit [args]
+$ uv run fixit [args]
 ```
 
 To run the test suite, type checker, and linters:
@@ -60,6 +54,12 @@ To run the full test, typecheck, lint suite, and build the docs all at once:
 ```shell-session
 $ make
 ```
+
+The dependencies are in `pyproject.toml`: those of the package, its extras
+(`lsp`, `pretty`), and the dependency groups for developing (`dev`, `docs`),
+which are not part of the package. After changing them, update `uv.lock` with
+`uv lock`, and commit both. CI installs from `uv.lock`, and fails when it does
+not match `pyproject.toml`.
 
 
 ## Submitting PRs
@@ -99,7 +99,7 @@ $ make format
 can make safely:
 
 ```shell-session
-$ ruff check --fix src/fixit/ scripts/
+$ uv run ruff check --fix src/fixit/ scripts/
 ```
 
 If you are using VS Code as your editor, you can use the
@@ -119,7 +119,7 @@ $ git config blame.ignoreRevsFile .git-blame-ignore-revs
 Make sure you've created an environment for Fixit:
 
 ```shell-session
-$ make venv
+$ make install
 ```
 
 Now, the VS Code Python module should be able to find and offer the local
