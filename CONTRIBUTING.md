@@ -53,7 +53,8 @@ $ make format
 [prek][] runs the checks of `prek.toml` before each commit: ruff, `fixit lint`
 and the copyright header on the files that `make lint` checks, and its built-in
 checks (whitespace, line endings, TOML and YAML syntax, large files, private
-keys) on every file. `make install` installs prek; install its Git hook once:
+keys) on every file. It checks the commit message too (see below). `make
+install` installs prek; install its Git hooks once:
 
 ```shell-session
 $ uv run prek install
@@ -95,6 +96,38 @@ Before submitting PRs, please address the following items:
 - Document any changes to configuration or behavior
 - Apply formatting, regenerate documentation, and run the test suite (see above)
 - Summarize the high level features or behavior changes in your commit message
+
+### Commit messages
+
+Commit messages, and the titles of pull requests, follow
+[Conventional Commits 1.0.0][cc]:
+
+```
+<type>(<scope>)!: <description>
+
+<body>
+
+Closes #123
+```
+
+- `type` is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`,
+  `refactor`, `revert`, `style`, `test` (the types of commitlint's
+  config-conventional).
+- `(<scope>)` is optional, such as `(config)` or `(lsp)`. `!` marks a breaking
+  change.
+- The first line is up to 100 characters. The description of a commit is in
+  English, in the imperative mood: `fix(config): stop at the first value that
+  fixit cannot use`.
+- The merge commits of GitHub, and `Revert` and `fixup!` commits, pass as they
+  are.
+
+The commit-msg hook of prek checks each message with `cz check` of
+[commitizen][], as configured in `pyproject.toml`, and CI checks the commits and
+the title of each pull request. To check a message by hand:
+
+```shell-session
+$ uv run cz check -m "fix(config): stop at the first value that fixit cannot use"
+```
 
 For most developers, we recommend using the [github cli][gh] to submit pull
 requests:
@@ -219,6 +252,8 @@ $ ghstack land $PR_URL
 
 [gh]: https://cli.github.com/
 [ghstack]: https://github.com/ezyang/ghstack
+[cc]: https://www.conventionalcommits.org/en/v1.0.0/
+[commitizen]: https://commitizen-tools.github.io/commitizen/
 [pipx]: https://pypa.github.io/pipx/
 [prek]: https://prek.j178.dev/
 [ruff]: https://docs.astral.sh/ruff/
