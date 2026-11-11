@@ -75,8 +75,7 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
+# .python-version is committed: uv develops Fixit on that version (#8).
 
 # celery beat schedule file
 celerybeat-schedule

@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # uv installs what uv.lock has, and fails if it does not match pyproject.toml.
+  UV_LOCKED: "1"
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -29,14 +33,14 @@ jobs:
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
-          cache-dependency-glob: pyproject.toml
+          cache-dependency-glob: uv.lock
           cache-suffix: ${{ matrix.python-version }}
           python-version: ${{ matrix.python-version }}
           activate-environment: true
       - name: Install
-        run: make EXTRAS=dev,lsp install
+        run: make SYNC="--extra lsp" install
       - name: Test
-        run: make test
+        run: make SYNC="--extra lsp" test
   
   pyrefly:
     runs-on: ubuntu-latest
@@ -48,9 +52,9 @@ jobs:
           python-version: "3.14"
           activate-environment: true
       - name: Install
-        run: make EXTRAS=dev install
+        run: make SYNC= install
       - name: Pyrefly
-        run: pyrefly check -c pyproject.toml
+        run: uv run pyrefly check -c pyproject.toml
 
   lint:
     runs-on: ubuntu-latest
@@ -62,9 +66,9 @@ jobs:
           python-version: "3.14"
           activate-environment: true
       - name: Install
-        run: make EXTRAS=dev install
+        run: make SYNC= install
       - name: Lint
-        run: make lint
+        run: make SYNC= lint
 
   docs:
     runs-on: ubuntu-latest
@@ -76,9 +80,9 @@ jobs:
           python-version: "3.14"
           activate-environment: true
       - name: Install
-        run: make EXTRAS=docs install
+        run: make SYNC="--group docs" install
       - name: Docs
-        run: make html
+        run: make SYNC="--group docs" html
       - name: Generated changes
         run: git diff --exit-code
 
@@ -90,13 +94,10 @@ jobs:
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
-          cache-dependency-glob: pyproject.toml
+          cache-dependency-glob: uv.lock
           python-version: '3.14'
-          activate-environment: true
-      - name: Install
-        run: make EXTRAS=dev install
       - name: Build
-        run: python -m build
+        run: uv build
       - name: Upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

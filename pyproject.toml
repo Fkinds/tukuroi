@@ -35,22 +35,25 @@ dynamic = ["version"]
 description = "A lint framework that writes better Python code for you."
 
 [project.optional-dependencies]
-docs = [
-    "jinja2 == 3.1.6",
-    "sphinx == 8.0.2",
-    "sphinx-mdinclude == 0.6.2",
-]
-dev = [
-    "attribution == 1.8.0",
-    "build > 1",
-    "ruff == 0.17.4",
-    "pyrefly == 0.63.1",
-]
 lsp = [
     "pygls ~= 2.0.0",
 ]
 pretty = [
     "rich >= 12.6.0",
+]
+
+# The tools to develop Fixit with (PEP 735): not part of the package (#8). uv
+# installs dev by default; `make install` installs docs too.
+[dependency-groups]
+dev = [
+    "attribution == 1.8.0",
+    "ruff == 0.17.4",
+    "pyrefly == 0.63.1",
+]
+docs = [
+    "jinja2 == 3.1.6",
+    "sphinx == 8.0.2",
+    "sphinx-mdinclude == 0.6.2",
 ]
 
 [project.scripts]
