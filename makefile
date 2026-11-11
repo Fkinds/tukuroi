@@ -22,6 +22,11 @@ lock:
 	uv pip compile --quiet --python-version=3.14 --generate-hashes \
 		build-constraints.in --output-file=build-constraints.txt
 
+# The known vulnerabilities of what uv.lock pins, from osv.dev (#25), but those
+# that `[tool.uv.audit]` of pyproject.toml leaves out. CI runs it each day.
+audit:
+	uv audit --preview-features audit-command
+
 test:
 	$(RUN) python -m $(PKG).tests
 	$(RUN) pyrefly check -c pyproject.toml

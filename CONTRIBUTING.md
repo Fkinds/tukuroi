@@ -115,6 +115,22 @@ finds too. The Dependency Dashboard issue lists what is pending. Nothing is
 merged automatically. The versions of Python (`.python-version`,
 `requires-python`) are left as the project chooses them.
 
+To check what `uv.lock` pins, with every extra and group, against the known
+vulnerabilities of [osv.dev][osv]:
+
+```shell-session
+$ make audit
+```
+
+`.github/workflows/audit.yml` runs it each day, and on the pull requests that
+change the dependencies. Each day it runs zizmor with GitHub too, for the
+actions: they are pinned to commit SHAs, for which GitHub sends no alerts. A
+failed run is the alert. A vulnerability that Fixit cannot fix yet goes in
+`[tool.uv.audit]` of `pyproject.toml`, with its reason and its issue in a
+comment: in `ignore-until-fixed` while no release fixes it, in `ignore` when it
+does not affect Fixit. Renovate opens the fixes of what osv.dev has for
+`build-constraints.txt` and the dependencies of `pyproject.toml` too.
+
 
 ## Submitting PRs
 
@@ -282,6 +298,7 @@ $ ghstack land $PR_URL
 [ghstack]: https://github.com/ezyang/ghstack
 [cc]: https://www.conventionalcommits.org/en/v1.0.0/
 [commitizen]: https://commitizen-tools.github.io/commitizen/
+[osv]: https://osv.dev/
 [pipx]: https://pypa.github.io/pipx/
 [prek]: https://prek.j178.dev/
 [Renovate]: https://docs.renovatebot.com/
