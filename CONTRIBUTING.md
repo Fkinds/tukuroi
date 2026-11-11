@@ -40,6 +40,21 @@ To format code and sort imports:
 $ make format
 ```
 
+[prek][] runs the checks of `prek.toml` before each commit: ruff, `fixit lint`
+and the copyright header on the files that `make lint` checks, and its built-in
+checks (whitespace, line endings, TOML and YAML syntax, large files, private
+keys) on every file. `make install` installs prek; install its Git hook once:
+
+```shell-session
+$ uv run prek install
+```
+
+To run every check on every file, as CI does:
+
+```shell-session
+$ uv run prek run --all-files
+```
+
 Documentation is built using sphinx. You can generate and view the documentation
 locally in your browser:
 
@@ -195,6 +210,7 @@ $ ghstack land $PR_URL
 [gh]: https://cli.github.com/
 [ghstack]: https://github.com/ezyang/ghstack
 [pipx]: https://pypa.github.io/pipx/
+[prek]: https://prek.j178.dev/
 [ruff]: https://docs.astral.sh/ruff/
 [uv]: https://docs.astral.sh/uv/
 

@@ -47,6 +47,7 @@ pretty = [
 [dependency-groups]
 dev = [
     "attribution == 1.8.0",
+    "prek == 0.5.10",
     "ruff == 0.17.4",
     "pyrefly == 0.63.1",
 ]

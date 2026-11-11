@@ -87,7 +87,7 @@ This could look something like:
     with temporary_sys_path(parent_path):
         name = name.lstrip(".")
         module = importlib.import_module(name)
- 
+
 Once loaded, local modules and rules can be handled and traversed the same as
 for global rules, though the logic for filtering out disabled local rules may
 require more nuance.

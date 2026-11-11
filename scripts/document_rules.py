@@ -116,18 +116,18 @@ def main() -> None:
         # The package that the rules are in: a module of it each.
         packages[name] = (rules[0].__module__.rpartition(".")[0], rules)
 
-    RULES_DOC.write_text(
-        PAGE_TPL.render(
-            dedent=dedent,
-            indent=indent,
-            redent=redent,
-            fixes=fixes,
-            invalid=invalid,
-            len=len,
-            packages=packages,
-            valid=valid,
-        )
+    page = PAGE_TPL.render(
+        dedent=dedent,
+        indent=indent,
+        redent=redent,
+        fixes=fixes,
+        invalid=invalid,
+        len=len,
+        packages=packages,
+        valid=valid,
     )
+    # One line break at the end, as the hooks of prek.toml want (#9).
+    RULES_DOC.write_text(page.rstrip() + "\n")
 
 
 if __name__ == "__main__":
