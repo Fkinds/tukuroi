@@ -15,10 +15,20 @@ To get this functionality, install the ``lsp`` extras (e.g.
 the Fixit LSP server. See the :ref:`lsp command <lsp_command>` for command
 usage details.
 
+The server lints the documents that the client opens as Python (``languageId``
+``python``), whatever their suffix, and formats only an open document. It reads
+the configuration of a document each time it lints it, so a change to a
+configuration needs no restart. A syntax error, an exception in a rule, and a
+configuration that Fixit cannot use are diagnostics too, with the severity
+Error: a syntax error where it is, and the others at the start of the document.
+The traceback of an exception goes to the log of the client.
+
 The server imports the custom rules that the configuration of each opened file
-enables. To open code that you do not trust, start it with
-``fixit --no-custom-rules lsp`` (see :ref:`security`). It imports each module
-of rules once: after changing a custom rule, restart the server.
+enables, a file outside the workspace too, with the configurations found from
+it as for ``lint`` (see :ref:`configuration`). To open code that you do not
+trust, start it with ``fixit --no-custom-rules lsp`` (see :ref:`security`). It
+imports each module of rules once: after changing a custom rule, restart the
+server.
 
 Examples of client setup:
 

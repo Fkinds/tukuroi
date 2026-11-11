@@ -12,6 +12,7 @@ from typing import Any, TypeVar, cast
 
 import pygls.uris as Uri
 from lsprotocol.types import (
+    SHUTDOWN,
     TEXT_DOCUMENT_DID_CHANGE,
     TEXT_DOCUMENT_DID_OPEN,
     TEXT_DOCUMENT_FORMATTING,
@@ -20,18 +21,22 @@ from lsprotocol.types import (
     DidChangeTextDocumentParams,
     DidOpenTextDocumentParams,
     DocumentFormattingParams,
+    LogMessageParams,
+    LSPErrorCodes,
+    MessageType,
     Position,
     PublishDiagnosticsParams,
     Range,
     TextEdit,
 )
+from pygls.exceptions import JsonRpcException
 from pygls.lsp.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
 
 from .__version__ import __version__
-from .api import fixit_bytes
-from .config import generate_config
-from .ftypes import Config, FileContent, LSPOptions, Options, Result
+from .api import _error, fixit_bytes
+from .config import ConfigError, generate_config
+from .ftypes import FileContent, LSPOptions, Options, Result
 from .util import capture
 
 # Line breaks of LSP 3.17 ("Text Documents"): not those of str.splitlines(),
@@ -56,44 +61,45 @@ class LSP:
         self.fixit_options = fixit_options
         self.lsp_options = lsp_options
 
-        self._config_cache: dict[Path, Config] = {}
-
         # separate debounce timer per URI so that linting one URI
         # doesn't cancel linting another
         self._validate_uri: dict[str, Callable[[int], None]] = {}
+        # Whether the client asked to shut down before "exit" (LSP 3.17).
+        self.shut_down = False
 
         self.lsp = LanguageServer("fixit-lsp", __version__)
         # `partial` since `pygls` can register functions but not methods
         self.lsp.feature(TEXT_DOCUMENT_DID_OPEN)(partial(self.on_did_open))
         self.lsp.feature(TEXT_DOCUMENT_DID_CHANGE)(partial(self.on_did_change))
         self.lsp.feature(TEXT_DOCUMENT_FORMATTING)(partial(self.format))
+        self.lsp.feature(SHUTDOWN)(partial(self.on_shutdown))
 
-    def load_config(self, path: Path) -> Config:
+    def path_of(self, doc: TextDocument) -> Path | None:
         """
-        Cached fetch of fixit.toml(s) for fixit_bytes.
+        The path of ``doc``, to look up its config from: ``None`` for a document
+        that is not a file, or not in Python, as its client says (#96).
         """
-        if path not in self._config_cache:
-            self._config_cache[path] = generate_config(path, options=self.fixit_options)
-        return self._config_cache[path]
-
-    def diagnostic_generator(
-        self, uri: str, autofix: bool = False
-    ) -> Generator[Result, bool, FileContent | None] | None:
-        """
-        LSP wrapper (provides document state from `pygls`) for `fixit_bytes`.
-        """
-        path_uri = Uri.to_fs_path(uri)
-        if not path_uri:
+        if doc.language_id != "python":
             return None
-        path = Path(path_uri)
+        path = Uri.to_fs_path(doc.uri)
+        return Path(path) if path else None
 
-        doc: TextDocument = self.lsp.workspace.get_text_document(uri)  # type: ignore[no-untyped-call]
-        return fixit_bytes(
-            path,
-            doc.source.encode(),
-            autofix=autofix,
-            config=self.load_config(path),
-        )
+    def lint(
+        self, doc: TextDocument, path: Path, *, autofix: bool = False
+    ) -> Generator[Result, bool, FileContent | None]:
+        """
+        :func:`~fixit.api.fixit_bytes` on the text of ``doc``. The config is
+        read each time, so that a change to it is seen without a restart (#96);
+        one that fixit cannot use, or a rule that it names that cannot be loaded,
+        is the error of the document, as with :func:`~fixit.api.fixit_file`.
+        """
+        try:
+            config = generate_config(path, options=self.fixit_options, check=True)
+        except ConfigError as error:
+            yield Result(path, violation=None, error=_error(error))
+            return None
+        content = doc.source.encode()
+        return (yield from fixit_bytes(path, content, autofix=autofix, config=config))
 
     def position(self, text: str, line: int, column: int) -> Position:
         """
@@ -109,21 +115,15 @@ class LSP:
             lines_of(text), Position(line - 1, column)
         )
 
-    def _validate(self, uri: str, version: int) -> None:
+    def diagnostic(self, text: str, result: Result) -> Diagnostic | None:
         """
-        Effect: publishes Fixit diagnostics to the LSP client.
+        ``result`` as a diagnostic: a violation, or an error (#96). A syntax
+        error is shown where it is, and another error, such as an exception in a
+        rule or a config that fixit cannot use, at the start of the document.
         """
-        generator = self.diagnostic_generator(uri)
-        if not generator:
-            return
-        text = self.lsp.workspace.get_text_document(uri).source  # type: ignore[no-untyped-call]
-        diagnostics = []
-        for result in generator:
-            violation = result.violation
-            if not violation:
-                continue
+        if violation := result.violation:
             start, end = violation.range.start, violation.range.end
-            diagnostic = Diagnostic(
+            return Diagnostic(
                 Range(
                     self.position(text, start.line, start.column),
                     self.position(text, end.line, end.column),
@@ -133,7 +133,40 @@ class LSP:
                 code=violation.rule_name,
                 source="fixit",
             )
-            diagnostics.append(diagnostic)
+        if error := result.error:
+            where = error.position
+            at = self.position(text, where.line, where.column) if where else None
+            at = at or Position(0, 0)
+            # An exception, with its traceback in the log: its type too.
+            message = error.message
+            if error.traceback:
+                message = f"{error.type}: {message}"
+            return Diagnostic(
+                Range(at, at),
+                message,
+                severity=DiagnosticSeverity.Error,
+                source="fixit",
+            )
+        return None
+
+    def _validate(self, uri: str, version: int) -> None:
+        """
+        Effect: publishes Fixit diagnostics to the LSP client. The traceback of
+        an exception goes to the log of the client (#96).
+        """
+        doc = self.lsp.workspace.text_documents.get(uri)
+        path = doc and self.path_of(doc)
+        if not doc or not path:
+            return
+        diagnostics = []
+        for result in self.lint(doc, path):
+            if diagnostic := self.diagnostic(doc.source, result):
+                diagnostics.append(diagnostic)
+            if result.error and result.error.traceback:
+                message = f"{path}:\n{result.error.traceback}"
+                self.lsp.window_log_message(
+                    LogMessageParams(MessageType.Error, message)
+                )
         self.lsp.text_document_publish_diagnostics(
             PublishDiagnosticsParams(uri, diagnostics, version)
         )
@@ -154,21 +187,32 @@ class LSP:
     def on_did_change(self, params: DidChangeTextDocumentParams) -> None:
         self.validate(params.text_document.uri, params.text_document.version)
 
+    def on_shutdown(self, *args: object) -> None:
+        self.shut_down = True
+
     def format(self, params: DocumentFormattingParams) -> list[TextEdit] | None:
-        generator = self.diagnostic_generator(params.text_document.uri, autofix=True)
-        if generator is None:
+        """
+        The fixes of the document, as one edit of its whole text. ``None`` for
+        a document that is not in Python, or has an error (#96). A document
+        that is not open is an error: its text is the client's (LSP 3.17).
+        """
+        uri = params.text_document.uri
+        doc = self.lsp.workspace.text_documents.get(uri)
+        if doc is None:
+            raise JsonRpcException(
+                f"document is not open: {uri}", LSPErrorCodes.RequestFailed
+            )
+        path = self.path_of(doc)
+        if path is None:
             return None
 
-        captured = capture(generator)
+        captured = capture(self.lint(doc, path, autofix=True))
         for _ in captured:
             pass
         formatted_content = captured.result
         if not formatted_content:
             return None
 
-        doc: TextDocument = self.lsp.workspace.get_text_document(
-            params.text_document.uri
-        )
         # The whole document: to the position after its last character (#21).
         lines = lines_of(doc.source)
         codec = self.lsp.workspace.position_codec
@@ -178,13 +222,15 @@ class LSP:
         entire_range = Range(start=Position(line=0, character=0), end=end)
         return [TextEdit(new_text=formatted_content.decode(), range=entire_range)]
 
-    def start(self) -> None:
+    def start(self) -> int:
         """
         Effect: occupies stdin and stdout. The server talks over stdio only: it
         had TCP and WebSocket too, which anyone on the machine could connect to
-        (#15).
+        (#15). Returns the exit code of LSP 3.17 "exit": 0 after "shutdown",
+        and 1 without (#96).
         """
         self.lsp.start_io()
+        return 0 if self.shut_down else 1
 
 
 VoidFunction = TypeVar("VoidFunction", bound=Callable[..., None])

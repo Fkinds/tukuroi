@@ -138,7 +138,9 @@ for more details.
 
     $ fixit lsp [--stdio] [--debounce-interval SECONDS]
 
-The server talks over stdio only, with the editor that starts it.
+The server talks over stdio only, with the editor that starts it. As LSP
+asks, the exit code is 0 when the client asked the server to shut down before
+it exits, and 1 otherwise.
 
 .. attribute:: --stdio
 
