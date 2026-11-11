@@ -17,6 +17,15 @@ test:
 	$(RUN) python -m $(PKG).tests
 	$(RUN) pyrefly check -c pyproject.toml
 
+# The tests change the current directory, and so do the processes that they
+# start: the data goes to one place, by its absolute path (#10).
+coverage: export COVERAGE_FILE=$(CURDIR)/.coverage
+coverage:
+	rm -f .coverage .coverage.*
+	$(RUN) coverage run -m $(PKG).tests
+	$(RUN) coverage combine -q
+	$(RUN) coverage report
+
 lint:
 	$(RUN) ruff check $(SRC)
 	$(RUN) ruff format --check $(SRC)
@@ -32,7 +41,7 @@ format:
 	$(RUN) ruff format $(SRC)
 
 clean:
-	rm -rf .mypy_cache build dist html *.egg-info
+	rm -rf .mypy_cache build dist html *.egg-info .coverage .coverage.*
 
 distclean: clean
 	rm -rf .venv

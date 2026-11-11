@@ -42,6 +42,25 @@ jobs:
       - name: Test
         run: make SYNC="--extra lsp" test
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: "3.14"
+          activate-environment: true
+      - name: Install
+        run: make SYNC="--extra lsp" install
+      - name: Coverage
+        # Fails below fail_under of pyproject.toml (#10).
+        run: make SYNC="--extra lsp" coverage
+      - name: Summary
+        # The table, on the page of the run: the data is not sent anywhere.
+        if: always()
+        run: uv run coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"
+
   pyrefly:
     runs-on: ubuntu-latest
     steps:
