@@ -12,19 +12,28 @@ error, and the exceptions that ``lint`` sends back from its process pool, or a
 process of it that ends.
 """
 
+import importlib
 import io
 import re
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import click
 from click.testing import CliRunner
 from moreorless.click import echo_color_precomputed_diff
 
-from ..api import _echo_diff, fixit_bytes, fixit_file, fixit_paths
+from ..api import (
+    _echo_diff,
+    fixit_bytes,
+    fixit_file,
+    fixit_paths,
+    fixit_stdin,
+    print_result,
+)
 from ..config import ConfigError, RulesOptionError, generate_config
 from ..core import loader
 from ..core.loader import load as load_core_rules
@@ -443,8 +452,80 @@ class CommandTest(TestCase):
         self.assertEqual(run(lambda: _echo_diff(DIFF)), (colored, ""))
         self.assertEqual(run(lambda: _echo_diff(DIFF, err=True)), ("", colored))
 
+    def test_debug_and_quiet(self) -> None:
+        # The level of the log (#116): --quiet hides a warning, and --debug
+        # shows the debug lines.
+        files_ = {
+            "pyproject.toml": '[tool.fixit]\nroot = true\nenable = [".rules"]\n',
+            "t.py": "x = 1\n",
+        }
+        warning = "Skipped rules '.rules': custom rules are turned off"
+        for options, shown in (([], True), (["--quiet"], False)):
+            with self.subTest(options=options):
+                loader._WARNED.clear()  # Each warning is given once in a process.
+                result = invoke(files_, [*options, "--no-custom-rules", "lint", "t.py"])
+                self.assertEqual(warning in result.stderr, shown)
+        files_["pyproject.toml"] = "[tool.fixit]\nroot = true\n"
+        result = invoke(files_, ["--debug", "lint", "t.py"])
+        self.assertIn("DEBUG:fixit.api:t.py: clean", result.stderr)
+
+    def test_main_module_on_import(self) -> None:
+        # Imported, not run with -m (#116): it does nothing.
+        with patch("fixit.cli.main") as main:
+            importlib.import_module("fixit.__main__")
+        main.assert_not_called()
+
+
+class PrintResultTest(TestCase):
+    def test_output_format_as_a_string(self) -> None:
+        # The value of the enum, as before (#116); another string is an error.
+        where = Range(Position(1, 0), Position(1, 1))
+        result = Result(Path.cwd() / "t.py", Violation("X", where, "m", False))
+        runner = CliRunner()
+        with runner.isolation() as (out, _, _):
+            print_result(result, output_format="vscode")  # type: ignore[arg-type]
+        self.assertEqual(out.getvalue(), b"t.py:1:0 X: m\n")
+        with self.assertRaisesRegex(ValueError, "'nope' is not a valid OutputFormat"):
+            print_result(result, output_format="nope")  # type: ignore[arg-type]
+
+
+class FixitStdinAndFileTest(TestCase):
+    """The errors of a file, when the API calls these alone (#116)."""
+
+    def test_config_error_of_stdin(self) -> None:
+        pyproject = "[tool.fixit]\nroot = true\nenable = 1\n"
+        stdin = io.TextIOWrapper(io.BytesIO(b"x = 1\n"))
+        with (
+            files({"pyproject.toml": pyproject}) as root,
+            chdir(root),
+            patch("sys.stdin", stdin),
+        ):
+            [result] = fixit_stdin(Path("t.py"))
+        message = "pyproject.toml: enable: must be an array of strings, got an integer"
+        self.assertEqual(result.error, Error("fixit.config.ConfigError", message))
+
+    def test_other_exception_of_stdin(self) -> None:
+        stdin = SimpleNamespace(
+            buffer=SimpleNamespace(read=Mock(side_effect=OSError("boom")))
+        )
+        with files({}) as root, chdir(root), patch("sys.stdin", stdin):
+            [result] = fixit_stdin(Path("t.py"))
+        assert result.error is not None
+        self.assertEqual((result.error.type, result.error.message), ("OSError", "boom"))
+        self.assertIn("Traceback", result.error.traceback)
+
+    def test_file_that_cannot_be_read(self) -> None:
+        with files({"sub/t.py": ""}) as root, chdir(root):
+            [result] = fixit_file(Path("sub"))
+        assert result.error is not None
+        self.assertEqual(result.error.type, "IsADirectoryError")
+        self.assertIn("Traceback", result.error.traceback)
+
 
 class FixitPathsTest(TestCase):
+    def test_no_paths(self) -> None:
+        self.assertEqual(list(fixit_paths([])), [])
+
     def test_invalid_config(self) -> None:
         # The config is wrong, not fixit: no traceback (#40).
         cases = (

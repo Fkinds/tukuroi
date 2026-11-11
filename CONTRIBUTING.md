@@ -41,8 +41,11 @@ $ make coverage
 ```
 
 It lists the lines and branches that no test runs, and fails when the total
-goes below `fail_under` in `pyproject.toml`. CI runs it too, and shows the table
-on the page of the run.
+goes below `fail_under` in `pyproject.toml`: 100%. CI runs it too, and shows the
+table on the page of the run. Code that cannot run by its design, such as the
+last branch of a check of every case, raises `AssertionError` with the reason,
+or calls `typing.assert_never`; coverage leaves those lines out. Do not leave
+out code that a test can run.
 
 To format code and sort imports:
 

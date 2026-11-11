@@ -12,6 +12,7 @@ import traceback
 from collections.abc import Generator, Iterable, Sequence
 from functools import partial
 from pathlib import Path
+from typing import assert_never
 
 import click
 import trailrunner
@@ -100,11 +101,13 @@ def print_result(
         if result.violation.autofixable:
             message += " (has autofix)"
 
-        if output_format == OutputFormat.fixit:
+        # The value as the enum, which a string of it is equal to: then `is`.
+        output_format = OutputFormat(output_format)
+        if output_format is OutputFormat.fixit:
             line = f"{path}@{start_line}:{start_col} {rule_name}: {message}"
-        elif output_format == OutputFormat.vscode:
+        elif output_format is OutputFormat.vscode:
             line = f"{path}:{start_line}:{start_col} {rule_name}: {message}"
-        elif output_format == OutputFormat.custom:
+        elif output_format is OutputFormat.custom:
             # The names only, and strings and numbers (#14).
             end = result.violation.range.end
             values = {
@@ -118,7 +121,7 @@ def print_result(
             }
             line = format_template(output_template, values)
         else:
-            raise NotImplementedError(f"output-format = {output_format!r}")
+            assert_never(output_format)
         click.secho(line, fg="yellow", err=stderr)
 
         if show_diff and result.violation.diff:
@@ -414,9 +417,6 @@ def fixit_paths(
     a :class:`~fixit.config.ConfigError`, and no file is linted (#40). A file
     linted alone (:func:`fixit_file`) gets such an error as its result.
     """
-    if not paths:
-        return
-
     expanded_paths: list[Path] = []
     is_stdin = False
     stdin_path = Path("stdin")

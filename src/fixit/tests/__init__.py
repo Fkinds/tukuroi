@@ -8,7 +8,14 @@ import os
 from fixit.core.loader import RuleName, import_rules
 from fixit.core.testing import generate_test_cases
 
-from .api import CommandTest, FixitBytesTest, FixitPathsTest, PublicNamesTest
+from .api import (
+    CommandTest,
+    FixitBytesTest,
+    FixitPathsTest,
+    FixitStdinAndFileTest,
+    PrintResultTest,
+    PublicNamesTest,
+)
 from .characterization_cli import CliCharacterizationTest
 from .characterization_config import ConfigCharacterizationTest
 from .characterization_custom_rules import CustomRulesCharacterizationTest
@@ -50,9 +57,11 @@ from .core_text import LineIndexTest, PositionTest, RangeTest, SpanTest
 from .custom_rules_switch import CustomRulesSwitchTest
 from .examples import ExamplesTest
 from .ftypes import TypesTest
+from .lsp import DebounceTest
 from .pool import PoolTest
 from .smoke import SmokeTest
 from .template import TemplateTest
+from .util import CaptureTest
 
 # Expect the default of the switch for custom rules, even when the shell sets
 # FIXIT_CUSTOM_RULES (see "Security" in the docs). custom_rules_switch sets it

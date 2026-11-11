@@ -297,16 +297,19 @@ class CustomRulesSwitchTest(TestCase):
             cwd = Path(td)
             (cwd / "pyproject.toml").write_text(toml("root = true"))
             (cwd / "rich.py").write_text(rich)
-            result = subprocess.run(
-                [sys.executable, "-m", "fixit", "debug"],
-                cwd=cwd,
-                env=env,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            # The config, with print, as rich cannot be imported.
-            self.assertIn(">>> ", result.stdout)
-            self.assertEqual(result.stderr, "")
-            self.assertEqual(result.returncode, 0)
-            self.assertFalse((cwd / "rich.imported").exists())
+            # With -P, Python leaves the current directory off itself (#116).
+            for flags in ([], ["-P"]):
+                with self.subTest(flags=flags):
+                    result = subprocess.run(
+                        [sys.executable, *flags, "-m", "fixit", "debug"],
+                        cwd=cwd,
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    # The config, with print, as rich cannot be imported.
+                    self.assertIn(">>> ", result.stdout)
+                    self.assertEqual(result.stderr, "")
+                    self.assertEqual(result.returncode, 0)
+                    self.assertFalse((cwd / "rich.imported").exists())

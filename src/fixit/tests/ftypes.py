@@ -56,3 +56,10 @@ class TypesTest(TestCase):
             },
             valid,
         )
+
+    def test_qualified_rule_order(self) -> None:
+        # By name, and with another QualifiedRule only (#116): Python raises a
+        # TypeError for anything else.
+        a, b = ftypes.QualifiedRule("a"), ftypes.QualifiedRule("a", "B")
+        self.assertEqual(sorted([b, a]), [a, b])
+        self.assertIs(a.__lt__("a"), NotImplemented)
