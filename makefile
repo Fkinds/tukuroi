@@ -13,6 +13,14 @@ install:
 
 venv: install
 
+# uv.lock, and the build backend with hashes for the release build (#18). Both
+# keep the versions they have: pass --upgrade to `uv lock` and to
+# `uv pip compile` to take newer ones.
+lock:
+	uv lock
+	uv pip compile --quiet --universal --python-version 3.14 --generate-hashes \
+		build-constraints.in -o build-constraints.txt
+
 test:
 	$(RUN) python -m $(PKG).tests
 	$(RUN) pyrefly check -c pyproject.toml
