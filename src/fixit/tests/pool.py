@@ -18,7 +18,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase, skipUnless
 
 from ..ftypes import Error, Result
-from ..pool import BROKEN, run
+from ..pool import BROKEN, _ended, run
 
 EXIT = "the process that linted the file exited with status 3"
 
@@ -89,6 +89,11 @@ class PoolTest(TestCase):
         self.assertEqual(
             found, {"a.py": clean("a.py"), "kill.py": broken("kill.py", died)}
         )
+
+    def test_negative_status_that_is_not_a_signal(self) -> None:
+        # As on Windows, where a status is not a signal (#116).
+        status = "the process that linted the file exited with status -999"
+        self.assertEqual(_ended(-999), Error(BROKEN, status))
 
     def test_lint_again_only_the_files_in_the_pool(self) -> None:
         # The first file breaks the pool: only the eight files in it then are

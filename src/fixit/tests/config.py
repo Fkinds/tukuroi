@@ -540,6 +540,43 @@ class ConfigTest(TestCase):
             with self.assertRaisesRegex(config.ConfigError, "output-format"):
                 config.generate_config(self.tdp / "outer" / "foo.py")
 
+    def test_describe(self) -> None:
+        # The path as the CLI shows it: relative to the current directory if
+        # it is under it, or else absolute (#116).
+        path = self.tdp / "pyproject.toml"
+        error = config.ConfigError("x", path=path)
+        with chdir(self.tdp):
+            self.assertEqual(error.describe(), "pyproject.toml: x")
+        with chdir(self.inner):
+            self.assertEqual(error.describe(), f"{path}: x")
+        self.assertEqual(config.ConfigError("x").describe(), "x")
+
+    def test_every_message(self) -> None:
+        # The checks give every message, though a config is wrong at the first
+        # (#116).
+        tables = "must be an array of tables ([[tool.fixit.overrides]]), got"
+        cases = (
+            (
+                config.outside_errors({"a": 1, "tool": {"black": {}, "fixit": {}}}),
+                ["a: must be under [tool.fixit]", "tool.black: must be under [tool.fixit]"],
+            ),
+            (
+                config.rule_errors("enable", ["a b", "c d"]),
+                ["enable: invalid rule name 'a b'", "enable: invalid rule name 'c d'"],
+            ),
+            # One message, and no more for the rest of the value.
+            (config.rule_errors("enable", 1), ["enable: must be an array of strings, got an integer"]),
+            (config.rule_errors("enable", [1, "a b"]), ["enable: must be an array of strings, got an array with an integer"]),
+            (config.override_errors(1), [f"overrides: {tables} an integer"]),
+            (config.override_errors([1, {}]), [f"overrides: {tables} an array with an integer"]),
+            (config.override_errors([{}, 1]), ["overrides: a table has no path"]),
+            (config.override_errors([{"path": 1}, 1]), ["overrides: path: must be a string, got an integer"]),
+            (config.override_errors([{"path": ""}, 1]), ["overrides: path: must not be an empty string"]),
+        )  # fmt: skip
+        for messages, expected in cases:
+            with self.subTest(expected[0]):
+                self.assertEqual(list(messages), expected)
+
     def test_toml_type(self) -> None:
         # Each type of TOML v1.1.0, as tomllib reads it (#40).
         cases = (

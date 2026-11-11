@@ -330,7 +330,7 @@ def toml_type(value: object) -> str:
             return "an array"
         case dict():
             return "a table"
-    return f"a {type(value).__name__}"
+    raise AssertionError(f"not a value that tomllib reads: {value!r}")
 
 
 def must_be(key: str, expected: str, value: object) -> str:

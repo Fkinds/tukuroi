@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -51,14 +51,6 @@ class QualifiedRuleRegexResult(TypedDict):
     module: str
     name: str | None
     local: str | None
-
-
-def is_sequence(value: Any) -> bool:
-    return isinstance(value, Sequence) and not isinstance(value, (str, bytes))
-
-
-def is_collection(value: Any) -> bool:
-    return isinstance(value, Iterable) and not isinstance(value, (str, bytes))
 
 
 # The packages of the rules that come with Fixit. With custom rules turned off

@@ -85,9 +85,9 @@ patch = ["subprocess"]
 parallel = true
 
 [tool.coverage.report]
-# The coverage when it was first measured (97.78%): it must not go down. It is
-# compared as the report shows it, rounded to a whole percent.
-fail_under = 98
+# Every line and branch (#116): a new one needs a test, or else the code that
+# cannot run raises AssertionError with the reason (exclude_also below).
+fail_under = 100
 show_missing = true
 skip_covered = true
 # What cannot run by the design of the code, with the reason in the message
