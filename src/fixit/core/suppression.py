@@ -170,6 +170,7 @@ class NodeComments:
             for key, value in zip(parent.keys, parent.values, strict=True):
                 if node is key or node is value:
                     return Span(span(key or value).start, span(value).end)
+            raise AssertionError("a child of a dict is one of its keys or values")
         elif isinstance(parent, ast.arguments):
             return self._parameter(node, parent)
         elif isinstance(node, ast.withitem):
@@ -191,7 +192,7 @@ class NodeComments:
             return parent.keys[-1] is not node and parent.values[-1] is not node
         return True
 
-    def _parameter(self, node: ast.AST, arguments: ast.arguments) -> Span | None:
+    def _parameter(self, node: ast.AST, arguments: ast.arguments) -> Span:
         """The span of the parameter that ``node`` is, or is the default of."""
         span = self._source.span
         positional = [*arguments.posonlyargs, *arguments.args]
@@ -204,7 +205,7 @@ class NodeComments:
         for parameter, default in pairs:
             if node is parameter or node is default:
                 return Span(span(parameter).start, span(default or parameter).end)
-        return None
+        raise AssertionError("a child of arguments is a parameter or a default")
 
     def _comma_comment(self, item: Span) -> Iterator[Comment]:
         """The comment right after the comma after ``item``, on the same line."""
@@ -332,8 +333,6 @@ class NodeComments:
         if self._starts_line(node):
             return node
         siblings = self._siblings(node)
-        if siblings is None:
-            return None
         index = _index(siblings, node)
         while index > 0 and _end_line(siblings[index - 1]) == _line(siblings[index]):
             index -= 1
@@ -341,12 +340,12 @@ class NodeComments:
                 return siblings[index]
         return None
 
-    def _siblings(self, node: ast.AST) -> list[ast.AST] | None:
-        """The list of statements or clauses that holds ``node``."""
+    def _siblings(self, node: ast.AST) -> list[ast.AST]:
+        """The list of statements or clauses that holds ``node``, a clause."""
         for _, value in ast.iter_fields(self._parent(node)):
             if isinstance(value, list) and any(item is node for item in value):
                 return value
-        return None
+        raise AssertionError("a clause is in a list of its parent")
 
     def _end_comment(self, node: ast.AST) -> Iterator[Comment]:
         """
@@ -404,8 +403,6 @@ class NodeComments:
             index = _index(parent.cases, node)
             return parent.cases[index - 1] if index else None
         siblings = self._siblings(node)
-        if siblings is None:
-            return None
         index = _index(siblings, node)
         return siblings[index - 1] if index else None
 

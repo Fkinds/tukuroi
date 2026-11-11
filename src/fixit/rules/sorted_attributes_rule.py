@@ -120,6 +120,32 @@ class SortedAttributes(Rule):
                 b = 1
             """,
         ),
+        # A block on the line of its statement has no comment lines after it:
+        # the comment is a's (#116).
+        Invalid(
+            """
+            class C:
+                \"\"\"@sorted-attributes\"\"\"
+
+                b = 1
+
+                def f(self): pass
+                # about a
+                a = 2
+            """,
+            expected_replacement="""
+            class C:
+                \"\"\"@sorted-attributes\"\"\"
+
+                # about a
+                a = 2
+
+                b = 1
+
+                def f(self):
+                    pass
+            """,
+        ),
         Invalid(
             'class C:\n    """@sorted-attributes"""\n\n    b = 1\n    a = 2',
             expected_replacement='class C:\n    """@sorted-attributes"""\n\n    a = 2\n\n    b = 1\n',
@@ -210,6 +236,8 @@ class SortedAttributes(Rule):
                 position += len(line)
                 if stripped.startswith("#") and len(line) - len(stripped) >= indent:
                     cut = position
+            else:
+                raise AssertionError("a unit has a statement, on a line of code")
             previous_group, previous = units[index - 1]
             units[index - 1] = (previous_group, Span(previous.start, cut))
             units[index] = (group, Span(cut, span.end))
