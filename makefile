@@ -40,6 +40,7 @@ lint:
 	$(RUN) ruff format --check $(SRC)
 	$(RUN) python -m fixit lint $(SRC)
 	$(RUN) python scripts/check_copyright.py
+	$(RUN) zizmor --offline .github/workflows
 
 html: docs/*
 	$(RUN) python scripts/document_rules.py
