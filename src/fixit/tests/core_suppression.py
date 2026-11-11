@@ -380,8 +380,26 @@ class ItemTest(SuppressionTestCase):
             ("list comprehension, after the for", f"x = [\n    {CALL}\n    for c in d  # lint-ignore\n]\n", ()),
             ("subscript, after [", f"x[\n    # lint-ignore\n    {CALL}\n]\n", ()),
             ("call in a set, before 1st", f"x = {{\n    # lint-ignore\n    {CALL},\n}}\n", ("3:4",)),
+            # (#116)
+            ("2nd of a dict, comma", f"x = {{\n    1: c,\n    2: {CALL},  # lint-ignore\n    3: d,\n}}\n", ()),
+            ("subscript of a value in parentheses, after [", f"(x)[\n    # lint-ignore\n    {CALL}\n]\n", ()),
         )  # fmt: skip
         self.run_cases(assert_true, cases)
+
+    def test_imported_names(self) -> None:
+        # A name of a multi-line import holds the comment after its comma (#116).
+        def bad(tree: ast.Module) -> Iterator[ast.AST]:
+            for node in ast.walk(tree):
+                if isinstance(node, ast.alias) and node.name == "bad":
+                    yield node
+
+        cases = (
+            ("comma", "from m import (\n    bad,  # lint-ignore\n    c,\n)\n", ()),
+            ("no comment", "from m import (\n    bad,\n    c,\n)\n", ("2:4",)),
+            ("other name", "from m import (\n    c,  # lint-ignore\n    bad,\n)\n", ("3:4",)),
+            ("import", "import bad, c  # lint-ignore\n", ()),
+        )  # fmt: skip
+        self.run_cases(bad, cases)
 
 
 class DecoratorTest(SuppressionTestCase):

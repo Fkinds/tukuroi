@@ -219,6 +219,24 @@ class NoNamedTuple(Rule):
                 pass
             """,
         ),
+        # The parentheses of a base are not those of the bases (#116).
+        Invalid(
+            code="""
+            from typing import NamedTuple
+
+            class Foo((NamedTuple)):
+                pass
+            """,
+            expected_replacement="""
+            from typing import NamedTuple
+            from dataclasses import dataclass
+
+
+            @dataclass(frozen=True)
+            class Foo:
+                pass
+            """,
+        ),
         Invalid(
             """
             from typing import NamedTuple
@@ -290,11 +308,11 @@ class NoNamedTuple(Rule):
             if offset < start or token.type != tokenize.OP:
                 continue
             if token.string == "(":
-                if depth == 0 and opening < 0:
+                if depth == 0:
                     opening = offset
                 depth += 1
             elif token.string == ")":
                 depth -= 1
-                if depth == 0 and opening >= 0:
+                if depth == 0:
                     return opening, offset + 1
-        raise ValueError("no parentheses")
+        raise AssertionError("a class with bases has parentheses")

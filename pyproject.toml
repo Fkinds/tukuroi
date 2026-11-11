@@ -90,6 +90,9 @@ parallel = true
 fail_under = 98
 show_missing = true
 skip_covered = true
+# What cannot run by the design of the code, with the reason in the message
+# (#116): not to be tested.
+exclude_also = ["raise AssertionError", "assert_never\\("]
 
 # `cz check` (#24): Conventional Commits 1.0.0, with the types of commitlint's
 # config-conventional, and the first line up to 100 characters, as it has. The

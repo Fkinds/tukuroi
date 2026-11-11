@@ -104,10 +104,9 @@ class Source:
             raise ParseError(Position(line, column), e.msg) from e
         lines = LineIndex(text)
         readline = io.StringIO(text, newline="").readline
-        try:
-            tokens = tuple(tokenize.generate_tokens(readline))
-        except (tokenize.TokenError, SyntaxError) as e:
-            raise ParseError(Position(1, 0), str(e)) from e
+        # The text parses, so it tokenizes: since Python 3.12, tokenize has the
+        # tokenizer of the parser (#116).
+        tokens = tuple(tokenize.generate_tokens(readline))
         comments = tuple(
             Comment(
                 Span(lines.offset(Position(*t.start)), lines.offset(Position(*t.end))),
