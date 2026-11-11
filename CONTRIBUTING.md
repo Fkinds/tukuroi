@@ -96,6 +96,17 @@ writes from `build-constraints.in`. `make lock` keeps the versions that the
 files have; pass `--upgrade` to `uv lock` and `uv pip compile` for newer ones.
 CI uses the version of uv in `UV_VERSION` of its workflows.
 
+[Renovate][] keeps them up to date, as `.github/renovate.json5` says. Each
+Monday morning (Asia/Tokyo) it opens pull requests for the versions released at
+least 7 days before: the dependencies of `pyproject.toml`, the actions of the
+workflows (pinned to commit SHAs), and `UV_VERSION`. The updates that are not
+major come in one pull request for each kind, and a major update in one of its
+own. On the first day of each month, it updates the rest of `uv.lock` and
+`build-constraints.txt`. It opens the fixes of the vulnerabilities that GitHub
+finds too. The Dependency Dashboard issue lists what is pending. Nothing is
+merged automatically. The versions of Python (`.python-version`,
+`requires-python`) are left as the project chooses them.
+
 
 ## Submitting PRs
 
@@ -265,6 +276,7 @@ $ ghstack land $PR_URL
 [commitizen]: https://commitizen-tools.github.io/commitizen/
 [pipx]: https://pypa.github.io/pipx/
 [prek]: https://prek.j178.dev/
+[Renovate]: https://docs.renovatebot.com/
 [ruff]: https://docs.astral.sh/ruff/
 [uv]: https://docs.astral.sh/uv/
 

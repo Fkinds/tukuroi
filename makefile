@@ -15,11 +15,12 @@ venv: install
 
 # uv.lock, and the build backend with hashes for the release build (#18). Both
 # keep the versions they have: pass --upgrade to `uv lock` and to
-# `uv pip compile` to take newer ones.
+# `uv pip compile` to take newer ones. Renovate runs the command of the header
+# of build-constraints.txt (#7): it takes `--option=value` only.
 lock:
 	uv lock
-	uv pip compile --quiet --universal --python-version 3.14 --generate-hashes \
-		build-constraints.in -o build-constraints.txt
+	uv pip compile --quiet --python-version=3.14 --generate-hashes \
+		build-constraints.in --output-file=build-constraints.txt
 
 test:
 	$(RUN) python -m $(PKG).tests
