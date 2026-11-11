@@ -47,6 +47,7 @@ pretty = [
 [dependency-groups]
 dev = [
     "attribution == 1.8.0",
+    "coverage == 7.17.2",
     "prek == 0.5.10",
     "ruff == 0.17.4",
     "pyrefly == 0.63.1",
@@ -71,6 +72,23 @@ package = "fixit"
 signed_tags = true
 version_file = false
 ignored_authors = ["dependabot"]
+
+# `make coverage` (#10): the lines and branches of the package that the tests
+# run, in the processes of the pool of `lint` and in subprocesses too.
+[tool.coverage.run]
+branch = true
+source = ["fixit"]
+omit = ["*/fixit/tests/*"]
+concurrency = ["thread", "multiprocessing"]
+patch = ["subprocess"]
+parallel = true
+
+[tool.coverage.report]
+# The coverage when it was first measured (97.78%): it must not go down. It is
+# compared as the report shows it, rounded to a whole percent.
+fail_under = 98
+show_missing = true
+skip_covered = true
 
 [tool.ruff.lint.per-file-ignores]
 # Package modules re-export names.

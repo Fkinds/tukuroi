@@ -34,6 +34,16 @@ $ make test
 $ make lint
 ```
 
+To measure which lines and branches of Fixit the tests run, with coverage.py:
+
+```shell-session
+$ make coverage
+```
+
+It lists the lines and branches that no test runs, and fails when the total
+goes below `fail_under` in `pyproject.toml`. CI runs it too, and shows the table
+on the page of the run.
+
 To format code and sort imports:
 
 ```shell-session
