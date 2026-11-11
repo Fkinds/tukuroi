@@ -47,6 +47,7 @@ pretty = [
 [dependency-groups]
 dev = [
     "attribution == 1.8.0",
+    "commitizen == 4.19.3",
     "coverage == 7.17.2",
     "prek == 0.5.10",
     "ruff == 0.17.4",
@@ -89,6 +90,18 @@ parallel = true
 fail_under = 98
 show_missing = true
 skip_covered = true
+
+# `cz check` (#24): Conventional Commits 1.0.0, with the types of commitlint's
+# config-conventional, and the first line up to 100 characters, as it has. The
+# pattern checks the length too: `cz check` of commitizen 4.19.3 does not read
+# message_length_limit.
+[tool.commitizen]
+name = "cz_customize"
+
+[tool.commitizen.customize]
+schema = "<type>(<scope>)!: <description>"
+schema_pattern = "(?m)^(?=.{1,100}$)(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([^()\\s]+\\))?!?: \\S"
+example = "fix(config): stop at the first value that fixit cannot use"
 
 [tool.ruff.lint.per-file-ignores]
 # Package modules re-export names.
