@@ -59,6 +59,7 @@ from .examples import ExamplesTest
 from .ftypes import TypesTest
 from .lsp import DebounceTest
 from .pool import PoolTest
+from .rules_strict import StrictRulesTest
 from .smoke import SmokeTest
 from .template import TemplateTest
 from .util import CaptureTest
@@ -68,7 +69,9 @@ from .util import CaptureTest
 # where it needs it. Every test module imports this package first.
 os.environ.pop("FIXIT_CUSTOM_RULES", None)
 
-# The test cases of the built-in rules, named after each rule.
-for _case in generate_test_cases(import_rules(RuleName("fixit.rules"))):
-    globals()[_case.__name__] = _case
-del _case
+# The test cases of the built-in rules, named after each rule: those enabled by
+# default, and the strict ones (#123).
+for _package in ("fixit.rules", "fixit.rules.strict"):
+    for _case in generate_test_cases(import_rules(RuleName(_package))):
+        globals()[_case.__name__] = _case
+del _package, _case

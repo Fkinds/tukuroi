@@ -9,6 +9,7 @@ Built-in Rules
 --------------
 
 - :mod:`fixit.rules`
+- :mod:`fixit.rules.strict`
 
 
 ``fixit.rules``
@@ -394,3 +395,67 @@ Built-in Rules
             import typing as t
 
             x: t.Callable[..., int] = ...
+
+
+``fixit.rules.strict``
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. automodule:: fixit.rules.strict
+
+- :class:`NoValueObjectDefault`
+
+.. class:: NoValueObjectDefault
+
+    A value object takes every value of its fields from its caller: no field
+    has a default, which the caller would get without writing it. Explicit is
+    better than implicit.
+
+    A value object is a class of ``@dataclass(frozen=True)`` without
+    ``eq=False``. A frozen dataclass with ``eq=False`` is an entity, equal to
+    the objects of its identity only, and may give its ``id`` a default. The
+    fields that the caller does not pass keep theirs: ``field(init=False)``,
+    and the ``ClassVar`` annotations, which are not fields.
+
+    .. attribute:: MESSAGE
+        :no-index:
+
+        A field of a value object takes no default: the caller passes every value.
+
+    .. attribute:: VALID
+        :no-index:
+
+        .. code:: python
+
+            from dataclasses import dataclass
+
+            @dataclass(frozen=True, kw_only=True)
+            class Money:
+                amount: int
+                currency: str
+        .. code:: python
+
+            import uuid
+            from dataclasses import dataclass, field
+
+            @dataclass(frozen=True, kw_only=True, eq=False)
+            class Order:
+                id: uuid.UUID = field(default_factory=uuid.uuid4)
+
+    .. attribute:: INVALID
+        :no-index:
+
+        .. code:: python
+
+            from dataclasses import dataclass
+
+            @dataclass(frozen=True, kw_only=True)
+            class Money:
+                amount: int
+                currency: str = "JPY"
+        .. code:: python
+
+            from dataclasses import dataclass, field
+
+            @dataclass(frozen=True, eq=True)
+            class Money:
+                amount: int = field(init=True, default=0)

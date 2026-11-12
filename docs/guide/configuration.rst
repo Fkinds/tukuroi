@@ -91,6 +91,16 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
     names. See :ref:`rule-selection`.
 
     Fixit will enable the built-in :mod:`fixit.rules` lint rules by default.
+    The stricter rules of :mod:`fixit.rules.strict` come with Fixit too, and
+    run only when named:
+
+    .. code-block:: toml
+
+        [tool.fixit]
+        enable = [
+            "fixit.rules",
+            "fixit.rules.strict:NoValueObjectDefault",
+        ]
 
     Fixit imports the rules that are enabled, which runs their code. See
     :ref:`security` for the configurations to trust, and for turning off the
