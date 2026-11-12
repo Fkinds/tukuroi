@@ -3,7 +3,7 @@
 # and sets what differs (--apply): see CONTRIBUTING.md.
 
 # The repository that the script reads and sets: never another one.
-name: Fkinds/Fixit
+name: Fkinds/tukuroi
 
 # PATCH /repos/{name}
 repository:

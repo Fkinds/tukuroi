@@ -66,9 +66,9 @@ docs = [
 fixit = "fixit.cli:main"
 
 [project.urls]
-Home = "https://github.com/Fkinds/Fixit"
-Github = "https://github.com/Fkinds/Fixit"
-Changelog = "https://github.com/Fkinds/Fixit/blob/main/CHANGELOG.md"
+Home = "https://github.com/Fkinds/tukuroi"
+Github = "https://github.com/Fkinds/tukuroi"
+Changelog = "https://github.com/Fkinds/tukuroi/blob/main/CHANGELOG.md"
 
 [tool.attribution]
 name = "Fixit"

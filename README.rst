@@ -1,7 +1,9 @@
 This is an **unofficial fork** of `Instagram/Fixit
 <https://github.com/Instagram/Fixit>`_, the linting framework that Meta
 published. It is not affiliated with Meta, nor endorsed by Meta or by the
-maintainers of Fixit. Its main differences from upstream:
+maintainers of Fixit. This repository is named tukuroi; the package, its
+module and its command are still named ``fixit``. Its main differences from
+upstream:
 
 - The rules run on a new engine, ``fixit.core``, built on Python's ``ast``
   module in place of LibCST.
@@ -22,7 +24,7 @@ or presented to the user for consideration.
 
 For more details, see the `user guide`__ in ``docs/``.
 
-.. __: https://github.com/Fkinds/Fixit/tree/main/docs/guide
+.. __: https://github.com/Fkinds/tukuroi/tree/main/docs/guide
 
 .. QUICKSTART
 
@@ -32,4 +34,4 @@ License
 
 Fixit is `MIT licensed`__, as found in the LICENSE file.
 
-.. __: https://github.com/Fkinds/Fixit/blob/main/LICENSE
+.. __: https://github.com/Fkinds/tukuroi/blob/main/LICENSE

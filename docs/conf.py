@@ -88,12 +88,12 @@ html_theme_options = {
     "badge_branch": "master",
     "github_button": False,
     "github_user": "Fkinds",
-    "github_repo": "Fixit",
+    "github_repo": "tukuroi",
     "show_powered_by": False,
     "sidebar_collapse": False,
     "extra_nav_links": {
-        "Source": "https://github.com/Fkinds/Fixit",
-        "Report Issues": "https://github.com/Fkinds/Fixit/issues",
+        "Source": "https://github.com/Fkinds/tukuroi",
+        "Report Issues": "https://github.com/Fkinds/tukuroi/issues",
     },
 }
 
