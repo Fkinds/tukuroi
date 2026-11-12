@@ -74,7 +74,7 @@ your repository.
 .. code:: yaml
 
     repos:
-      - repo: https://github.com/Fkinds/Fixit
+      - repo: https://github.com/Fkinds/tukuroi
         rev: <commit SHA>  # no release of this fork has a tag yet
         hooks:
           - id: fixit-lint
@@ -84,7 +84,7 @@ your repository.
 .. code:: yaml
 
     repos:
-      - repo: https://github.com/Fkinds/Fixit
+      - repo: https://github.com/Fkinds/tukuroi
         rev: <commit SHA>  # no release of this fork has a tag yet
         hooks:
           - id: fixit-fix
