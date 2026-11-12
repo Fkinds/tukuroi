@@ -93,8 +93,6 @@ covers the others that Fixit used to have (see :ref:`ruff-rules`). To write
 rules of your own, see :ref:`writing-rules`.
 
 
-.. _suppressions:
-
 Silencing Errors
 ^^^^^^^^^^^^^^^^
 
