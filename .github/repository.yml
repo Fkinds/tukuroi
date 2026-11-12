@@ -1,0 +1,107 @@
+# The settings of this repository on GitHub, by the names of the REST API.
+# scripts/repository_settings.py shows how GitHub differs from them (--check),
+# and sets what differs (--apply): see CONTRIBUTING.md.
+
+# The repository that the script reads and sets: never another one.
+name: Fkinds/Fixit
+
+# PATCH /repos/{name}
+repository:
+  description: "Unofficial fork of Instagram/Fixit: a Python linting framework with autofixes (MIT)"
+  homepage: ""
+  has_issues: true
+  has_projects: false
+  has_wiki: false
+  has_discussions: false
+  # Merge commits only: the commits of a pull request stay as they are (#24).
+  allow_merge_commit: true
+  allow_squash_merge: false
+  allow_rebase_merge: false
+  allow_auto_merge: false
+  delete_branch_on_merge: true
+  allow_update_branch: true
+  merge_commit_title: MERGE_MESSAGE
+  merge_commit_message: PR_TITLE
+
+# PATCH /repos/{name}, as security_and_analysis: public repositories only.
+security_and_analysis:
+  secret_scanning:
+    status: enabled
+  secret_scanning_push_protection:
+    status: enabled
+
+# PUT /repos/{name}/topics
+topics:
+  - ast
+  - linter
+  - python
+  - static-analysis
+
+# Dependabot alerts: on. Dependabot security updates: off, as Renovate opens the
+# fixes (#7). Private vulnerability reporting, as SECURITY.md says: public
+# repositories only.
+vulnerability_alerts: true
+automated_security_fixes: false
+private_vulnerability_reporting: true
+
+actions:
+  # PUT /repos/{name}/actions/permissions: the actions of GitHub, and those
+  # that selected_actions names, each pinned to a full commit SHA (#16).
+  permissions:
+    enabled: true
+    allowed_actions: selected
+    sha_pinning_required: true
+  # PUT /repos/{name}/actions/permissions/selected-actions
+  selected_actions:
+    github_owned_allowed: true
+    verified_allowed: false
+    patterns_allowed:
+      - astral-sh/setup-uv@*
+  # PUT /repos/{name}/actions/permissions/workflow
+  workflow:
+    default_workflow_permissions: read
+    can_approve_pull_request_reviews: false
+  # PUT /repos/{name}/actions/permissions/fork-pr-contributor-approval: the
+  # workflows of a pull request from outside run once approved. Public
+  # repositories only.
+  fork_pr_contributor_approval:
+    approval_policy: all_external_contributors
+
+# The labels, exactly: --apply deletes the others.
+labels:
+  - name: accessibility
+    color: f143ab
+    description: Barrier affecting people with disabilities
+  - name: bug
+    color: d73a4a
+    description: Something isn't working
+  - name: dependencies
+    color: 0366d6
+    description: Pull requests that update a dependency file
+  - name: documentation
+    color: 0075ca
+    description: Improvements or additions to documentation
+  - name: duplicate
+    color: cfd3d7
+    description: This issue or pull request already exists
+  - name: enhancement
+    color: a2eeef
+    description: New feature or request
+  - name: good first issue
+    color: 7057ff
+    description: Good for newcomers
+  - name: help wanted
+    color: "008672"
+    description: Extra attention is needed
+  - name: invalid
+    color: e4e669
+    description: This doesn't seem right
+  - name: question
+    color: d876e3
+    description: Further information is requested
+  - name: security
+    color: b60205
+    description: Fixes of vulnerabilities
+  - name: wontfix
+    color: ffffff
+    description: This will not be worked on

@@ -337,6 +337,25 @@ Older versions are dropped to keep the set of runtimes we maintain small.
 Under PEP 602, each minor version gets two years of full support, so the two
 newest minor versions are the ones that still receive bug fixes.
 
+## Repository settings
+
+The settings of this repository on GitHub are in `.github/repository.yml`, by
+the names of the REST API: merging, security features, GitHub Actions, topics
+and labels. To change one, change the file in a pull request. Once it is merged,
+an admin of the repository sets it, with `gh` logged in:
+
+```shell-session
+$ uv run python scripts/repository_settings.py --check
+$ uv run python scripts/repository_settings.py --apply
+```
+
+`--check` shows how GitHub differs from the file, and exits with 1 when a
+setting differs, or when GitHub does not show it (most security settings, while
+the repository is private). `--apply` sets what differs, then checks again. The
+labels are exactly those of the file: `--apply` deletes the others. A workflow
+can use the actions of GitHub, and those in `patterns_allowed`: to use another
+action, add it there too.
+
 ## Relationship to upstream
 
 This repository is a fork of `Instagram/Fixit`. It stopped merging upstream
