@@ -19,6 +19,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,9 @@ SETTINGS = Path(__file__).parent.parent / ".github" / "repository.yml"
 
 # The statuses of the settings that GitHub shows for public repositories only.
 PUBLIC_ONLY = {404: "public repositories only", 422: "public repositories only"}
+
+# How long --apply waits for GitHub to set up CodeQL, in seconds.
+WAIT = 180
 
 
 class Unavailable(Exception):
@@ -119,12 +123,17 @@ def differences(want: Any, have: Any, at: str) -> list[str]:
             found += differences(value, have.get(key), f"{at}.{key}")
         return found
     if isinstance(want, list) and isinstance(have, list):
-        same = sorted(map(str, want)) == sorted(map(str, have))
+        same = sorted(map(canonical, want)) == sorted(map(canonical, have))
     elif want == "":
         same = have in ("", None)
     else:
         same = want == have
     return [] if same else [f"{at}: {have!r} -> {want!r}"]
+
+
+def canonical(value: Any) -> str:
+    """``value`` as JSON, with its keys in order: equal for equal values."""
+    return json.dumps(value, sort_keys=True)
 
 
 @dataclass(frozen=True)
@@ -141,15 +150,43 @@ class Setting:
         return self.compare(self.want, self.get(), self.name)
 
 
-def label_changes(want: Any, have: Any, at: str) -> list[str]:
-    """The labels to delete, to create and to change: they are exactly ``want``."""
+def named_changes(
+    want: Mapping[str, Any],
+    have: Mapping[str, Any],
+    at: str,
+    compare: Callable[[Any, Any, str], list[str]] = differences,
+) -> list[str]:
+    """
+    The things to delete, to create and to change, by name: they are exactly
+    ``want``. ``compare`` compares the two of each name.
+    """
     found = [f"{at}: delete {name!r}" for name in have if name not in want]
-    for name, label in want.items():
+    for name, value in want.items():
         if name not in have:
             found.append(f"{at}: create {name!r}")
         else:
-            found += differences(label, have[name], f"{at}[{name!r}]")
+            found += compare(value, have[name], f"{at}[{name!r}]")
     return found
+
+
+def rule_changes(want: Any, have: Any, at: str) -> list[str]:
+    """
+    How the rules of a ruleset differ, by type: only the parameters that
+    ``want`` has count, as GitHub adds those of its own.
+    """
+    return named_changes(
+        {rule["type"]: rule.get("parameters", {}) for rule in want},
+        {rule["type"]: rule.get("parameters", {}) for rule in have},
+        at,
+    )
+
+
+def ruleset_changes(want: Any, have: Any, at: str) -> list[str]:
+    """How a ruleset differs: its rules by type, and the rest as it is."""
+    rest = {key: value for key, value in want.items() if key != "rules"}
+    return differences(rest, have, at) + rule_changes(
+        want["rules"], have.get("rules", []), f"{at}.rules"
+    )
 
 
 def labels(repo: str, listed: list[Mapping[str, str]]) -> Setting:
@@ -181,7 +218,58 @@ def labels(repo: str, listed: list[Mapping[str, str]]) -> Setting:
             elif differences(label, have[name], name):
                 gh("PATCH", f"repos/{repo}/labels/{quote(name)}", label)
 
-    return Setting("labels", want, get, put, label_changes)
+    return Setting("labels", want, get, put, named_changes)
+
+
+def rulesets(repo: str, listed: list[Mapping[str, Any]]) -> Setting:
+    want = {ruleset["name"]: ruleset for ruleset in listed}
+
+    def ids() -> dict[str, int]:
+        return {
+            ruleset["name"]: ruleset["id"]
+            for ruleset in read(f"repos/{repo}/rulesets?includes_parents=false", {})
+        }
+
+    def get() -> Any:
+        return {
+            name: read(f"repos/{repo}/rulesets/{number}", {})
+            for name, number in ids().items()
+        }
+
+    def put(want: Any) -> None:
+        have = ids()
+        for name, number in have.items():
+            if name not in want:
+                gh("DELETE", f"repos/{repo}/rulesets/{number}")
+        for name, ruleset in want.items():
+            if name not in have:
+                gh("POST", f"repos/{repo}/rulesets", ruleset)
+            else:
+                gh("PUT", f"repos/{repo}/rulesets/{have[name]}", ruleset)
+
+    def compare(want: Any, have: Any, at: str) -> list[str]:
+        return named_changes(want, have, at, ruleset_changes)
+
+    return Setting("rulesets", want, get, put, compare)
+
+
+def code_scanning(repo: str, want: Mapping[str, Any]) -> Setting:
+    """
+    The default setup of CodeQL. GitHub sets it in a run of its own: the
+    setter waits for the setting, up to ``WAIT`` seconds.
+    """
+    path = f"repos/{repo}/code-scanning/default-setup"
+
+    def get() -> Any:
+        return read(path, PUBLIC_ONLY)
+
+    def put(want: Any) -> None:
+        gh("PATCH", path, want)
+        deadline = time.monotonic() + WAIT
+        while differences(want, get(), "") and time.monotonic() < deadline:
+            time.sleep(5)
+
+    return Setting("code_scanning_default_setup", want, get, put, differences)
 
 
 def settings(config: Mapping[str, Any]) -> list[Setting]:
@@ -289,6 +377,9 @@ def settings(config: Mapping[str, Any]) -> list[Setting]:
             sender("PUT", f"{base}/fork-pr-contributor-approval", None),
             differences,
         ),
+        code_scanning(repo, config["code_scanning_default_setup"]),
+        # After CodeQL and the actions: the ruleset requires checks of CI.
+        rulesets(repo, config["rulesets"]),
         labels(repo, config["labels"]),
     ]
 

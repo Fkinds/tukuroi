@@ -152,3 +152,25 @@ jobs:
           uv build --no-cache
           --build-constraints build-constraints.txt --require-build-hashes
           --preview-features build-dependency-hashes
+
+  required:
+    # The check that the ruleset of main requires (#11), in place of each job:
+    # it passes when every job of needs passed. A new job goes into needs.
+    if: always()
+    needs: [test, pyrefly, lint, docs, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        shell: bash
+        run: |
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<< "$NEEDS")
+          if [[ -n $failed ]]; then
+            while read -r line; do
+              echo "::error::$line"
+            done <<< "$failed"
+            exit 1
+          fi

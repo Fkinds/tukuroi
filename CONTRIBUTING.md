@@ -340,8 +340,8 @@ newest minor versions are the ones that still receive bug fixes.
 ## Repository settings
 
 The settings of this repository on GitHub are in `.github/repository.yml`, by
-the names of the REST API: merging, security features, GitHub Actions, topics
-and labels. To change one, change the file in a pull request. Once it is merged,
+the names of the REST API: merging, security features, GitHub Actions, CodeQL,
+rulesets, topics and labels. To change one, change the file in a pull request. Once it is merged,
 an admin of the repository sets it, with `gh` logged in:
 
 ```shell-session
@@ -351,10 +351,19 @@ $ uv run python scripts/repository_settings.py --apply
 
 `--check` shows how GitHub differs from the file, and exits with 1 when a
 setting differs, or when GitHub does not show it (most security settings, while
-the repository is private). `--apply` sets what differs, then checks again. The
-labels are exactly those of the file: `--apply` deletes the others. A workflow
+the repository is private). `--apply` sets what differs, then checks again: it
+waits up to three minutes for GitHub to set up CodeQL. The labels and the
+rulesets are exactly those of the file: `--apply` deletes the others. A workflow
 can use the actions of GitHub, and those in `patterns_allowed`: to use another
 action, add it there too.
+
+The ruleset `main` protects the default branch, for the admins too. A change
+goes in through a pull request that is up to date with `main`, merged with a
+merge commit. It needs two checks, from GitHub Actions: `commits` of
+`commits.yml`, and `required` of `ci.yml`, which passes when every other job of
+CI passes. A new job of CI goes into the `needs` of `required`. The ruleset
+names the two checks: to rename one, change the ruleset in the same pull
+request, and set it with `--apply` from that branch just before the merge.
 
 ## Relationship to upstream
 
