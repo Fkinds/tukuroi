@@ -32,9 +32,10 @@ def assertion(call: ast.Call, methods: Collection[str]) -> str | None:
 def method_span(source: Source, call: ast.Call) -> Span:
     """The span of the name of the method of ``call``, ``self.<method>``."""
     func = call.func
-    assert isinstance(func, ast.Attribute)
-    end = source.span(func).end
-    return Span(end - len(func.attr), end)
+    if isinstance(func, ast.Attribute):
+        end = source.span(func).end
+        return Span(end - len(func.attr), end)
+    raise AssertionError("a call that assertion() matched calls self.<method>")
 
 
 def arguments(call: ast.Call) -> list[ast.expr | ast.keyword]:

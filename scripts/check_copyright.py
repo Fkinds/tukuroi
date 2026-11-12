@@ -16,7 +16,8 @@ EXPECTED_HEADER = "\n".join(
 
 def tracked_files() -> Iterable[Path]:
     proc = run(
-        ["git", "ls-tree", "-r", "--name-only", "HEAD"],
+        # The git of the developer, from PATH (#130).
+        ["git", "ls-tree", "-r", "--name-only", "HEAD"],  # noqa: S607
         check=True,
         capture_output=True,
         encoding="utf-8",
