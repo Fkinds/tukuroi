@@ -162,8 +162,7 @@ Closes #123
 - The first line is up to 100 characters. The description of a commit is in
   English, in the imperative mood: `fix(config): stop at the first value that
   fixit cannot use`.
-- The merge commits of GitHub, and `Revert` and `fixup!` commits, pass as they
-  are.
+- The merge commits of GitHub, and `Revert` commits, pass as they are.
 
 The commit-msg hook of prek checks each message with `cz check` of
 [commitizen][], as configured in `pyproject.toml`, and CI checks the commits and
@@ -171,6 +170,14 @@ the title of each pull request. To check a message by hand:
 
 ```shell-session
 $ uv run cz check -m "fix(config): stop at the first value that fixit cannot use"
+```
+
+In a review, fix a commit with `git commit --fixup` (or `--squash`): the hook
+lets its `fixup!` message pass. CI fails while a pull request has such a commit,
+or a title like it. Squash them into the commits that they fix before the merge:
+
+```shell-session
+$ git rebase -i --autosquash origin/main
 ```
 
 For most developers, we recommend using the [github cli][gh] to submit pull

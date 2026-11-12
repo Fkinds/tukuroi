@@ -45,3 +45,32 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: uv run cz check --message "$TITLE"
+      - name: Autosquash
+        # No commit of `git commit --fixup` or `--squash` goes into main, and no
+        # title like theirs (#127): cz check lets them pass, as the hook does
+        # while a pull request is in review. The messages and the title are
+        # anyone's text, from the environment. git log runs apart from the
+        # loop, so that its failure fails the step.
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+        shell: bash
+        run: |
+          pattern='^(fixup|squash|amend)! '
+          log=$(git log --format='%h %s' "$BASE..$HEAD")
+          status=0
+          while read -r commit subject; do
+            if [[ $subject =~ $pattern ]]; then
+              echo "::error::Commit $commit: $subject"
+              status=1
+            fi
+          done <<< "$log"
+          if [[ $TITLE =~ $pattern ]]; then
+            echo "::error::Title: $TITLE"
+            status=1
+          fi
+          if ((status)); then
+            echo "::error::Squash them before the merge: git rebase -i --autosquash origin/main"
+          fi
+          exit "$status"
