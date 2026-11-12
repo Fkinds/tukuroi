@@ -67,6 +67,59 @@ actions:
   fork_pr_contributor_approval:
     approval_policy: all_external_contributors
 
+# PATCH /repos/{name}/code-scanning/default-setup: CodeQL, on the pull requests
+# and pushes of main, and each week (#25). Its sources include the files, the
+# arguments and the environment: Fixit lints repositories that it does not
+# trust. Public repositories only.
+code_scanning_default_setup:
+  state: configured
+  languages:
+    - actions
+    - python
+  query_suite: extended
+  threat_model: remote_and_local
+
+# The rulesets, exactly, by name: --apply creates and updates them with
+# POST /repos/{name}/rulesets and PUT /repos/{name}/rulesets/{id}, and deletes
+# the others. Public repositories only.
+rulesets:
+  - name: main
+    target: branch
+    enforcement: active
+    # Nobody passes the rules: the admins too merge a pull request that passes.
+    bypass_actors: []
+    conditions:
+      ref_name:
+        include:
+          - "~DEFAULT_BRANCH"
+        exclude: []
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: pull_request
+        parameters:
+          required_approving_review_count: 0
+          dismiss_stale_reviews_on_push: false
+          require_code_owner_review: false
+          require_last_push_approval: false
+          required_review_thread_resolution: false
+          allowed_merge_methods:
+            - merge
+      - type: required_status_checks
+        parameters:
+          # The pull request is up to date with main: its checks ran with the
+          # main that it merges into.
+          strict_required_status_checks_policy: true
+          do_not_enforce_on_create: false
+          # The job that waits for the others in ci.yml, and the commit
+          # messages of commits.yml (#127). Only GitHub Actions (15368) reports
+          # them. Audit is not one: it runs on few pull requests (#25).
+          required_status_checks:
+            - context: required
+              integration_id: 15368
+            - context: commits
+              integration_id: 15368
+
 # The labels, exactly: --apply deletes the others.
 labels:
   - name: accessibility
