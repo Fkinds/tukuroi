@@ -1,28 +1,15 @@
-.. image:: docs/_static/logo/logo.svg
-   :width: 600 px
-   :alt: Fixit
+This is an **unofficial fork** of `Instagram/Fixit
+<https://github.com/Instagram/Fixit>`_, the linting framework that Meta
+published. It is not affiliated with Meta, nor endorsed by Meta or by the
+maintainers of Fixit. Its main differences from upstream:
 
-|readthedocs-badge| |pypi-badge| |changelog-badge| |roadmap-badge| |license-badge|
-
-.. |readthedocs-badge| image:: https://readthedocs.org/projects/pip/badge/?version=latest&style=flat
-   :target: https://fixit.readthedocs.io/en/latest/
-   :alt: Documentation
-
-.. |pypi-badge| image:: https://img.shields.io/pypi/v/fixit.svg
-   :target: https://pypi.org/project/fixit
-   :alt: PyPI
-
-.. |changelog-badge| image:: https://img.shields.io/badge/change-log-blue.svg
-   :target: https://fixit.readthedocs.io/en/latest/changelog.html
-   :alt: Changelog
-
-.. |roadmap-badge| image:: https://img.shields.io/badge/road-map-9cf.svg
-   :target: https://github.com/Instagram/Fixit/milestones
-   :alt: Project Roadmap
-
-.. |license-badge| image:: https://img.shields.io/pypi/l/fixit.svg
-   :target: https://github.com/instagram/fixit/blob/main/LICENSE
-   :alt: MIT License
+- The rules run on a new engine, ``fixit.core``, built on Python's ``ast``
+  module in place of LibCST.
+- Safer handling of untrusted repositories: ``--no-custom-rules`` keeps Fixit
+  from importing any rules but its built-in ones, the search for configurations
+  stops at the root of the repository, output templates take only the names of
+  their fields, and the LSP server talks over stdio only.
+- It supports only the two newest minor versions of CPython: 3.14 and 3.15.
 
 Fixit provides a highly configurable linting framework with support for
 auto-fixes, custom "local" lint rules, and hierarchical configuration, built
@@ -33,15 +20,9 @@ Fixit makes it quick and easy to write new lint rules and offer suggested
 changes for any errors found, which can then be accepted automatically,
 or presented to the user for consideration.
 
+For more details, see the `user guide`__ in ``docs/``.
 
-**Fixit 2.0 has been rebuilt for better configuration and support for custom
-lint rules.** If you are using Fixit 0.1.4 or older, take a look at the
-`legacy documentation <https://fixit.rtfd.io/en/v0.1.4/>`_
-or the `stable branch <https://github.com/Instagram/Fixit/tree/0.x>`_.
-
-For more details, see the `user guide`__.
-
-.. __: https://fixit.rtfd.io/en/latest/guide.html
+.. __: https://github.com/Fkinds/Fixit/tree/main/docs/guide
 
 .. QUICKSTART
 
@@ -51,4 +32,4 @@ License
 
 Fixit is `MIT licensed`__, as found in the LICENSE file.
 
-.. __: https://github.com/Instagram/Fixit/blob/main/LICENSE
+.. __: https://github.com/Fkinds/Fixit/blob/main/LICENSE

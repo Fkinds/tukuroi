@@ -74,8 +74,8 @@ your repository.
 .. code:: yaml
 
     repos:
-      - repo: https://github.com/Instagram/Fixit
-        rev: 0.0.0  # replace with the Fixit version to use
+      - repo: https://github.com/Fkinds/Fixit
+        rev: <commit SHA>  # no release of this fork has a tag yet
         hooks:
           - id: fixit-lint
 
@@ -84,8 +84,8 @@ your repository.
 .. code:: yaml
 
     repos:
-      - repo: https://github.com/Instagram/Fixit
-        rev: 0.0.0  # replace with the Fixit version to use
+      - repo: https://github.com/Fkinds/Fixit
+        rev: <commit SHA>  # no release of this fork has a tag yet
         hooks:
           - id: fixit-fix
 

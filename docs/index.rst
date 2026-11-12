@@ -2,7 +2,6 @@ Fixit: linting framework with auto-fixes
 ========================================
 
 .. include:: ../README.rst
-    :start-line: 4
     :end-before: .. QUICKSTART
 
 .. include:: guide/quickstart.rst
@@ -41,4 +40,3 @@ Fixit: linting framework with auto-fixes
 
     changelog
     contributing
-    code-of-conduct
