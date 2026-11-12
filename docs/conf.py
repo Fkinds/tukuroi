@@ -52,9 +52,6 @@ extensions = [
     "sphinx_mdinclude",
 ]
 
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
-
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
@@ -86,29 +83,26 @@ master_doc = "index"
 #
 html_theme = "alabaster"
 html_theme_options = {
-    "logo": "logo/logo.svg",
     "description": "Advanced linting framework",
     "fixed_sidebar": True,
     "badge_branch": "master",
     "github_button": False,
-    "github_user": "Instagram",
+    "github_user": "Fkinds",
     "github_repo": "Fixit",
     "show_powered_by": False,
     "sidebar_collapse": False,
     "extra_nav_links": {
-        "Project Roadmap": "https://github.com/Instagram/Fixit/milestones",
-        "Report Issues": "https://github.com/Instagram/Fixit/issues",
+        "Source": "https://github.com/Fkinds/Fixit",
+        "Report Issues": "https://github.com/Fkinds/Fixit/issues",
     },
 }
 
 html_sidebars = {
     "**": [
         "about.html",
-        "badges.html",
         "navigation.html",
         "relations.html",
         "searchbox.html",
-        "meta.html",
     ],
 }
 
