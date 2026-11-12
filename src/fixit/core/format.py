@@ -30,7 +30,9 @@ def ruff_format(text: str, path: Path | None, *, isolated: bool = False) -> str:
     command = [find_ruff_bin(), "format", "--stdin-filename", filename, "-"]
     if isolated:
         command.insert(2, "--isolated")
-    result = subprocess.run(
+    # The ruff of Fixit, with arguments of its own and no shell: the text goes
+    # to its input (#130).
+    result = subprocess.run(  # noqa: S603
         command, input=text.encode(), capture_output=True, check=False
     )
     if result.returncode:

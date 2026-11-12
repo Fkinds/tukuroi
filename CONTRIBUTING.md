@@ -189,7 +189,9 @@ $ ghstack submit
 ## Code style
 
 Fixit uses [ruff][] to format code, sort imports, and lint, with ruff's default
-rules. The settings are in `pyproject.toml`. `make lint` and CI check them.
+rules and its `S` rules: the security checks of [bandit][]. The settings are in
+`pyproject.toml`. `make lint` and CI check them. A finding that is safe by
+design gets `# noqa` with the rule, and a comment that says why.
 
 You can ensure your changes are well formatted, and imports are sorted:
 
@@ -296,6 +298,7 @@ $ ghstack land $PR_URL
 
 [gh]: https://cli.github.com/
 [ghstack]: https://github.com/ezyang/ghstack
+[bandit]: https://bandit.readthedocs.io/
 [cc]: https://www.conventionalcommits.org/en/v1.0.0/
 [commitizen]: https://commitizen-tools.github.io/commitizen/
 [osv]: https://osv.dev/

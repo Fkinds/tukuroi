@@ -118,9 +118,17 @@ schema = "<type>(<scope>)!: <description>"
 schema_pattern = "(?m)^(?=.{1,100}$)(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([^()\\s]+\\))?!?: \\S"
 example = "fix(config): stop at the first value that fixit cannot use"
 
+# ruff's default rules, and the checks of bandit that ruff has (#130): its
+# stable rules, not those of preview.
+[tool.ruff.lint]
+extend-select = ["S"]
+
 [tool.ruff.lint.per-file-ignores]
 # Package modules re-export names.
 "__init__.py" = ["F401"]
+# The tests narrow types with assert, and run Fixit in a subprocess with
+# sys.executable.
+"src/fixit/tests/*" = ["S101", "S603"]
 
 [tool.fixit]
 root = true
