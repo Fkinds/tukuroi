@@ -104,16 +104,22 @@ the versions that the files have; pass `--upgrade` to `uv lock` and `uv pip
 compile` for newer ones. CI uses the version of uv in `UV_VERSION` of its
 workflows.
 
-[Renovate][] keeps them up to date, as `.github/renovate.json5` says. Each
-Monday morning (Asia/Tokyo) it opens pull requests for the versions released at
-least 7 days before: the dependencies of `pyproject.toml`, the actions of the
-workflows (pinned to commit SHAs), and `UV_VERSION`. The updates that are not
-major come in one pull request for each kind, and a major update in one of its
-own. On the first day of each month, it updates the rest of `uv.lock` and
-`build-constraints.txt`. It opens the fixes of the vulnerabilities that GitHub
-finds too. The Dependency Dashboard issue lists what is pending. Nothing is
-merged automatically. The versions of Python (`.python-version`,
-`requires-python`) are left as the project chooses them.
+[Renovate][] keeps them up to date, as `.github/renovate.json5` says: the
+dependencies of `pyproject.toml`, the actions of the workflows (pinned to
+commit SHAs), and `UV_VERSION`. It opens a pull request for an update that is
+not major as soon as the version is released, one for each kind; for a major
+update, one of its own, each morning (Asia/Tokyo), for the versions released
+at least 7 days before. On Mondays, it updates the rest of `uv.lock` and
+`build-constraints.txt`.
+It opens the fixes of the vulnerabilities that GitHub finds too. The Dependency
+Dashboard issue lists what is pending. The versions of Python
+(`.python-version`, `requires-python`) are left as the project chooses them.
+
+Renovate merges the updates that are not major of the development tools (the
+groups of `pyproject.toml`), of the actions, of `UV_VERSION`, and of `uv.lock`,
+once every check of the pull request passes, Audit and CodeQL too, and it is up
+to date with `main`. A maintainer merges the others: the dependencies of the
+package, which reach its users, the major updates, and `build-constraints.txt`.
 
 To check what `uv.lock` pins, with every extra and group, against the known
 vulnerabilities of [osv.dev][osv]:
