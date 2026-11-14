@@ -13,19 +13,26 @@ from typing import (
     Any,
 )
 
-from .core.format import ruff_installed
-from .core.loader import CollectionError, RuleName
+from .core.loader import CollectionError, RuleName, warn_once
 from .core.loader import collect_rules as collect_core_rules
 from .core.loader import load as load_core_rules
 from .core.rule import Rule
 from .ftypes import (
     Config,
-    Formatter,
     Options,
     OutputFormat,
     QualifiedRule,
     QualifiedRuleRegex,
     RawConfig,
+)
+from .plugins import (
+    FORMATTERS,
+    NO_FORMATTER,
+    PluginError,
+    formatter_names,
+    is_builtin,
+    load_formatter,
+    registered,
 )
 from .template import template_error
 
@@ -358,8 +365,6 @@ KEYS = (
 )
 OVERRIDE_KEYS = ("disable", "enable", "formatter", "path")
 REMOVED_KEYS = ("options", "python-version", "tags")
-# What formats a fixed file (#108): nothing, or ruff format.
-FORMATTERS = {f.value: f for f in Formatter}
 # In any case, as the option (#40).
 OUTPUT_FORMATS = {o.value: o for o in OutputFormat}
 
@@ -435,16 +440,52 @@ def root_import_errors(value: object) -> Iterator[str]:
 
 def formatter_errors(value: object) -> Iterator[str]:
     """
-    The messages for ``value`` of ``formatter``: one of :data:`FORMATTERS`, and
-    ``"ruff"`` only with the optional ruff package installed (#108).
+    The messages for ``value`` of ``formatter``: none, or the name of a
+    formatter plugin (#169). A plugin of tukuroi itself is loaded here, as
+    ``ruff``, which needs its optional package (#108); one of another
+    distribution, only where custom rules may run (:func:`plugin_errors`).
     """
     if not isinstance(value, str):
         yield must_be("formatter", "a string", value)
-    elif value not in FORMATTERS:
-        choices = ", ".join(map(repr, FORMATTERS))
-        yield f"formatter: unknown value {value!r}, not one of {choices}"
-    elif FORMATTERS[value] is Formatter.ruff and not ruff_installed():
-        yield 'formatter: "ruff" needs the ruff package: pip install "tukuroi[ruff]"'
+    elif value != NO_FORMATTER:
+        point = registered(FORMATTERS).get(value)
+        if point is None:
+            choices = ", ".join(map(repr, formatter_names()))
+            yield f"formatter: unknown value {value!r}, not one of {choices}"
+        elif is_builtin(point):
+            try:
+                load_formatter(value)
+            except PluginError as error:
+                yield f"formatter: {error}"
+
+
+def plugin_errors(
+    configs: Sequence[RawConfig], custom_rules: bool
+) -> Iterator[ConfigError]:
+    """
+    The messages for the formatter plugins of other distributions that
+    ``configs`` name, at any level: each one is loaded, with custom rules on
+    (``custom_rules``); with them off, it is skipped with a warning (#169).
+    """
+    for config in configs:
+        for name in _formatters_named(config.data):
+            point = registered(FORMATTERS).get(name)
+            if point is None or is_builtin(point):
+                continue
+            if not custom_rules:
+                warn_once(f"Skipped formatter {name!r}: custom rules are turned off")
+                continue
+            try:
+                load_formatter(name)
+            except PluginError as error:
+                yield ConfigError(f"formatter: {error}", config)
+
+
+def _formatters_named(data: dict[str, Any]) -> list[str]:
+    """The formatters that ``data`` names, at its top and in its overrides."""
+    levels = [data, *(o for o in data.get("overrides", ()) if isinstance(o, dict))]
+    found = [level.get("formatter") for level in levels]
+    return [name for name in found if isinstance(name, str)]
 
 
 def output_format_errors(value: object) -> Iterator[str]:
@@ -536,7 +577,7 @@ def merge_configs(
     disable_rules: set[QualifiedRule] = set()
     output_format: OutputFormat = OutputFormat.fixit
     output_template: str = ""
-    formatter: Formatter = Formatter.none
+    formatter = NO_FORMATTER
 
     for config in reversed(raw_configs):
         if root is None:
@@ -565,7 +606,7 @@ def merge_configs(
         for level in levels(path, config, config_file=config_file):
             # The nearest level that names a formatter wins (#108).
             if "formatter" in level:
-                formatter = FORMATTERS[level["formatter"]]
+                formatter = level["formatter"]
             disable = {
                 parse_rule(r, directory, config) for r in level.get("disable", ())
             }
@@ -674,6 +715,8 @@ def generate_config(
 
     if check:
         check_rules(raw_configs, config, options)
+        for error in plugin_errors(raw_configs, config.custom_rules):
+            raise error
 
     return config
 
@@ -726,4 +769,5 @@ def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
                 log_skipped(rule)
             elif error := load_error(rule, config):
                 errors.append(ConfigError(f"{key}: {error}", raw).describe())
+    errors.extend(e.describe() for e in plugin_errors([raw], custom_rules))
     return errors

@@ -173,10 +173,14 @@ Fixit that tukuroi does not support (``python-version``, ``options``,
       for the file. An import that a fix adds goes to its place.
       It needs the optional ruff package: ``pip install "tukuroi[ruff]"``.
       Without it, ``formatter = "ruff"`` is a configuration error.
+    - The name of a formatter plugin of another package (see
+      :ref:`plugins`). It runs code of that package: with custom rules
+      turned off, it is not loaded, and tukuroi warns.
 
     The nearest configuration or override that sets it wins: a subdirectory
-    can turn formatting off with ``formatter = "none"``. The formatters of
-    Fixit (``black``, ``ufmt``) are not supported.
+    can turn formatting off with ``formatter = "none"``. A name that no
+    plugin has, or a plugin that cannot run, is a configuration error. The
+    formatters of Fixit (``black``, ``ufmt``) are not built in.
 
     .. code-block:: toml
 

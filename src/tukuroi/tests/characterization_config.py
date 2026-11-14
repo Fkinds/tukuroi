@@ -28,6 +28,7 @@ from .characterization_cli import (
     line,
     toml_error,
 )
+from .plugins import Upper, point, points, raises
 
 NA = "NoAssertTrueForComparisons"
 SI = "NoStaticIfCondition"
@@ -547,7 +548,7 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         for label, files, args, error in cases:
             with (
                 self.subTest(label),
-                patch("tukuroi.config.ruff_installed", return_value=False),
+                patch("tukuroi.core.format.ruff_installed", return_value=False),
             ):
                 path = args[-1] if args[0] != "validate-config" else "t.py"
                 result = invoke({**files, path: SOURCE}, args)
@@ -555,11 +556,53 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 2)
         with (
             self.subTest("none"),
-            patch("tukuroi.config.ruff_installed", return_value=False),
+            patch("tukuroi.core.format.ruff_installed", return_value=False),
         ):
             files = {"pyproject.toml": toml(*ONLY_SI_LINES, 'formatter = "none"')}
             result = invoke({**files, "t.py": SOURCE}, ["lint", "t.py"])
             self.assertEqual(result.exit_code, 1)
+
+    def test_formatter_plugin(self) -> None:
+        # A formatter of another distribution (#169), named by the config: it
+        # formats the fixed file. With custom rules turned off, it is not
+        # loaded, with a warning, and the file is not formatted (#12).
+        only_na = toml(
+            ROOT, f"disable = [{ALL}]", f"enable = [{NA_}]", 'formatter = "upper"'
+        )
+        files = {"pyproject.toml": only_na, "t.py": "self.assertTrue(a, 3)\n"}
+        skipped = "WARNING:tukuroi.config:Skipped formatter 'upper': custom rules are turned off\n"
+        cases = (
+            # (label, options, the file after the fix, a warning)
+            ("custom rules", [], "SELF.ASSERTEQUAL(A, 3)\n", ""),
+            (
+                "no custom rules",
+                ["--no-custom-rules"],
+                "self.assertEqual(a, 3)\n",
+                skipped,
+            ),
+        )
+        for label, options, fixed, warning in cases:
+            with self.subTest(label), points(point("upper", lambda: Upper)):
+                result = invoke(files, [*options, "fix", "--automatic", "t.py"])
+                self.assertEqual(result.files["t.py"], fixed)
+                self.assertTrue(result.stderr.startswith(warning), result.stderr)
+                self.assertEqual(result.exit_code, 0)
+
+    def test_formatter_plugin_that_cannot_be_used(self) -> None:
+        # An error of the config that names it, before any file is linted; with
+        # custom rules turned off, it is not loaded.
+        files = {"pyproject.toml": toml(ROOT, 'formatter = "upper"'), "t.py": SOURCE}
+        error = "Error: pyproject.toml: formatter: could not load 'upper': ImportError: no module named 'upper'\n"
+        for args in (["lint", "t.py"], ["validate-config", "pyproject.toml"]):
+            with self.subTest(args[0]), points(point("upper", raises)):
+                result = invoke(files, args)
+                self.assertEqual(result.stderr, error)
+                self.assertEqual(result.exit_code, 2)
+        with self.subTest("no custom rules"), points(point("upper", raises)):
+            result = invoke(
+                files, ["--no-custom-rules", "validate-config", "pyproject.toml"]
+            )
+            self.assertEqual(result.exit_code, 0)
 
     def test_keys_outside_the_table(self) -> None:
         # tukuroi.toml and .tukuroi.toml are read under [tool.tukuroi] only: a key or

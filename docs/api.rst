@@ -24,6 +24,13 @@ Lint Rules
     :members: qualified_names
 
 
+Plugins
+-------
+
+.. autoclass:: FormatterPlugin
+    :members: available, format
+
+
 Frontends
 ---------
 

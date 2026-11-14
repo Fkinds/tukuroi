@@ -22,7 +22,6 @@ from . import pool
 from .config import ConfigError, check_configs, generate_config, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
-from .core.format import ruff_formatter
 from .core.rule import Report, Rule
 from .core.source import ParseError, Source
 from .core.text import Range
@@ -31,7 +30,6 @@ from .ftypes import (
     Config,
     Error,
     FileContent,
-    Formatter,
     Metrics,
     MetricsHook,
     Options,
@@ -39,6 +37,7 @@ from .ftypes import (
     Result,
     Violation,
 )
+from .plugins import formatter_of
 from .template import format_template
 
 LOG = logging.getLogger(__name__)
@@ -235,7 +234,8 @@ def fixit_bytes(
         if not chosen:
             return None
 
-        formatter = ruff_formatter if config.formatter is Formatter.ruff else None
+        plugin = formatter_of(config.formatter, custom=config.custom_rules)
+        formatter = None if plugin is None else plugin.format
         choose = None if autofix else chosen.__contains__
         fixed = fix(source, rules, choose=choose, formatter=formatter)
         for report in fixed.broken:

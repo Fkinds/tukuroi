@@ -17,10 +17,40 @@ import importlib.util
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 
 class FormatError(Exception):
     """ruff failed, for example on a syntax error."""
+
+
+@runtime_checkable
+class FormatterPlugin(Protocol):
+    """
+    A formatter of the files that tukuroi fixes (#169): a class registered in
+    the entry points ``tukuroi.formatters``, by the name that ``formatter``
+    of a config gives. tukuroi makes one with no argument.
+    """
+
+    def available(self) -> str | None:
+        """Why the formatter cannot run, such as a missing package, or ``None``."""
+        ...
+
+    def format(self, text: str, path: Path | None) -> str:
+        """``text``, the fixed text of the file at ``path``, formatted."""
+        ...
+
+
+class RuffFormatter:
+    """The formatter ``ruff``: the imports sorted, then ``ruff format``."""
+
+    def available(self) -> str | None:
+        if ruff_installed():
+            return None
+        return 'needs the ruff package: pip install "tukuroi[ruff]"'
+
+    def format(self, text: str, path: Path | None) -> str:
+        return ruff_formatter(text, path)
 
 
 def ruff_installed() -> bool:

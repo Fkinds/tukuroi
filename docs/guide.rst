@@ -10,6 +10,7 @@ User Guide
 .. include:: guide/integrations.rst
 
 .. include:: guide/rules.rst
+.. include:: guide/plugins.rst
 
 .. include:: guide/builtins.rst
 .. include:: guide/ruff.rst
