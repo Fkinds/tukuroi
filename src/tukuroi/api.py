@@ -18,7 +18,7 @@ import trailrunner
 from moreorless import unified_diff
 
 from . import pool
-from .config import ConfigError, check_configs, generate_config, load_rules
+from .config import ConfigError, ConfigReader, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
 from .core.rule import Report, Rule
@@ -269,7 +269,7 @@ def fixit_stdin(
 
     try:
         content: FileContent = sys.stdin.buffer.read()
-        config = generate_config(path, options=options, check=True)
+        config = ConfigReader(options).config(path, check=True)
 
         updated = yield from fixit_bytes(
             path, content, config=config, autofix=autofix, metrics_hook=metrics_hook
@@ -307,7 +307,7 @@ def fixit_file(
 
     try:
         content: FileContent = path.read_bytes()
-        config = generate_config(path, options=options, check=True)
+        config = ConfigReader(options).config(path, check=True)
 
         updated = yield from fixit_bytes(
             path, content, config=config, autofix=autofix, metrics_hook=metrics_hook
@@ -389,9 +389,10 @@ def fixit_paths(
     kill), that file gets an error, and the other files their results (#94).
 
     Before the first result, the config of the directory of each file is read
-    (:func:`~tukuroi.config.check_configs`): a config that tukuroi cannot use raises
-    a :class:`~tukuroi.config.ConfigError`, and no file is linted (#40). A file
-    linted alone (:func:`fixit_file`) gets such an error as its result.
+    (:meth:`~tukuroi.config.ConfigReader.check`): a config that tukuroi cannot
+    use raises a :class:`~tukuroi.config.ConfigError`, and no file is linted
+    (#40). A file linted alone (:func:`fixit_file`) gets such an error as its
+    result.
     """
     expanded_paths: list[Path] = []
     is_stdin = False
@@ -420,7 +421,7 @@ def fixit_paths(
         unique.setdefault(path.resolve(), path)
     expanded_paths = list(unique.values())
 
-    check_configs([stdin_path] if is_stdin else expanded_paths, options)
+    ConfigReader(options).check([stdin_path] if is_stdin else expanded_paths)
 
     if is_stdin:
         yield from fixit_stdin(

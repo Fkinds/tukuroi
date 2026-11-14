@@ -66,14 +66,18 @@ def files(tree: Mapping[str, str], on_path: bool = False) -> Generator[Path]:
 def new_process() -> Generator[RuleLoader]:
     """
     As in a new process (#157): the loader of the process is a new one, with
-    new warnings. The modules that the old one imported must be out of
-    ``sys.modules``, as :func:`files` puts them back.
+    new warnings, and so is the checker of the configs, which goes with it. The
+    modules that the old one imported must be out of ``sys.modules``, as
+    :func:`files` puts them back.
     """
+    from .. import config
+
     warnings = OnceLog()
     new = RuleLoader(warnings)
     with (
         patch.object(loader, "WARNINGS", warnings),
         patch.object(loader, "LOADER", new),
+        patch.object(config, "CHECKER", config.RuleChecker()),
     ):
         yield new
 

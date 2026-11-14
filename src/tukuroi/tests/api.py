@@ -34,7 +34,7 @@ from ..api import (
     fixit_stdin,
     print_result,
 )
-from ..config import ConfigError, RulesOptionError, generate_config
+from ..config import ConfigError, ConfigReader, RulesOptionError
 from ..core.text import Position, Range
 from ..ftypes import (
     STDIN,
@@ -633,22 +633,32 @@ class FixitPathsTest(TestCase):
             "a/u.py": "",
             "b/t.py": "",
         }
+        real = ConfigReader.config
         with (
             files(tree) as root,
             chdir(root),
-            patch("tukuroi.config.generate_config", wraps=generate_config) as checked,
-            patch("tukuroi.api.generate_config", wraps=generate_config) as linted,
+            patch.object(
+                ConfigReader, "config", autospec=True, side_effect=real
+            ) as read,
         ):
+
+            def read_paths() -> list[Path]:
+                return [call.args[1].resolve() for call in read.call_args_list]
+
             list(fixit_paths([Path("a"), Path("b/t.py")], parallel=False))
-            directories = [call.args[0] for call in checked.call_args_list]
-            self.assertEqual(directories, [root / "a", root / "b"])
-            # And then for each file, as it is linted.
-            self.assertEqual(linted.call_count, 3)
+            # The directories first, and then each file, as it is linted: the
+            # files of a directory in the order of the file system.
+            files_ = [root / "a/t.py", root / "a/u.py", root / "b/t.py"]
+            paths = read_paths()
+            self.assertEqual(paths[:2], [root / "a", root / "b"])
+            self.assertCountEqual(paths[2:], files_)
             # With --config-file, that config is read once.
-            checked.reset_mock()
+            read.reset_mock()
             options = Options(config_file=root / "pyproject.toml")
             list(fixit_paths([Path("a"), Path("b")], options=options, parallel=False))
-            self.assertEqual(checked.call_count, 1)
+            paths = read_paths()
+            self.assertEqual(paths[:1], [root / "a"])
+            self.assertCountEqual(paths[1:], files_)
 
     def test_rule_that_cannot_be_loaded(self) -> None:
         # An error of the config that names it, with the key (#40).

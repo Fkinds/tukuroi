@@ -17,8 +17,8 @@ from tukuroi import __version__
 from .api import fixit_paths, print_result
 from .config import (
     ConfigError,
+    ConfigReader,
     RulesOptionError,
-    generate_config,
     load_rules,
     parse_rule,
     validate_config,
@@ -273,7 +273,7 @@ def lint(
     visited: set[Path] = set()
     dirty: set[Path] = set()
     autofixes = 0
-    output = output_of(generate_config(options=options))
+    output = output_of(ConfigReader(options).config())
     echo(output.start())
     for result in fixit_paths(
         paths, options=options, metrics_hook=print if options.print_metrics else None
@@ -346,7 +346,7 @@ def fix(
             metrics_hook=print if options.print_metrics else None,
         )
     )
-    output = output_of(generate_config(options=options))
+    output = output_of(ConfigReader(options).config())
     echo(output.start(), err=is_stdin)
     for result in generator:
         visited.add(result.path)
@@ -433,7 +433,7 @@ def run_rule_tests(
     Exits with 5 when no test ran, as unittest and pytest do: no standard
     defines it.
     """
-    config = generate_config(options=options)
+    config = ConfigReader(options).config()
     config.enable, config.disable = list(rules), []
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()
@@ -469,7 +469,7 @@ def debug(ctx: click.Context, paths: Sequence[Path]) -> None:
     for path in paths:
         path = path.resolve()
         # A rule that cannot be loaded is an error, with its config (#40).
-        config = generate_config(path, options=options, check=True)
+        config = ConfigReader(options).config(path, check=True)
         enabled = load_rules(config)
 
         pprint(">>> ", path)

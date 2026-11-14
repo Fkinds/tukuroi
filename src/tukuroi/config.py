@@ -6,6 +6,7 @@
 import logging
 import tomllib
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
     Any,
@@ -91,7 +92,7 @@ def load_rules(config: Config) -> tuple[type[Rule], ...]:
     The rules that ``config`` enables, sorted by name: the built-in rules in
     ``tukuroi.rules``, and the custom rules. A rule that cannot be loaded is a
     :class:`ConfigError` (#40), without the config that names it: see
-    :func:`check_rules` for that.
+    :meth:`RuleChecker.check` for that.
     """
     try:
         # The loader of the process, as it is when called: a test sets another.
@@ -114,41 +115,56 @@ def root_import_of(config: Config) -> Path | None:
     return config.root
 
 
-# The configs, and the names of --rules, whose rules were loaded in this
-# process, with how: each is checked once (#40).
-_CHECKED: set[tuple[object, ...]] = set()
+@dataclass
+class RuleChecker:
+    """
+    Loads the rules of each config, and of the names of ``--rules``, once in a
+    process (#40): ``checked`` has those whose rules were loaded, with how.
+    The rules are loaded with the loader of the process, and stay in
+    ``sys.modules``: :data:`CHECKER` goes with
+    :data:`~tukuroi.core.loader.LOADER`, and another one with another loader,
+    as in the tests.
+    """
+
+    checked: set[tuple[object, ...]] = field(default_factory=set)
+
+    def check(
+        self,
+        raw_configs: Sequence[RawConfig],
+        config: Config,
+        options: Options | None = None,
+    ) -> None:
+        """
+        Load the rules that each of ``raw_configs``, the configs merged into
+        ``config``, names, from the root config inward, and the first one that
+        cannot be loaded raises a :class:`ConfigError` that names the key
+        (#40). The rules of all the overrides are loaded, whether or not they
+        apply to the file. With ``--rules``, only its rules are loaded, and the
+        error is a :class:`RulesOptionError`. The rules skipped with custom
+        rules turned off are not loaded.
+        """
+        root_import = root_import_of(config)
+        how = (root_import, config.custom_rules)
+        if options and options.rules:
+            if (*how, tuple(options.rules)) not in self.checked:
+                for rule in options.rules:
+                    if error := load_error(rule, config):
+                        raise RulesOptionError(error)
+                self.checked.add((*how, tuple(options.rules)))
+            return
+        for raw in reversed(raw_configs):
+            if (*how, raw.path, repr(raw.data)) in self.checked:
+                continue
+            for key, names in named_rules(raw.data):
+                for name in names:
+                    rule = parse_rule(name, raw.path.parent, raw)
+                    if error := load_error(rule, config):
+                        raise ConfigError(f"{key}: {error}", config=raw)
+            self.checked.add((*how, raw.path, repr(raw.data)))
 
 
-def check_rules(
-    raw_configs: Sequence[RawConfig], config: Config, options: Options | None = None
-) -> None:
-    """
-    Load the rules that each of ``raw_configs``, the configs merged into
-    ``config``, names, from the root config inward, and the first one that
-    cannot be loaded raises a :class:`ConfigError` that names the key (#40).
-    The rules of all the overrides are loaded, whether or not they apply to the
-    file. With ``--rules``, only its rules are loaded, and the error is a
-    :class:`RulesOptionError`. The rules skipped with custom rules turned off
-    are not loaded.
-    """
-    root_import = root_import_of(config)
-    how = (root_import, config.custom_rules)
-    if options and options.rules:
-        if (*how, tuple(options.rules)) not in _CHECKED:
-            for rule in options.rules:
-                if error := load_error(rule, config):
-                    raise RulesOptionError(error)
-            _CHECKED.add((*how, tuple(options.rules)))
-        return
-    for raw in reversed(raw_configs):
-        if (*how, raw.path, repr(raw.data)) in _CHECKED:
-            continue
-        for key, names in named_rules(raw.data):
-            for name in names:
-                rule = parse_rule(name, raw.path.parent, raw)
-                if error := load_error(rule, config):
-                    raise ConfigError(f"{key}: {error}", config=raw)
-        _CHECKED.add((*how, raw.path, repr(raw.data)))
+# The checker of this process.
+CHECKER = RuleChecker()
 
 
 def load_error(rule: QualifiedRule, config: Config) -> str | None:
@@ -474,69 +490,75 @@ def contains(name: QualifiedRule, other: QualifiedRule) -> bool:
     return name.module in (other.module, other.module.rpartition(".")[0])
 
 
-def generate_config(
-    path: Path | None = None,
-    root: Path | None = None,
-    *,
-    options: Options | None = None,
-    check: bool = False,
-) -> Config:
+@dataclass(frozen=True)
+class ConfigReader:
     """
-    Given a file path, walk upwards looking for and applying cascading configs.
-    With ``check``, the rules that the configs name are loaded, and the first one
-    that cannot be raises a :class:`ConfigError` (see :func:`check_rules`).
+    Reads the config of a path: the configs from its directory upwards, up to
+    ``root`` if it is given (see :func:`locate_configs`), merged, as
+    ``options`` change them.
     """
-    path = (path or Path.cwd()).resolve()
 
-    if root is not None:
-        root = root.resolve()
+    options: Options | None = None
+    root: Path | None = None
 
-    if options and options.config_file:
-        config_paths = [options.config_file]
-    else:
-        config_paths = locate_configs(path, root=root)
+    def config(self, path: Path | None = None, *, check: bool = False) -> Config:
+        """
+        The config of ``path`` (by default, the current directory). With
+        ``check``, the rules that the configs name are loaded, and the first one
+        that cannot be raises a :class:`ConfigError` (see :class:`RuleChecker`).
+        """
+        options = self.options
+        path = (path or Path.cwd()).resolve()
+        root = self.root.resolve() if self.root is not None else None
 
-    raw_configs = read_configs(config_paths)
-    config_file = bool(options and options.config_file)
-    config = merge_configs(path, raw_configs, root=root, config_file=config_file)
+        if options and options.config_file:
+            config_paths = [options.config_file]
+        else:
+            config_paths = locate_configs(path, root=root)
 
-    if options:
-        config.custom_rules = options.custom_rules
+        raw_configs = read_configs(config_paths)
+        config_file = bool(options and options.config_file)
+        config = merge_configs(path, raw_configs, root=root, config_file=config_file)
 
-        if options.rules:
-            config.enable = list(options.rules)
-            config.disable = []
+        if options:
+            config.custom_rules = options.custom_rules
 
-        if options.output_format:
-            # In any case, as in a config (#40).
-            config.output_format = options.output_format.lower()
+            if options.rules:
+                config.enable = list(options.rules)
+                config.disable = []
 
-        if options.output_template:
-            config.output_template = options.output_template
+            if options.output_format:
+                # In any case, as in a config (#40).
+                config.output_format = options.output_format.lower()
 
-    if check:
-        check_rules(raw_configs, config, options)
-        for error in plugin_errors(raw_configs, config.custom_rules):
-            raise error
+            if options.output_template:
+                config.output_template = options.output_template
 
-    return config
+        if check:
+            # The checker of the process, as it is when called: a test sets
+            # another.
+            CHECKER.check(raw_configs, config, options)
+            for error in plugin_errors(raw_configs, config.custom_rules):
+                raise error
 
+        return config
 
-def check_configs(paths: Sequence[Path], options: Options | None = None) -> None:
-    """
-    Read the config of the directory of each file in ``paths``, in their order
-    and once for each directory, and load the rules that it names, before any
-    file is linted: the first error is raised as a :class:`ConfigError` (#40).
-    With ``--config-file``, that config is read once.
-    """
-    if options and options.config_file:
-        paths = paths[:1]
-    seen: set[Path] = set()
-    for path in paths:
-        directory = path.resolve().parent
-        if directory not in seen:
-            seen.add(directory)
-            generate_config(directory, options=options, check=True)
+    def check(self, paths: Sequence[Path]) -> None:
+        """
+        Read the config of the directory of each file in ``paths``, in their
+        order and once for each directory, and load the rules that it names,
+        before any file is linted: the first error is raised as a
+        :class:`ConfigError` (#40). With ``--config-file``, that config is read
+        once.
+        """
+        if self.options and self.options.config_file:
+            paths = paths[:1]
+        seen: set[Path] = set()
+        for path in paths:
+            directory = path.resolve().parent
+            if directory not in seen:
+                seen.add(directory)
+                self.config(directory, check=True)
 
 
 def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
