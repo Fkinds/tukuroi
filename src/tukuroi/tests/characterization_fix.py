@@ -764,6 +764,22 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 1)
                 self.assertEqual(result.files["t.py"], source)
 
+    def test_fix_sorts_an_added_import_with_ruff(self) -> None:
+        # An import that a fix adds goes after the last import; with
+        # formatter = "ruff", ruff sorts it among the others (#140).
+        source = "from typing import NamedTuple\n\nfrom app import x\n\n\nclass Foo(NamedTuple):\n    a: int\n"
+        after = "\n\n@dataclass(frozen=True)\nclass Foo:\n    a: int\n"
+        cases = (
+            ("default", "", f"from typing import NamedTuple\n\nfrom app import x\nfrom dataclasses import dataclass\n{after}"),
+            ("ruff", 'formatter = "ruff"\n', f"from dataclasses import dataclass\nfrom typing import NamedTuple\n\nfrom app import x\n{after}"),
+        )  # fmt: skip
+        for label, extra, expected in cases:
+            with self.subTest(label):
+                files = {"pyproject.toml": config(NT) + extra, "t.py": source}
+                result = invoke(files, ["fix", "--automatic", "t.py"])
+                self.assertEqual(result.files["t.py"], expected)
+                self.assertEqual(result.exit_code, 0)
+
     def test_unformatted_cases(self) -> None:
         # Not a test of tukuroi: checks that the cases of formatting would
         # change with ruff format, and that what they expect would not.

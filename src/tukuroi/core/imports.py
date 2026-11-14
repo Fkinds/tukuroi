@@ -9,7 +9,8 @@ the import when the module does not have it yet.
 
 The import goes on a new line after the last import at the top of the module,
 or else after its docstring, or else before its first statement. It is not
-merged into an import there: ruff sorts and merges imports (I001). When the
+merged into an import there: with ``formatter = "ruff"``, ruff sorts and merges
+the imports (I001, #140); without it, the import stays where it goes. When the
 name is bound to something else in the module, there is no clean way to import
 it, and the fix should not be offered.
 """

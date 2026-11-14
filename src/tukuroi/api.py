@@ -22,7 +22,7 @@ from . import pool
 from .config import ConfigError, check_configs, generate_config, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
-from .core.format import ruff_format
+from .core.format import ruff_formatter
 from .core.rule import Report, Rule
 from .core.source import ParseError, Source
 from .core.text import Range
@@ -235,7 +235,7 @@ def fixit_bytes(
         if not chosen:
             return None
 
-        formatter = ruff_format if config.formatter is Formatter.ruff else None
+        formatter = ruff_formatter if config.formatter is Formatter.ruff else None
         choose = None if autofix else chosen.__contains__
         fixed = fix(source, rules, choose=choose, formatter=formatter)
         if not fixed.converged:

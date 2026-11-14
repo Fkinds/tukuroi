@@ -7,8 +7,8 @@ tukuroi makes it easy to write new lint rules, directly in your codebase
 alongside the code they lint. A rule finds code in the syntax tree of Python's
 :mod:`ast` module, and fixes it by replacing ranges of the original text: the
 rest of the file stays as it was, comments included. With ``formatter = "ruff"``
-(see :attr:`formatter`), tukuroi then formats each file it fixes with
-``ruff format``. Write a replacement that reads well without it.
+(see :attr:`formatter`), tukuroi then sorts the imports of each file it fixes,
+and formats it, with ruff. Write a replacement that reads well without it.
 
 A Rule
 ^^^^^^

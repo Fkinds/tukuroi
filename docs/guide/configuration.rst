@@ -168,7 +168,9 @@ Fixit that tukuroi does not support (``python-version``, ``options``,
     - ``none``: nothing, the default. Only the ranges that the fixes replace
       change. An import that a fix adds goes on a new line after the last
       import, and is not sorted.
-    - ``ruff``: ``ruff format``, with the settings of ruff for the file.
+    - ``ruff``: ruff sorts the imports, as its isort rule (``I001``) fixes them,
+      then ``ruff format`` formats the file, both with the settings of ruff
+      for the file. An import that a fix adds goes to its place.
       It needs the optional ruff package: ``pip install "tukuroi[ruff]"``.
       Without it, ``formatter = "ruff"`` is a configuration error.
 
