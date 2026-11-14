@@ -237,7 +237,7 @@ class CustomRulesSwitchTest(TestCase):
             self.assert_lint(result, (BAD, UGLY))
             self.assertEqual(imported(result), {"rules"})
 
-    def test_fixit_test(self) -> None:
+    def test_tukuroi_test(self) -> None:
         cases = (
             # (label, TUKUROI_CUSTOM_RULES, args)
             ("--no-custom-rules", None, ["--no-custom-rules", "test", ".rules"]),

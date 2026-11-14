@@ -3,16 +3,16 @@
 Writing Rules
 -------------
 
-Fixit makes it easy to write new lint rules, directly in your codebase
+tukuroi makes it easy to write new lint rules, directly in your codebase
 alongside the code they lint. A rule finds code in the syntax tree of Python's
 :mod:`ast` module, and fixes it by replacing ranges of the original text: the
-rest of the file stays as it was, comments included. Fixit then formats each
+rest of the file stays as it was, comments included. tukuroi then formats each
 file it fixes with ``ruff format``.
 
 A Rule
 ^^^^^^
 
-A rule is a subclass of :class:`fixit.Rule`, with a message, examples of code
+A rule is a subclass of :class:`tukuroi.Rule`, with a message, examples of code
 it accepts and reports, and ``visit_<node>`` methods named after the classes of
 :mod:`ast`:
 
@@ -22,7 +22,7 @@ it accepts and reports, and ``visit_<node>`` methods named after the classes of
 
     import ast
 
-    from fixit import Invalid, Rule, Valid
+    from tukuroi import Invalid, Rule, Valid
 
 
     class HollywoodName(Rule):
@@ -42,7 +42,7 @@ it accepts and reports, and ``visit_<node>`` methods named after the classes of
 
 - ``MESSAGE`` is the message of a report that gives none. The name of the rule
   is the name of its class, without a ``Rule`` at its end.
-- Fixit walks the tree once, parents before children, and calls the methods of
+- tukuroi walks the tree once, parents before children, and calls the methods of
   every rule for each node. ``visit_stmt`` or ``visit_expr`` takes every node of
   that kind; the most specific method runs first.
 - ``self.report(node, message=None, *, replacement=None, edits=())`` reports
@@ -53,7 +53,7 @@ Fixes
 ^^^^^
 
 A fix is ``replacement``, a string for the text of the node reported, or
-``edits``, a list of :class:`fixit.Edit`: each replaces a :class:`fixit.Span`
+``edits``, a list of :class:`tukuroi.Edit`: each replaces a :class:`tukuroi.Span`
 of the text, and an empty span inserts. Build them from the original text, so
 that quotes, comments and spacing stay as they are:
 
@@ -64,10 +64,10 @@ that quotes, comments and spacing stay as they are:
   refers to through the imports of the module: with ``import typing as t``,
   ``t.Callable`` is ``typing.Callable``. Names bound again after the import are
   not followed.
-- ``fixit.core.imports.add_import`` gives the name to use for a module or a
+- ``tukuroi.core.imports.add_import`` gives the name to use for a module or a
   name of it, and the edit that imports it when the file does not yet.
 
-Fixit applies the fixes of a file in the order of their start, and skips one
+tukuroi applies the fixes of a file in the order of their start, and skips one
 that overlaps a fix applied before it. Then it lints the result again, until no
 fix is left (at most 100 rounds). A fix that would drop a comment inside the
 range it replaces is not applied: the report has no fix.
@@ -77,16 +77,16 @@ Tests
 
 ``VALID`` and ``INVALID`` are the tests of the rule. A valid case must not be
 reported. An invalid case must be reported, with ``expected_message`` and
-``position`` (a :class:`fixit.Position`) when given. When the rule fixes it,
+``position`` (a :class:`tukuroi.Position`) when given. When the rule fixes it,
 the case must give ``expected_replacement``: the file after all the fixes and
 ``ruff format`` with its default settings.
 
-Run them with :ref:`fixit test <test_command>`, or add them to a test module
+Run them with :ref:`tukuroi test <test_command>`, or add them to a test module
 of your own:
 
 .. code:: python
 
-    from fixit.testing import add_rule_tests_to_module
+    from tukuroi.testing import add_rule_tests_to_module
 
     from .rules.hollywood import HollywoodName
 
@@ -111,11 +111,11 @@ Enable the rules in the project's :ref:`configuration` file:
 
     The leading ``.`` (period) is required when using in-repo, or "local", lint
     rules, with a module path relative to the directory containing the config
-    file. This allows Fixit to locate and import the lint rule without needing
+    file. This allows tukuroi to locate and import the lint rule without needing
     to install a plugin in the user's environment.
 
-Fixit imports each module of rules once in a process. After changing a rule,
-restart :ref:`fixit lsp <lsp_command>` (or the editor that runs it) for the
+tukuroi imports each module of rules once in a process. After changing a rule,
+restart :ref:`tukuroi lsp <lsp_command>` (or the editor that runs it) for the
 change to take effect.
 
 Rules run the code of the repo: see :ref:`security` before linting code you do

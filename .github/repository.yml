@@ -69,7 +69,7 @@ actions:
 
 # PATCH /repos/{name}/code-scanning/default-setup: CodeQL, on the pull requests
 # and pushes of main, and each week (#25). Its sources include the files, the
-# arguments and the environment: Fixit lints repositories that it does not
+# arguments and the environment: tukuroi lints repositories that it does not
 # trust. Public repositories only.
 code_scanning_default_setup:
   state: configured

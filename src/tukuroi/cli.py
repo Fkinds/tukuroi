@@ -115,7 +115,7 @@ class ConfigFailure(click.ClickException):
     exit_code = 2
 
 
-class _FixitGroup(click.Group):
+class _TukuroiGroup(click.Group):
     """
     Keep the pre-Click 8.2 behavior for an empty command line. A
     :class:`ConfigError` in any command is printed without a traceback (#40).
@@ -138,7 +138,7 @@ class _FixitGroup(click.Group):
             raise ConfigFailure(error.describe()) from error
 
 
-@click.group(cls=_FixitGroup)
+@click.group(cls=_TukuroiGroup)
 @click.pass_context
 @click.version_option(__version__, "--version", "-V", prog_name="tukuroi")
 @click.option(

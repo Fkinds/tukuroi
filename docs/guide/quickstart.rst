@@ -5,20 +5,20 @@ Quick Start
 Setup
 ^^^^^
 
-Install Fixit from PyPI:
+Install tukuroi from PyPI:
 
 .. code-block:: console
 
-    $ pip install --pre "fixit >1"
+    $ pip install tukuroi
 
-By default, Fixit enables all of the lint rules that ship with Fixit,
-all of which are part of the :mod:`fixit.rules` package.
+By default, tukuroi enables all of the lint rules that ship with tukuroi,
+all of which are part of the :mod:`tukuroi.rules` package.
 
 If you want to customize the list of enabled rules, either to add new rules
 or disable others, see the :ref:`Configuration Guide <configuration>` for
 details and options available.
 
-Fixit offers multiple integrations, including pre-commit actions and LSP support
+tukuroi offers multiple integrations, including pre-commit actions and LSP support
 for VSCode and other editors. See the :ref:`Integrations Guide <integrations>`
 for details.
 
@@ -30,15 +30,15 @@ See lints and suggested changes for a set of source files:
 
 .. code-block:: console
 
-    $ fixit lint <path>
+    $ tukuroi lint <path>
 
 Apply suggested changes on those same files automatically:
 
 .. code-block:: console
 
-    $ fixit fix <path>
+    $ tukuroi fix <path>
 
-If given directories, Fixit will automatically recurse them, finding any files
+If given directories, tukuroi will automatically recurse them, finding any files
 with the ``.py`` extension, while obeying your repo's global ``.gitignore``.
 
 See the :ref:`Command Reference <commands>` for more details.
@@ -61,11 +61,11 @@ Given the following code:
             if True:
                 self.assertTrue(value, None)
 
-When running Fixit, we see three separate lint errors:
+When running tukuroi, we see three separate lint errors:
 
 .. code:: console
 
-    $ fixit lint foo_test.py
+    $ tukuroi lint foo_test.py
     foo_test.py@8:8 UseAssertIn: Use assertIn/assertNotIn instead of assertTrue/assertFalse for inclusion check.
     See https://docs.python.org/3/library/unittest.html#unittest.TestCase.assertIn) (has autofix)
     foo_test.py@9:8 NoStaticIfCondition: Your if condition appears to evaluate to a static value (e.g. `or True`, `and False`). Please double check this logic and if it is actually temporary debug code.
@@ -76,7 +76,7 @@ We can also see any suggested changes by passing ``--diff``:
 
 .. code:: console
 
-    $ fixit lint --diff foo_test.py
+    $ tukuroi lint --diff foo_test.py
     foo_test.py@8:8 UseAssertIn: Use assertIn/assertNotIn instead of assertTrue/assertFalse for inclusion check.
     See https://docs.python.org/3/library/unittest.html#unittest.TestCase.assertIn) (has autofix)
     --- a/foo_test.py
@@ -88,8 +88,8 @@ We can also see any suggested changes by passing ``--diff``:
              if True:
     ...
 
-Fixit checks the rules that come with it (see :ref:`builtin-rules`); ruff
-covers the others that Fixit used to have (see :ref:`ruff-rules`). To write
+tukuroi checks the rules that come with it (see :ref:`builtin-rules`); ruff
+covers the others that Fixit had (see :ref:`ruff-rules`). To write
 rules of your own, see :ref:`writing-rules`.
 
 
@@ -108,15 +108,15 @@ triggered the lint rule:
     # lint-ignore: UseAssertIn
     self.assertTrue(c in d)
 
-By providing one or more lint rule, separated by commas, Fixit can still report
+By providing one or more lint rule, separated by commas, tukuroi can still report
 issues triggered by other lint rules that haven't been listed in the comment,
 but this is not required. The names follow a ``:``, and must have the same
 case as the names of the rules, with or without ``Rule`` at the end. A
-directive that does not fit this form silences nothing, and Fixit warns about
+directive that does not fit this form silences nothing, and tukuroi warns about
 it (``invalid lint-ignore directive``). A comment can hold other tools'
 directives too: ``# noqa  # lint-ignore: UseAssertIn``.
 
-If no rule name is listed, Fixit will silence all rules when reported on code
+If no rule name is listed, tukuroi will silence all rules when reported on code
 associated with that comment:
 
 .. code-block:: python
@@ -140,5 +140,5 @@ the user, though they are intended to be used with the following meanings:
   intentionally written or structured in a way that the lint error cannot
   be avoided.
 
-Future versions of Fixit may offer reporting or similar tools that treat
+Future versions of tukuroi may offer reporting or similar tools that treat
 "fixme" directives differently from "ignore" directives.

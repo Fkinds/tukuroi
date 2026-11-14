@@ -53,8 +53,8 @@ class QualifiedRuleRegexResult(TypedDict):
     local: str | None
 
 
-# The packages of the rules that come with Fixit. With custom rules turned off
-# (`--no-custom-rules`), Fixit imports no other rules.
+# The packages of the rules that come with tukuroi. With custom rules turned off
+# (`--no-custom-rules`), tukuroi imports no other rules.
 BUILTIN_RULE_PACKAGES = ("tukuroi.rules",)
 
 
@@ -69,7 +69,7 @@ class QualifiedRule:
     @property
     def builtin(self) -> bool:
         """
-        Whether this names rules that come with Fixit, not custom rules. The
+        Whether this names rules that come with tukuroi, not custom rules. The
         module of a local rule starts with ".", so it never matches.
         """
         return any(
@@ -154,7 +154,7 @@ class RawConfig:
 class Violation:
     """
     A violation that a rule reports: the rule, where it is (lines from 1,
-    columns in characters from 0), the message, whether Fixit can fix it, and
+    columns in characters from 0), the message, whether tukuroi can fix it, and
     the diff of its fix alone.
     """
 
@@ -168,7 +168,7 @@ class Violation:
 @dataclass(frozen=True, slots=True)
 class Error:
     """
-    An exception that stopped Fixit on a file, in strings alone: the name of
+    An exception that stopped tukuroi on a file, in strings alone: the name of
     its type and its message, as :mod:`traceback` writes them, and the
     traceback (empty for a syntax error in the file). The process pool of
     ``lint`` sends it back whatever the exception was, even one that a rule

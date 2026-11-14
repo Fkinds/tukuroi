@@ -1,12 +1,12 @@
 - id: tukuroi-lint
-  name: Fixit - lint
-  description: This hook shows Fixit lints and suggested changes without applying autofixes.
+  name: tukuroi - lint
+  description: This hook shows tukuroi lints and suggested changes without applying autofixes.
   entry: tukuroi lint --diff
   language: python
   types: [python]
 - id: tukuroi-fix
-  name: Fixit - lint and apply autofixes
-  description: This hook shows Fixit lints and applies suggested changes.
+  name: tukuroi - lint and apply autofixes
+  description: This hook shows tukuroi lints and applies suggested changes.
   entry: tukuroi fix --automatic
   language: python
   types: [python]

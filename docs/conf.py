@@ -38,7 +38,7 @@ python.py_sig_re = py_sig_re
 
 # -- Project information -----------------------------------------------------
 
-project = "Fixit"
+project = "tukuroi"
 copyright = f" Copyright © Meta Platforms, Inc. and affiliates"
 author = ""
 # -- General configuration ---------------------------------------------------

@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-Rules stricter than most code needs. Fixit does not enable them by default, and
+Rules stricter than most code needs. tukuroi does not enable them by default, and
 enabling :mod:`tukuroi.rules` does not enable them: name this package, or a rule
 of it, in :attr:`enable`.
 """

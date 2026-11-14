@@ -4,6 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-The engine of Fixit, built on ``ast`` and ``tokenize`` (#21): it parses the
+The engine of tukuroi, built on ``ast`` and ``tokenize`` (#21): it parses the
 source, runs the rules, applies their fixes, and formats with ruff.
 """

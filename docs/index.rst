@@ -1,5 +1,5 @@
-Fixit: linting framework with auto-fixes
-========================================
+tukuroi: linting framework with auto-fixes
+==========================================
 
 .. include:: ../README.rst
     :end-before: .. QUICKSTART
@@ -27,12 +27,6 @@ Fixit: linting framework with auto-fixes
     :maxdepth: 2
 
     api
-
-.. toctree::
-    :hidden:
-    :maxdepth: 2
-
-    proposals
 
 .. toctree::
     :hidden:
