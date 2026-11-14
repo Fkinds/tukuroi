@@ -111,9 +111,9 @@ rulesets:
           # main that it merges into.
           strict_required_status_checks_policy: true
           do_not_enforce_on_create: false
-          # The job that waits for the others in ci.yml, and the commit
-          # messages of commits.yml (#127). Only GitHub Actions (15368) reports
-          # them. Audit is not one: it runs on few pull requests (#25).
+          # The job that waits for the others in ci.yml, the audit of the
+          # dependencies among them (#173), and the commit messages of
+          # commits.yml (#127). Only GitHub Actions (15368) reports them.
           required_status_checks:
             - context: required
               integration_id: 15368

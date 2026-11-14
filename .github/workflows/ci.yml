@@ -153,11 +153,42 @@ jobs:
           --build-constraints build-constraints.txt --require-build-hashes
           --preview-features build-dependency-hashes
 
+  audit:
+    # The known vulnerabilities of what uv.lock pins, with every extra and
+    # group, against osv.dev: on each change, through required (#173). Audit
+    # checks them each day too, for those found with no change here. When
+    # osv.dev cannot be reached, the job fails: run it again.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+          python-version: "3.14"
+      - name: Audit
+        # bash, for pipefail: the step fails with make, not with tee.
+        shell: bash
+        run: make audit 2>&1 | tee audit.txt
+      - name: Summary
+        # The report, on the page of the run.
+        if: always()
+        run: |
+          {
+            echo '```'
+            cat audit.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   required:
     # The check that the ruleset of main requires (#11), in place of each job:
     # it passes when every job of needs passed. A new job goes into needs.
     if: always()
-    needs: [test, pyrefly, lint, docs, build]
+    needs: [test, pyrefly, lint, docs, build, audit]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions: {}
