@@ -20,7 +20,7 @@ import ast
 import re
 import tokenize
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .edits import Edit, drops_comments
 from .names import ImportTable, bound
@@ -135,30 +135,102 @@ def remove_import(source: Source, *names: str) -> tuple[Edit, ...]:
     """
     if not names:
         return ()
-    read = _reads(source)
-    alone = _alone_in_a_block(source.tree)
-    edits: list[Edit] = []
-    for node in ast.walk(source.tree):
-        if not isinstance(node, ast.Import | ast.ImportFrom):
-            continue
-        span = source.span(node)
+    return _ImportRemover(source, names).edits()
+
+
+@dataclass
+class _ImportRemover:
+    """
+    How :func:`remove_import` takes the imports of ``names`` out of ``source``:
+    with where each name is read (``read``), and the statements that are the
+    only one of a block (``alone``), found once.
+    """
+
+    source: Source
+    names: tuple[str, ...]
+    read: defaultdict[str, list[int]] = field(init=False)
+    alone: set[int] = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.read = _reads(self.source)
+        self.alone = _alone_in_a_block(self.source.tree)
+
+    def edits(self) -> tuple[Edit, ...]:
+        edits: list[Edit] = []
+        for node in ast.walk(self.source.tree):
+            if not isinstance(node, ast.Import | ast.ImportFrom):
+                continue
+            unused = self._unused(node)
+            if not unused:
+                continue
+            if len(unused) == len(node.names):
+                found = self._without_statement(node)
+            else:
+                found = self._without_names(node.names, unused)
+            if found and not drops_comments(found, self.source.comments):
+                edits.extend(found)
+        return tuple(edits)
+
+    def _unused(self, node: ast.Import | ast.ImportFrom) -> list[ast.alias]:
+        """The names of ``node`` to take out: imports of ``names``, read nowhere else."""
+        span = self.source.span(node)
         bindings = list(bound(node))
         aliases = [a for a in node.names if a.name != "*"]
-        unused = [
+        return [
             alias
             for alias, (local, qualified) in zip(aliases, bindings, strict=True)
-            if _imports_one_of(qualified, names)
-            and all(span.start <= at < span.end for at in read[local])
+            if _imports_one_of(qualified, self.names)
+            and all(span.start <= at < span.end for at in self.read[local])
         ]
-        if not unused:
-            continue
-        if len(unused) == len(node.names):
-            found = _without_statement(source, node, alone)
-        else:
-            found = _without_names(source, node.names, unused)
-        if found and not drops_comments(found, source.comments):
-            edits.extend(found)
-    return tuple(edits)
+
+    def _without_statement(self, node: ast.Import | ast.ImportFrom) -> list[Edit]:
+        """The edit that takes out ``node`` with its lines, if they are its own."""
+        if id(node) in self.alone:
+            return []
+        source = self.source
+        span = source.span(node)
+        start = source.lines.position(span.start)
+        line_start = source.lines.offset(Position(start.line, 0))
+        end = source.lines.position(span.end)
+        try:
+            next_line = source.lines.offset(Position(end.line + 1, 0))
+        except ValueError:
+            next_line = len(source.text)
+        before = source.text[line_start : span.start]
+        after = source.text[span.end : next_line]
+        if before.strip() or after.strip():
+            return []
+        return [Edit(Span(line_start, next_line), "")]
+
+    def _without_names(
+        self, aliases: list[ast.alias], unused: list[ast.alias]
+    ) -> list[Edit]:
+        """
+        The edits that take ``unused`` out of ``aliases``, some of them: each run
+        of them up to the next name that stays, or, at the end, from the name
+        before.
+        """
+        span = self.source.span
+        edits: list[Edit] = []
+        index = 0
+        while index < len(aliases):
+            if not any(aliases[index] is a for a in unused):
+                index += 1
+                continue
+            last = index
+            while last + 1 < len(aliases) and any(
+                aliases[last + 1] is a for a in unused
+            ):
+                last += 1
+            if last + 1 < len(aliases):
+                start = span(aliases[index]).start
+                end = span(aliases[last + 1]).start
+            else:
+                start = span(aliases[index - 1]).end
+                end = span(aliases[last]).end
+            edits.append(Edit(Span(start, end), ""))
+            index = last + 1
+        return edits
 
 
 def _imports_one_of(qualified: str, names: tuple[str, ...]) -> bool:
@@ -187,51 +259,3 @@ def _alone_in_a_block(tree: ast.Module) -> set[int]:
             if node is not tree and isinstance(block, list) and len(block) == 1:
                 alone.add(id(block[0]))
     return alone
-
-
-def _without_statement(
-    source: Source, node: ast.Import | ast.ImportFrom, alone: set[int]
-) -> list[Edit]:
-    """The edit that takes out ``node`` with its lines, if they are its own."""
-    if id(node) in alone:
-        return []
-    span = source.span(node)
-    start = source.lines.position(span.start)
-    line_start = source.lines.offset(Position(start.line, 0))
-    end = source.lines.position(span.end)
-    try:
-        next_line = source.lines.offset(Position(end.line + 1, 0))
-    except ValueError:
-        next_line = len(source.text)
-    before = source.text[line_start : span.start]
-    after = source.text[span.end : next_line]
-    if before.strip() or after.strip():
-        return []
-    return [Edit(Span(line_start, next_line), "")]
-
-
-def _without_names(
-    source: Source, aliases: list[ast.alias], unused: list[ast.alias]
-) -> list[Edit]:
-    """
-    The edits that take ``unused`` out of ``aliases``, some of them: each run of
-    them up to the next name that stays, or, at the end, from the name before.
-    """
-    edits: list[Edit] = []
-    index = 0
-    while index < len(aliases):
-        if not any(aliases[index] is a for a in unused):
-            index += 1
-            continue
-        last = index
-        while last + 1 < len(aliases) and any(aliases[last + 1] is a for a in unused):
-            last += 1
-        if last + 1 < len(aliases):
-            start = source.span(aliases[index]).start
-            end = source.span(aliases[last + 1]).start
-        else:
-            start = source.span(aliases[index - 1]).end
-            end = source.span(aliases[last]).end
-        edits.append(Edit(Span(start, end), ""))
-        index = last + 1
-    return edits
