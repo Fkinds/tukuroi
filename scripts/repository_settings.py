@@ -20,8 +20,9 @@ import re
 import subprocess
 import sys
 import time
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -49,22 +50,43 @@ class GhError(Exception):
         self.status = status
 
 
-def gh(method: str, path: str, body: object = None) -> Any:
-    """The JSON that `gh api` returns for ``method`` on ``path``, or None."""
-    command = ["gh", "api", "--method", method, path]
-    if body is not None:
-        command += ["--input", "-"]
-    # The gh of the developer, from PATH, with arguments of its own.
-    result = subprocess.run(  # noqa: S603
-        command,
-        input=None if body is None else json.dumps(body),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode:
-        raise GhError(status_of(result), (result.stdout + result.stderr).strip())
-    return json.loads(result.stdout) if result.stdout.strip() else None
+@dataclass(frozen=True)
+class GitHub:
+    """
+    `gh api` on the repository ``repo``: a path is under ``repos/{repo}``, so
+    that no other repository can be read or set.
+    """
+
+    repo: str
+
+    def call(self, method: str, path: str = "", body: object = None) -> Any:
+        """The JSON that `gh api` returns for ``method`` on ``path``, or None."""
+        command = ["gh", "api", "--method", method, self._full(path)]
+        if body is not None:
+            command += ["--input", "-"]
+        # The gh of the developer, from PATH, with arguments of its own.
+        result = subprocess.run(  # noqa: S603
+            command,
+            input=None if body is None else json.dumps(body),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode:
+            raise GhError(status_of(result), (result.stdout + result.stderr).strip())
+        return json.loads(result.stdout) if result.stdout.strip() else None
+
+    def read(self, path: str, unavailable: Mapping[int, str]) -> Any:
+        """GET ``path``: a status in ``unavailable`` is a setting GitHub does not show."""
+        try:
+            return self.call("GET", path)
+        except GhError as e:
+            if e.status is not None and e.status in unavailable:
+                raise Unavailable(unavailable[e.status]) from e
+            raise
+
+    def _full(self, path: str) -> str:
+        return f"repos/{self.repo}/{path}" if path else f"repos/{self.repo}"
 
 
 def status_of(result: subprocess.CompletedProcess[str]) -> int | None:
@@ -80,34 +102,6 @@ def status_of(result: subprocess.CompletedProcess[str]) -> int | None:
         return int(error["status"])
     match = re.search(r"\(HTTP (\d+)\)", result.stderr)
     return int(match.group(1)) if match else None
-
-
-def read(path: str, unavailable: Mapping[int, str]) -> Any:
-    """GET ``path``: a status in ``unavailable`` is a setting GitHub does not show."""
-    try:
-        return gh("GET", path)
-    except GhError as e:
-        if e.status is not None and e.status in unavailable:
-            raise Unavailable(unavailable[e.status]) from e
-        raise
-
-
-def sender(method: str, path: str, wrap: str | None) -> Callable[[Any], None]:
-    """A setter that sends what is wanted to ``path``, under the key ``wrap``."""
-
-    def send(want: Any) -> None:
-        gh(method, path, want if wrap is None else {wrap: want})
-
-    return send
-
-
-def switch(path: str) -> Callable[[Any], None]:
-    """A setter of a feature that PUT turns on and DELETE turns off."""
-
-    def send(want: Any) -> None:
-        gh("PUT" if want else "DELETE", path)
-
-    return send
 
 
 def differences(want: Any, have: Any, at: str) -> list[str]:
@@ -134,20 +128,6 @@ def differences(want: Any, have: Any, at: str) -> list[str]:
 def canonical(value: Any) -> str:
     """``value`` as JSON, with its keys in order: equal for equal values."""
     return json.dumps(value, sort_keys=True)
-
-
-@dataclass(frozen=True)
-class Setting:
-    """A setting: what is wanted, and how to read, compare and set it."""
-
-    name: str
-    want: Any
-    get: Callable[[], Any]
-    set: Callable[[Any], None]
-    compare: Callable[[Any, Any, str], list[str]]
-
-    def check(self) -> list[str]:
-        return self.compare(self.want, self.get(), self.name)
 
 
 def named_changes(
@@ -189,198 +169,261 @@ def ruleset_changes(want: Any, have: Any, at: str) -> list[str]:
     )
 
 
-def labels(repo: str, listed: list[Mapping[str, str]]) -> Setting:
-    want = {
-        label["name"]: {
-            "color": str(label["color"]).lower(),
-            "description": label["description"],
-        }
-        for label in listed
-    }
+@dataclass(frozen=True)
+class Setting(ABC):
+    """A setting of the repository: what is wanted, and how to read and set it."""
 
-    def get() -> Any:
-        return {
-            label["name"]: {
-                "color": label["color"].lower(),
-                "description": label["description"] or "",
-            }
-            for label in read(f"repos/{repo}/labels?per_page=100", {})
-        }
+    github: GitHub
+    name: str
+    want: Any
 
-    def put(want: Any) -> None:
-        have = get()
-        for name in have:
-            if name not in want:
-                gh("DELETE", f"repos/{repo}/labels/{quote(name)}")
-        for name, label in want.items():
-            if name not in have:
-                gh("POST", f"repos/{repo}/labels", {"name": name, **label})
-            elif differences(label, have[name], name):
-                gh("PATCH", f"repos/{repo}/labels/{quote(name)}", label)
+    @abstractmethod
+    def get(self) -> Any:
+        """The setting as GitHub has it; :class:`Unavailable` if not shown."""
 
-    return Setting("labels", want, get, put, named_changes)
+    @abstractmethod
+    def apply(self) -> None:
+        """Set what is wanted."""
+
+    def changes(self, have: Any) -> list[str]:
+        """How ``have`` differs from what is wanted."""
+        return differences(self.want, have, self.name)
+
+    def check(self) -> list[str]:
+        """How GitHub differs from what is wanted."""
+        return self.changes(self.get())
 
 
-def rulesets(repo: str, listed: list[Mapping[str, Any]]) -> Setting:
-    want = {ruleset["name"]: ruleset for ruleset in listed}
-
-    def ids() -> dict[str, int]:
-        return {
-            ruleset["name"]: ruleset["id"]
-            for ruleset in read(f"repos/{repo}/rulesets?includes_parents=false", {})
-        }
-
-    def get() -> Any:
-        return {
-            name: read(f"repos/{repo}/rulesets/{number}", {})
-            for name, number in ids().items()
-        }
-
-    def put(want: Any) -> None:
-        have = ids()
-        for name, number in have.items():
-            if name not in want:
-                gh("DELETE", f"repos/{repo}/rulesets/{number}")
-        for name, ruleset in want.items():
-            if name not in have:
-                gh("POST", f"repos/{repo}/rulesets", ruleset)
-            else:
-                gh("PUT", f"repos/{repo}/rulesets/{have[name]}", ruleset)
-
-    def compare(want: Any, have: Any, at: str) -> list[str]:
-        return named_changes(want, have, at, ruleset_changes)
-
-    return Setting("rulesets", want, get, put, compare)
-
-
-def code_scanning(repo: str, want: Mapping[str, Any]) -> Setting:
+@dataclass(frozen=True)
+class RestSetting(Setting):
     """
-    The default setup of CodeQL. GitHub sets it in a run of its own: the
-    setter waits for the setting, up to ``WAIT`` seconds.
+    A setting that GET reads at ``path``, and ``method`` sends there: under
+    ``key`` of both, if any. A status in ``unavailable`` is not shown.
     """
-    path = f"repos/{repo}/code-scanning/default-setup"
 
-    def get() -> Any:
-        return read(path, PUBLIC_ONLY)
+    path: str = ""
+    method: str = "PUT"
+    key: str | None = None
+    unavailable: Mapping[int, str] = field(default_factory=dict)
 
-    def put(want: Any) -> None:
-        gh("PATCH", path, want)
-        deadline = time.monotonic() + WAIT
-        while differences(want, get(), "") and time.monotonic() < deadline:
-            time.sleep(5)
+    def get(self) -> Any:
+        have = self.github.read(self.path, self.unavailable)
+        return have if self.key is None else have[self.key]
 
-    return Setting("code_scanning_default_setup", want, get, put, differences)
+    def apply(self) -> None:
+        body = self.want if self.key is None else {self.key: self.want}
+        self.github.call(self.method, self.path, body)
 
 
-def settings(config: Mapping[str, Any]) -> list[Setting]:
-    """The settings of ``config``, in the order to set them."""
-    repo = config["name"]
-    actions = config["actions"]
-    base = f"repos/{repo}/actions/permissions"
+@dataclass(frozen=True)
+class SecurityAndAnalysis(RestSetting):
+    """Under the key of the repository that GitHub has for public ones only."""
 
-    def security() -> Any:
-        have = read(f"repos/{repo}", {}).get("security_and_analysis")
+    def get(self) -> Any:
+        have = self.github.read(self.path, self.unavailable).get(self.key)
         if have is None:
             raise Unavailable("public repositories only")
         return have
 
-    def alerts() -> bool:
+
+@dataclass(frozen=True)
+class SelectedActions(RestSetting):
+    """The actions that may run, as GitHub has them when it allows those only."""
+
+    def get(self) -> Any:
+        # 409 while every action is allowed: then none is selected.
+        try:
+            return self.github.call("GET", self.path)
+        except GhError as e:
+            if e.status == 409:
+                return None
+            raise
+
+
+@dataclass(frozen=True)
+class SwitchSetting(Setting):
+    """
+    A feature at ``path`` that PUT turns on and DELETE turns off: GET reads
+    whether it is on under ``key``. A status in ``unavailable`` is not shown.
+    """
+
+    path: str = ""
+    key: str = "enabled"
+    unavailable: Mapping[int, str] = field(default_factory=dict)
+
+    def get(self) -> Any:
+        return self.github.read(self.path, self.unavailable)[self.key]
+
+    def apply(self) -> None:
+        self.github.call("PUT" if self.want else "DELETE", self.path)
+
+
+@dataclass(frozen=True)
+class VulnerabilityAlerts(SwitchSetting):
+    """The Dependabot alerts: GET has no body."""
+
+    def get(self) -> Any:
         # 204 when they are on, 404 when they are off.
         try:
-            gh("GET", f"repos/{repo}/vulnerability-alerts")
+            self.github.call("GET", self.path)
         except GhError as e:
             if e.status == 404:
                 return False
             raise
         return True
 
-    def selected() -> Any:
-        # 409 while every action is allowed: then none is selected.
-        try:
-            return gh("GET", f"{base}/selected-actions")
-        except GhError as e:
-            if e.status == 409:
-                return None
-            raise
 
+@dataclass(frozen=True)
+class Labels(Setting):
+    """The labels, exactly, by name: --apply deletes the others."""
+
+    @classmethod
+    def of(cls, github: GitHub, listed: list[Mapping[str, str]]) -> Labels:
+        want = {
+            label["name"]: {
+                "color": str(label["color"]).lower(),
+                "description": label["description"],
+            }
+            for label in listed
+        }
+        return cls(github, "labels", want)
+
+    def get(self) -> Any:
+        return {
+            label["name"]: {
+                "color": label["color"].lower(),
+                "description": label["description"] or "",
+            }
+            for label in self.github.read("labels?per_page=100", {})
+        }
+
+    def apply(self) -> None:
+        have = self.get()
+        for name in have:
+            if name not in self.want:
+                self.github.call("DELETE", f"labels/{quote(name)}")
+        for name, label in self.want.items():
+            if name not in have:
+                self.github.call("POST", "labels", {"name": name, **label})
+            elif differences(label, have[name], name):
+                self.github.call("PATCH", f"labels/{quote(name)}", label)
+
+    def changes(self, have: Any) -> list[str]:
+        return named_changes(self.want, have, self.name)
+
+
+@dataclass(frozen=True)
+class Rulesets(Setting):
+    """The rulesets, exactly, by name: --apply deletes the others."""
+
+    @classmethod
+    def of(cls, github: GitHub, listed: list[Mapping[str, Any]]) -> Rulesets:
+        return cls(github, "rulesets", {ruleset["name"]: ruleset for ruleset in listed})
+
+    def get(self) -> Any:
+        return {
+            name: self.github.read(f"rulesets/{number}", {})
+            for name, number in self._ids().items()
+        }
+
+    def apply(self) -> None:
+        have = self._ids()
+        for name, number in have.items():
+            if name not in self.want:
+                self.github.call("DELETE", f"rulesets/{number}")
+        for name, ruleset in self.want.items():
+            if name not in have:
+                self.github.call("POST", "rulesets", ruleset)
+            else:
+                self.github.call("PUT", f"rulesets/{have[name]}", ruleset)
+
+    def changes(self, have: Any) -> list[str]:
+        return named_changes(self.want, have, self.name, ruleset_changes)
+
+    def _ids(self) -> dict[str, int]:
+        return {
+            ruleset["name"]: ruleset["id"]
+            for ruleset in self.github.read("rulesets?includes_parents=false", {})
+        }
+
+
+@dataclass(frozen=True)
+class CodeScanning(Setting):
+    """
+    The default setup of CodeQL. GitHub sets it in a run of its own: --apply
+    waits for the setting, up to ``WAIT`` seconds.
+    """
+
+    path: str = "code-scanning/default-setup"
+
+    def get(self) -> Any:
+        return self.github.read(self.path, PUBLIC_ONLY)
+
+    def apply(self) -> None:
+        self.github.call("PATCH", self.path, self.want)
+        deadline = time.monotonic() + WAIT
+        while differences(self.want, self.get(), "") and time.monotonic() < deadline:
+            time.sleep(5)
+
+
+def settings(config: Mapping[str, Any]) -> list[Setting]:
+    """The settings of ``config``, in the order to set them."""
+    github = GitHub(config["name"])
+    actions = config["actions"]
+    base = "actions/permissions"
     return [
-        Setting(
-            "repository",
-            config["repository"],
-            lambda: read(f"repos/{repo}", {}),
-            sender("PATCH", f"repos/{repo}", None),
-            differences,
-        ),
-        Setting(
+        RestSetting(github, "repository", config["repository"], method="PATCH"),
+        SecurityAndAnalysis(
+            github,
             "security_and_analysis",
             config["security_and_analysis"],
-            security,
-            sender("PATCH", f"repos/{repo}", "security_and_analysis"),
-            differences,
+            method="PATCH",
+            key="security_and_analysis",
         ),
-        Setting(
-            "topics",
-            config["topics"],
-            lambda: read(f"repos/{repo}/topics", {})["names"],
-            sender("PUT", f"repos/{repo}/topics", "names"),
-            differences,
-        ),
-        Setting(
+        RestSetting(github, "topics", config["topics"], path="topics", key="names"),
+        VulnerabilityAlerts(
+            github,
             "vulnerability_alerts",
             config["vulnerability_alerts"],
-            alerts,
-            switch(f"repos/{repo}/vulnerability-alerts"),
-            differences,
+            path="vulnerability-alerts",
         ),
-        Setting(
+        SwitchSetting(
+            github,
             "automated_security_fixes",
             config["automated_security_fixes"],
-            lambda: read(f"repos/{repo}/automated-security-fixes", {})["enabled"],
-            switch(f"repos/{repo}/automated-security-fixes"),
-            differences,
+            path="automated-security-fixes",
         ),
-        Setting(
+        SwitchSetting(
+            github,
             "private_vulnerability_reporting",
             config["private_vulnerability_reporting"],
-            lambda: read(f"repos/{repo}/private-vulnerability-reporting", PUBLIC_ONLY)[
-                "enabled"
-            ],
-            switch(f"repos/{repo}/private-vulnerability-reporting"),
-            differences,
+            path="private-vulnerability-reporting",
+            unavailable=PUBLIC_ONLY,
         ),
         # Before the selected actions, which need allowed_actions "selected".
-        Setting(
-            "actions.permissions",
-            actions["permissions"],
-            lambda: read(base, {}),
-            sender("PUT", base, None),
-            differences,
-        ),
-        Setting(
+        RestSetting(github, "actions.permissions", actions["permissions"], path=base),
+        SelectedActions(
+            github,
             "actions.selected_actions",
             actions["selected_actions"],
-            selected,
-            sender("PUT", f"{base}/selected-actions", None),
-            differences,
+            path=f"{base}/selected-actions",
         ),
-        Setting(
-            "actions.workflow",
-            actions["workflow"],
-            lambda: read(f"{base}/workflow", {}),
-            sender("PUT", f"{base}/workflow", None),
-            differences,
+        RestSetting(
+            github, "actions.workflow", actions["workflow"], path=f"{base}/workflow"
         ),
-        Setting(
+        RestSetting(
+            github,
             "actions.fork_pr_contributor_approval",
             actions["fork_pr_contributor_approval"],
-            lambda: read(f"{base}/fork-pr-contributor-approval", PUBLIC_ONLY),
-            sender("PUT", f"{base}/fork-pr-contributor-approval", None),
-            differences,
+            path=f"{base}/fork-pr-contributor-approval",
+            unavailable=PUBLIC_ONLY,
         ),
-        code_scanning(repo, config["code_scanning_default_setup"]),
+        CodeScanning(
+            github, "code_scanning_default_setup", config["code_scanning_default_setup"]
+        ),
         # After CodeQL and the actions: the ruleset requires checks of CI.
-        rulesets(repo, config["rulesets"]),
-        labels(repo, config["labels"]),
+        Rulesets.of(github, config["rulesets"]),
+        Labels.of(github, config["labels"]),
     ]
 
 
@@ -403,7 +446,7 @@ def check(all_settings: list[Setting], *, apply: bool) -> bool:
         for line in found:
             print(line)
         if apply:
-            setting.set(setting.want)
+            setting.apply()
             print(f"{setting.name}: set")
         else:
             good = False
