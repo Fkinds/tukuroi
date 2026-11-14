@@ -1,6 +1,6 @@
-==========
-Why Fixit?
-==========
+============
+Why tukuroi?
+============
 
 **There are many Python linter tools. Why do we need another?**
 
@@ -12,10 +12,10 @@ At some point, they may start to ignore lint suggestions, even the important one
 
 We'd like to help developers move faster by **auto-fixing** lint violations.
 The `AST <https://docs.python.org/3/library/ast.html>`_ doesn't preserve formatting
-information (comments, whitespaces, etc), so Fixit never turns a tree back into
+information (comments, whitespaces, etc), so tukuroi never turns a tree back into
 code. Rules find problematic code in the AST, and fix it by replacing ranges of
 the original text: everything outside those ranges is left as it was, and a fix
-that would drop a comment is not applied. Fixit then formats the fixed files
+that would drop a comment is not applied. tukuroi then formats the fixed files
 with `ruff <https://docs.astral.sh/ruff/>`_, and leaves to ruff the many rules
 that it already has.
 
@@ -43,7 +43,7 @@ develop upon.
 
 Design Principles
 =================
-When designing Fixit, we used the following list of principles.
+Fixit was designed with the following principles, and tukuroi keeps them.
 
 - **Autofix.** Lint rules should provide autofix whenever possible to help developers
   write better code faster. The autofix can run as a codemod on an existing codebase to

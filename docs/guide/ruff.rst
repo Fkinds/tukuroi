@@ -3,7 +3,7 @@
 Rules Replaced by ruff
 ----------------------
 
-Fixit keeps only the built-in rules that `ruff <https://docs.astral.sh/ruff/>`_
+tukuroi keeps only the built-in rules that `ruff <https://docs.astral.sh/ruff/>`_
 does not cover. The other built-in rules of Fixit 2 are removed: use the ruff
 rules below instead.
 
@@ -80,7 +80,7 @@ case; "close" means that it misses some, or fixes them another way.
         reports every ``%`` format, not only ``%s``.
     * - ``UseTypesFromTyping``
       - None
-      - It applied only below Python 3.10. Fixit supports newer versions.
+      - It applied only below Python 3.10. tukuroi supports newer versions.
     * - ``ExplicitFrozenDataclass`` (``fixit.rules.extra``)
       - None
       - ruff has no rule for it.

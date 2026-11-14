@@ -1,24 +1,22 @@
-This is an **unofficial fork** of `Instagram/Fixit
+tukuroi is an **unofficial fork** of `Instagram/Fixit
 <https://github.com/Instagram/Fixit>`_, the linting framework that Meta
 published. It is not affiliated with Meta, nor endorsed by Meta or by the
-maintainers of Fixit. This repository is named tukuroi; the package, its
-module and its command are still named ``fixit``. Its main differences from
-upstream:
+maintainers of Fixit. Its main differences from upstream:
 
-- The rules run on a new engine, ``fixit.core``, built on Python's ``ast``
+- The rules run on a new engine, ``tukuroi.core``, built on Python's ``ast``
   module in place of LibCST.
-- Safer handling of untrusted repositories: ``--no-custom-rules`` keeps Fixit
-  from importing any rules but its built-in ones, the search for configurations
-  stops at the root of the repository, output templates take only the names of
-  their fields, and the LSP server talks over stdio only.
+- Safer handling of untrusted repositories: ``--no-custom-rules`` keeps
+  tukuroi from importing any rules but its built-in ones, the search for
+  configurations stops at the root of the repository, output templates take
+  only the names of their fields, and the LSP server talks over stdio only.
 - It supports only the two newest minor versions of CPython: 3.14 and 3.15.
 
-Fixit provides a highly configurable linting framework with support for
+tukuroi provides a highly configurable linting framework with support for
 auto-fixes, custom "local" lint rules, and hierarchical configuration, built
 on Python's ``ast`` module, with fixed files formatted by
 `ruff <https://docs.astral.sh/ruff/>`_.
 
-Fixit makes it quick and easy to write new lint rules and offer suggested
+tukuroi makes it quick and easy to write new lint rules and offer suggested
 changes for any errors found, which can then be accepted automatically,
 or presented to the user for consideration.
 
@@ -29,9 +27,69 @@ For more details, see the `user guide`__ in ``docs/``.
 .. QUICKSTART
 
 
+Coming from Fixit
+-----------------
+
+tukuroi reads none of the names of Fixit. Rename them:
+
+.. list-table::
+    :header-rows: 1
+
+    * - Fixit
+      - tukuroi
+    * - ``pip install fixit``
+      - ``pip install tukuroi``
+    * - ``fixit lint``, ``python -m fixit``
+      - ``tukuroi lint``, ``python -m tukuroi``
+    * - ``[tool.fixit]``, ``[[tool.fixit.overrides]]``
+      - ``[tool.tukuroi]``, ``[[tool.tukuroi.overrides]]``
+    * - ``fixit.toml``, ``.fixit.toml``
+      - ``tukuroi.toml``, ``.tukuroi.toml``
+    * - ``FIXIT_CUSTOM_RULES``
+      - ``TUKUROI_CUSTOM_RULES``
+    * - ``fixit.rules``
+      - ``tukuroi.rules``, with fewer rules: ruff has the others (see the
+        `ruff guide`__)
+    * - the pre-commit hooks ``fixit-lint`` and ``fixit-fix``
+      - ``tukuroi-lint`` and ``tukuroi-fix``
+
+.. __: https://github.com/Fkinds/tukuroi/blob/main/docs/guide/ruff.rst
+
+The settings of Fixit that tukuroi does not support (``python-version``,
+``formatter``, ``options``, ``tags``) are configuration errors that say so.
+
+The rules of Fixit do not run on tukuroi: they are written for LibCST, and
+tukuroi uses ``ast``. To port a rule:
+
+.. list-table::
+    :header-rows: 1
+
+    * - Fixit
+      - tukuroi
+    * - a subclass of ``fixit.LintRule``, visiting LibCST nodes
+      - a subclass of ``tukuroi.Rule``, with ``visit_<node>`` methods named
+        after the classes of ``ast``
+    * - ``METADATA_DEPENDENCIES`` and ``QualifiedNameProvider``
+      - ``self.imports.qualified_names(node)``
+    * - a LibCST node as the ``replacement``
+      - a string as the ``replacement``, or ``edits`` over the original text
+    * - ``fixit.testing.add_lint_rule_tests_to_module``
+      - ``tukuroi.testing.add_rule_tests_to_module``
+    * - ``fixit.config.collect_rules(Config(...))``
+      - ``tukuroi.config.load_rules(Config(...))``; ``Config`` has no
+        ``python_version``
+    * - ``expected_replacement`` compared as it is written
+      - ``expected_replacement`` compared after ``ruff format``, with its
+        default settings
+
+See `Writing Rules`__ for the details.
+
+.. __: https://github.com/Fkinds/tukuroi/blob/main/docs/guide/rules.rst
+
+
 License
 -------
 
-Fixit is `MIT licensed`__, as found in the LICENSE file.
+tukuroi is `MIT licensed`__, as found in the LICENSE file.
 
 .. __: https://github.com/Fkinds/tukuroi/blob/main/LICENSE

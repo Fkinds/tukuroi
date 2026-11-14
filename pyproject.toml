@@ -42,7 +42,7 @@ pretty = [
     "rich >= 12.6.0",
 ]
 
-# The tools to develop Fixit with (PEP 735): not part of the package (#8). uv
+# The tools to develop tukuroi with (PEP 735): not part of the package (#8). uv
 # installs dev by default; `make install` installs docs too.
 [dependency-groups]
 dev = [
@@ -71,7 +71,7 @@ Github = "https://github.com/Fkinds/tukuroi"
 Changelog = "https://github.com/Fkinds/tukuroi/blob/main/CHANGELOG.md"
 
 [tool.attribution]
-name = "Fixit"
+name = "tukuroi"
 package = "tukuroi"
 signed_tags = true
 version_file = false
@@ -118,7 +118,7 @@ name = "cz_customize"
 [tool.commitizen.customize]
 schema = "<type>(<scope>)!: <description>"
 schema_pattern = "(?m)^(?=.{1,100}$)(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([^()\\s]+\\))?!?: \\S"
-example = "fix(config): stop at the first value that fixit cannot use"
+example = "fix(config): stop at the first value that tukuroi cannot use"
 
 # ruff's default rules, and the checks of bandit that ruff has (#130): its
 # stable rules, not those of preview.
@@ -128,7 +128,7 @@ extend-select = ["S"]
 [tool.ruff.lint.per-file-ignores]
 # Package modules re-export names.
 "__init__.py" = ["F401"]
-# The tests narrow types with assert, and run Fixit in a subprocess with
+# The tests narrow types with assert, and run tukuroi in a subprocess with
 # sys.executable.
 "src/tukuroi/tests/*" = ["S101", "S603"]
 

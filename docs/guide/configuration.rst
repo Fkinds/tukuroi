@@ -3,22 +3,22 @@
 Configuration
 -------------
 
-Fixit uses `TOML format <https://toml.io>`_ for configuration, and supports
-hierarchical, cascading configuration. Fixit will read values from both the
+tukuroi uses `TOML format <https://toml.io>`_ for configuration, and supports
+hierarchical, cascading configuration. tukuroi will read values from both the
 standardized ``pyproject.toml`` file as well as a separate ``.tukuroi.toml`` or
 ``tukuroi.toml`` file, with values from the latter taking precendence over the
 former, and values from files "nearer" to those being linted taking precedence
 over values from files "further" away.
 
-When determining the configuration to use for a given path, Fixit will continue
+When determining the configuration to use for a given path, tukuroi will continue
 looking upward in the filesystem until it reaches either the root of the
 repository, or a configuration file is found with :attr:`root` set to ``True``.
-Fixit will then read configuration values from each file, from further to
+tukuroi will then read configuration values from each file, from further to
 nearest, and merge or override values as appropriate. For :attr:`enable` and
 :attr:`disable`, the nearer wins: see :ref:`rule-selection`.
 
 The root of the repository is the nearest directory with ``.git`` (a directory,
-or a file in a worktree or a submodule) or ``.hg``. Outside a repository, Fixit
+or a file in a worktree or a submodule) or ``.hg``. Outside a repository, tukuroi
 looks up to the current directory if the path is in it, or else only in the
 directory of the path. A configuration file above that is not read: pass it
 with ``--config-file`` to use it.
@@ -39,10 +39,10 @@ keys go under ``[tool.tukuroi]``: a key or a table outside it is a configuration
 error there. In ``pyproject.toml``, the keys of other tools are left alone.
 
 A key other than the ones below, a value of a type other than the one given
-below, or a rule name that is not valid, is a configuration error. Fixit checks
-the whole file as it reads it, and stops at the first error. The settings that
-Fixit no longer supports (``python-version``, ``formatter``, ``options``,
-``tags``) are errors that say so.
+below, or a rule name that is not valid, is a configuration error. tukuroi checks
+the whole file as it reads it, and stops at the first error. The settings of
+Fixit that tukuroi does not support (``python-version``, ``formatter``,
+``options``, ``tags``) are errors that say so.
 
 .. attribute:: root
     :type: bool
@@ -50,8 +50,8 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
     Marks this file as a root of the configuration hierarchy.
 
-    If set to ``true``, Fixit will not visit any configuration files further up
-    the filesystem hierarchy. Fixit does not look above the root of the
+    If set to ``true``, tukuroi will not visit any configuration files further up
+    the filesystem hierarchy. tukuroi does not look above the root of the
     repository in any case.
 
 .. attribute:: enable
@@ -61,7 +61,7 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
     List of modules or individual rules to enable when linting files covered
     by this configuration.
 
-    Rules bundled with Fixit, or available in the environment's site-packages,
+    Rules bundled with tukuroi, or available in the environment's site-packages,
     can be referenced as a group by their fully-qualified package name, or
     individually by adding a colon and the rule name:
 
@@ -69,8 +69,8 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
         [tool.tukuroi]
         enable = [
-            "fixit.rules",  # all lint rules in this package (non-recursive)
-            "fixit.rules:UseAssertIn",  # single lint rule by name
+            "tukuroi.rules",  # all lint rules in this package (non-recursive)
+            "tukuroi.rules:UseAssertIn",  # single lint rule by name
         ]
 
     Local rules, available only in the repo being linted, can be referenced by
@@ -90,21 +90,21 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
     Wins over :attr:`disable` further up the hierarchy, for the rules that it
     names. See :ref:`rule-selection`.
 
-    Fixit will enable the built-in :mod:`fixit.rules` lint rules by default.
-    The stricter rules of :mod:`fixit.rules.strict` come with Fixit too, and
+    tukuroi will enable the built-in :mod:`tukuroi.rules` lint rules by default.
+    The stricter rules of :mod:`tukuroi.rules.strict` come with tukuroi too, and
     run only when named:
 
     .. code-block:: toml
 
         [tool.tukuroi]
         enable = [
-            "fixit.rules",
-            "fixit.rules.strict:NoValueObjectDefault",
+            "tukuroi.rules",
+            "tukuroi.rules.strict:NoValueObjectDefault",
         ]
 
-    Fixit imports the rules that are enabled, which runs their code. See
+    tukuroi imports the rules that are enabled, which runs their code. See
     :ref:`security` for the configurations to trust, and for turning off the
-    rules that do not come with Fixit.
+    rules that do not come with tukuroi.
 
     A name whose rules cannot be loaded is a configuration error, in
     :attr:`disable` too: the module cannot be imported, its code raises an
@@ -171,7 +171,7 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
     - ``custom``: Specify your own format using the :attr:`output-template`
       option below.
-    - ``fixit``: Fixit's default output format.
+    - ``fixit``: the default output format.
     - ``vscode``: A format that provides clickable paths for Visual Studio Code.
 
     .. note::
@@ -201,7 +201,7 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
     - ``message``: Message emitted by the applied rule (a string).
 
-    - ``path``: Path to affected file, as Fixit shows it (a string).
+    - ``path``: Path to affected file, as tukuroi shows it (a string).
 
     - ``rule_name``: Name of the applied rule (a string).
 
@@ -229,13 +229,13 @@ defining the subpath it applies to, along with :attr:`enable` and
 
     [[tool.tukuroi.overrides]]
     path = "foo/bar"
-    disable = ["fixit.rules:ExampleRule"]
+    disable = ["tukuroi.rules:ExampleRule"]
 
     [[tool.tukuroi.overrides]]
     path = "fizz/buzz"
     enable = ["plugin:SomethingNeat"]
 
-Each table needs ``path``, a string that is not empty. Fixit checks every
+Each table needs ``path``, a string that is not empty. tukuroi checks every
 table, whether or not it applies to the file being linted.
 
 An override applies to the files under its path, relative to the directory of
@@ -264,17 +264,17 @@ level further up disables them, and the other way round:
     # pyproject.toml
     [tool.tukuroi]
     root = true
-    enable = ["fixit.rules:UseAssertIn"]
+    enable = ["tukuroi.rules:UseAssertIn"]
 
     # tests/tukuroi.toml
     [tool.tukuroi]
-    disable = ["fixit.rules"]  # UseAssertIn too, in tests/
+    disable = ["tukuroi.rules"]  # UseAssertIn too, in tests/
 
 A module names its own rules, and if it is a package, those of the modules in
 it: one level down, not those of its packages. ``module:Rule`` names one rule.
-Fixit tells the rules that a name gives by the names alone. A package such as
-:mod:`fixit.rules` names the rules of its modules as its own, so
-``fixit.rules.use_assert_in`` and ``fixit.rules:UseAssertIn`` do not name the
+tukuroi tells the rules that a name gives by the names alone. A package such as
+:mod:`tukuroi.rules` names the rules of its modules as its own, so
+``tukuroi.rules.use_assert_in`` and ``tukuroi.rules:UseAssertIn`` do not name the
 same rule for it: name a rule the same way at every level.
 
 Within one level, the more specific name wins: a rule over a module, and a
@@ -284,8 +284,8 @@ name in both :attr:`enable` and :attr:`disable`, the rule is disabled:
 .. code-block:: toml
 
     [tool.tukuroi]
-    disable = ["fixit.rules"]
-    enable = ["fixit.rules:UseAssertIn"]  # UseAssertIn only
+    disable = ["tukuroi.rules"]
+    enable = ["tukuroi.rules:UseAssertIn"]  # UseAssertIn only
 
 
 .. _security:
@@ -293,61 +293,61 @@ name in both :attr:`enable` and :attr:`disable`, the rule is disabled:
 Security
 ^^^^^^^^
 
-Configuration files can run code. Fixit imports the rules that a configuration
-enables, which runs their code with the permissions of the user running Fixit.
+Configuration files can run code. tukuroi imports the rules that a configuration
+enables, which runs their code with the permissions of the user running tukuroi.
 That includes custom rules: local rules in the repo (see :attr:`enable`), the
 modules found through :attr:`enable-root-import`, and rules from any package
-other than Fixit. Before it lints any file, Fixit imports every rule that the
+other than tukuroi. Before it lints any file, tukuroi imports every rule that the
 configurations name: in :attr:`disable` and in all the :ref:`overrides` too,
 whether or not they apply to a file. The rules checked by
-``fixit validate-config`` are imported too.
+``tukuroi validate-config`` are imported too.
 
-Fixit looks for configuration files from each linted file up to the root of the
+tukuroi looks for configuration files from each linted file up to the root of the
 repository, or outside one, up to the current directory. A configuration file
 in a parent directory of the repo, which someone else may have written, is not
 read.
 
-Only run Fixit with custom rules on code whose configuration you trust. For
+Only run tukuroi with custom rules on code whose configuration you trust. For
 other code, turn custom rules off with ``--no-custom-rules``, or with the
-environment variable ``TUKUROI_CUSTOM_RULES=0`` (see :ref:`commands`). Then Fixit
-imports only the built-in rules, in :mod:`fixit.rules`:
+environment variable ``TUKUROI_CUSTOM_RULES=0`` (see :ref:`commands`). Then tukuroi
+imports only the built-in rules, in :mod:`tukuroi.rules`:
 
 - Custom rules in :attr:`enable` are skipped with a warning. The built-in rules
   still run, and the exit code does not change.
 - Custom rules in :attr:`disable`, and :attr:`enable-root-import`, are ignored.
-- ``fixit validate-config`` checks only the names of custom rules, and warns
+- ``tukuroi validate-config`` checks only the names of custom rules, and warns
   that it skipped them.
-- A custom rule named with ``--rules``, or given to ``fixit test``, is a usage
+- A custom rule named with ``--rules``, or given to ``tukuroi test``, is a usage
   error.
 
-Turn custom rules off when Fixit runs on code that others can change, such as:
+Turn custom rules off when tukuroi runs on code that others can change, such as:
 
 - CI jobs that lint pull requests from forks,
 - repositories that you clone to review or investigate,
-- editors that start ``fixit lsp`` in any folder that you open.
+- editors that start ``tukuroi lsp`` in any folder that you open.
 
 For example, in a CI job:
 
 .. code:: console
 
-    $ TUKUROI_CUSTOM_RULES=0 fixit lint src/
+    $ TUKUROI_CUSTOM_RULES=0 tukuroi lint src/
 
 To keep custom rules off by default, set ``TUKUROI_CUSTOM_RULES=0`` in your
 shell, and pass ``--custom-rules`` in the repos that you trust. The option on
 the command line wins over the variable. So the variable does not keep custom
 rules off when the repo can change the command line, for example with the
 ``args`` of a hook in ``.pre-commit-config.yaml``, or with the workspace
-settings of an editor that starts ``fixit lsp``. pre-commit runs the hooks that
+settings of an editor that starts ``tukuroi lsp``. pre-commit runs the hooks that
 the repo defines, so running it on a repo is beyond what this option can
 protect.
 
 Also:
 
-- Run the ``fixit`` command, or ``python -P -m fixit``. ``python -m fixit``
-  puts the current directory first on :attr:`sys.path`. Fixit takes it off
+- Run the ``tukuroi`` command, or ``python -P -m tukuroi``. ``python -m tukuroi``
+  puts the current directory first on :attr:`sys.path`. tukuroi takes it off
   when it starts, so that the modules it imports later (such as a formatter)
-  are not read from there. But a ``fixit`` package in the current directory is
-  imported in place of Fixit before that.
+  are not read from there. But a ``tukuroi`` package in the current directory is
+  imported in place of tukuroi before that.
 - To use a configuration that you trust instead of the ones found next to the
-  linted files, pass ``--config-file``. Fixit still imports the custom rules
+  linted files, pass ``--config-file``. tukuroi still imports the custom rules
   that it enables.

@@ -1,8 +1,8 @@
-# Contributing to Fixit
+# Contributing to tukuroi
 
 ## Setup
 
-Fixit supports the two newest series of Python: 3.14 and 3.15. It uses [uv][]
+tukuroi supports the two newest series of Python: 3.14 and 3.15. It uses [uv][]
 to manage its environment. Once uv is installed, create the environment from
 `uv.lock`, with every extra and dependency group of `pyproject.toml`:
 
@@ -20,10 +20,10 @@ $ UV_PYTHON=3.15 make install
 ## Developing
 
 `make` runs each command with `uv run`, in the environment of `uv.lock`, so the
-environment needs no activation. To run Fixit from the checkout:
+environment needs no activation. To run tukuroi from the checkout:
 
 ```shell-session
-$ uv run fixit [args]
+$ uv run tukuroi [args]
 ```
 
 To run the test suite, type checker, and linters:
@@ -34,7 +34,7 @@ $ make test
 $ make lint
 ```
 
-To measure which lines and branches of Fixit the tests run, with coverage.py:
+To measure which lines and branches of tukuroi the tests run, with coverage.py:
 
 ```shell-session
 $ make coverage
@@ -54,7 +54,7 @@ To format code and sort imports:
 $ make format
 ```
 
-[prek][] runs the checks of `prek.toml` before each commit: ruff, `fixit lint`
+[prek][] runs the checks of `prek.toml` before each commit: ruff, `tukuroi lint`
 and the copyright header on the files that `make lint` checks, [zizmor][] on the
 workflows of `.github/workflows`, and its built-in checks (whitespace, line
 endings, TOML and YAML syntax, large files, private keys) on every file. It
@@ -125,10 +125,10 @@ $ make audit
 `.github/workflows/audit.yml` runs it each day, and on the pull requests that
 change the dependencies. Each day it runs zizmor with GitHub too, for the
 actions: they are pinned to commit SHAs, for which GitHub sends no alerts. A
-failed run is the alert. A vulnerability that Fixit cannot fix yet goes in
+failed run is the alert. A vulnerability that tukuroi cannot fix yet goes in
 `[tool.uv.audit]` of `pyproject.toml`, with its reason and its issue in a
 comment: in `ignore-until-fixed` while no release fixes it, in `ignore` when it
-does not affect Fixit. Renovate opens the fixes of what osv.dev has for
+does not affect tukuroi. Renovate opens the fixes of what osv.dev has for
 `build-constraints.txt` and the dependencies of `pyproject.toml` too.
 
 
@@ -161,7 +161,7 @@ Closes #123
   change.
 - The first line is up to 100 characters. The description of a commit is in
   English, in the imperative mood: `fix(config): stop at the first value that
-  fixit cannot use`.
+  tukuroi cannot use`.
 - The merge commits of GitHub, and `Revert` commits, pass as they are.
 
 The commit-msg hook of prek checks each message with `cz check` of
@@ -169,7 +169,7 @@ The commit-msg hook of prek checks each message with `cz check` of
 the title of each pull request. To check a message by hand:
 
 ```shell-session
-$ uv run cz check -m "fix(config): stop at the first value that fixit cannot use"
+$ uv run cz check -m "fix(config): stop at the first value that tukuroi cannot use"
 ```
 
 In a review, fix a commit with `git commit --fixup` (or `--squash`): the hook
@@ -187,7 +187,7 @@ requests:
 $ gh pr create
 ```
 
-If you are a Fixit maintainer, we recommend using [ghstack][] (see below):
+If you are a tukuroi maintainer, we recommend using [ghstack][] (see below):
 
 ```shell-session
 $ ghstack submit
@@ -195,7 +195,7 @@ $ ghstack submit
 
 ## Code style
 
-Fixit uses [ruff][] to format code, sort imports, and lint, with ruff's default
+tukuroi uses [ruff][] to format code, sort imports, and lint, with ruff's default
 rules and its `S` rules: the security checks of [bandit][]. The settings are in
 `pyproject.toml`. `make lint` and CI check them. A finding that is safe by
 design gets `# noqa` with the rule, and a comment that says why.
@@ -210,7 +210,7 @@ $ make format
 can make safely:
 
 ```shell-session
-$ uv run ruff check --fix src/fixit/ scripts/
+$ uv run ruff check --fix src/tukuroi/ scripts/
 ```
 
 If you are using VS Code as your editor, you can use the
@@ -227,7 +227,7 @@ $ git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 ## VS Code
 
-Make sure you've created an environment for Fixit:
+Make sure you've created an environment for tukuroi:
 
 ```shell-session
 $ make install

@@ -75,7 +75,7 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# .python-version is committed: uv develops Fixit on that version (#8).
+# .python-version is committed: uv develops tukuroi on that version (#8).
 
 # celery beat schedule file
 celerybeat-schedule
