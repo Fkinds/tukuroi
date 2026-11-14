@@ -149,12 +149,21 @@ class LSP:
             )
         return None
 
+    def open_document(self, uri: str) -> TextDocument | None:
+        """
+        The document of ``uri`` that the client opened, or ``None``. pygls finds
+        it however the client encodes the URI (pygls 2.1 keeps it decoded); a
+        document that it makes from the file on disk has no version.
+        """
+        doc = self.lsp.workspace.get_text_document(uri)
+        return doc if doc.version is not None else None
+
     def _validate(self, uri: str, version: int) -> None:
         """
         Effect: publishes tukuroi diagnostics to the LSP client. The traceback of
         an exception goes to the log of the client (#96).
         """
-        doc = self.lsp.workspace.text_documents.get(uri)
+        doc = self.open_document(uri)
         if not doc or not (path := self.path_of(doc)):
             return
         diagnostics = []
@@ -196,7 +205,7 @@ class LSP:
         that is not open is an error: its text is the client's (LSP 3.17).
         """
         uri = params.text_document.uri
-        doc = self.lsp.workspace.text_documents.get(uri)
+        doc = self.open_document(uri)
         if doc is None:
             raise JsonRpcException(
                 f"document is not open: {uri}", LSPErrorCodes.RequestFailed
