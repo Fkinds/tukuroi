@@ -29,10 +29,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .directives import InvalidDirective, parse_directives
-from .edits import apply_fixes, drops_comments
+from .edits import Applied, apply_fixes, drops_comments
 from .names import ImportTable
 from .rule import Report, Rule
-from .source import Source
+from .source import ParseError, Source
 from .suppression import NodeComments, is_suppressed
 from .text import Position
 
@@ -111,14 +111,16 @@ def _bad_directives(source: Source) -> Iterator[BadDirective]:
 class FixResult:
     """
     The text after the fixes, the reports that the source had (those of the
-    first round), how many fixes were applied in all the rounds, and whether the
-    rounds ended before their limit.
+    first round), how many fixes were applied in all the rounds, whether the
+    rounds ended before their limit, and the reports whose fixes would break the
+    code, which are not applied (#147).
     """
 
     text: str
     reports: tuple[Report, ...]
     applied: int
     converged: bool
+    broken: tuple[Report, ...] = ()
 
 
 def fix(
@@ -136,19 +138,28 @@ def fix(
     fixes no longer change the text. With ``choose``, apply only the fixes it
     takes, in one round. Format the text with ``formatter`` if one is given and
     the text changed (#108).
+
+    A fix that would break the code, so that the text no longer parses, is not
+    applied, nor tried again in the rounds after (#147): the others are.
     """
     first = lint(source, rules)
     text, applied, converged = source.text, 0, False
     result = first
+    broken: dict[tuple[str, tuple[str, ...]], Report] = {}
     for round_ in range(1 if choose else rounds):
         if round_:
             result = lint(Source.from_text(text, source.path), rules)
-        fixes = [r for r in result.reports if r.edits and (choose is None or choose(r))]
+        fixes = [
+            r
+            for r in result.reports
+            if r.edits and (choose is None or choose(r)) and _fix_key(r) not in broken
+        ]
         fixes.sort(key=lambda r: (r.edits[0].span.start, r.rule))
         if not fixes:
             converged = True
             break
-        done = apply_fixes(text, [r.edits for r in fixes])
+        done, failed = _apply(text, fixes, source.path)
+        broken.update((_fix_key(r), r) for r in failed)
         if done.text == text:
             converged = True
             break
@@ -157,4 +168,42 @@ def fix(
         converged = choose is not None
     if formatter is not None and text != source.text:
         text = formatter(text, source.path)
-    return FixResult(text, first.reports, applied, converged)
+    return FixResult(text, first.reports, applied, converged, tuple(broken.values()))
+
+
+def _fix_key(report: Report) -> tuple[str, tuple[str, ...]]:
+    """A fix, wherever it is: its rule and the texts of its edits."""
+    return report.rule, tuple(edit.text for edit in report.edits)
+
+
+def _apply(
+    text: str, fixes: Sequence[Report], path: Path | None
+) -> tuple[Applied, list[Report]]:
+    """
+    Apply ``fixes`` to ``text``, as :func:`apply_fixes` does. If the result
+    does not parse, apply them one at a time, in their order, and leave out
+    each that the text does not parse after: those are returned (#147).
+    """
+    done = apply_fixes(text, [r.edits for r in fixes])
+    if _parses(done.text, path):
+        return done, []
+    kept: list[Report] = []
+    failed: list[Report] = []
+    for report in fixes:
+        trial = apply_fixes(text, [r.edits for r in [*kept, report]])
+        if len(trial.applied) == len(kept):
+            # It overlaps one kept: tried in the next round.
+            continue
+        if _parses(trial.text, path):
+            kept.append(report)
+        else:
+            failed.append(report)
+    return apply_fixes(text, [r.edits for r in kept]), failed
+
+
+def _parses(text: str, path: Path | None) -> bool:
+    try:
+        Source.from_text(text, path)
+    except ParseError:
+        return False
+    return True

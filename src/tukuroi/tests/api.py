@@ -76,6 +76,14 @@ GROW = HEAD + (
     "    def visit_Module(self, node: ast.Module) -> None:\n"
     '        self.report(node, edits=[Edit(Span(0, 0), "x = 1\\n")])\n'
 )
+# A rule whose fix breaks the code (#147).
+BREAK = HEAD + (
+    "\n\nclass BrokenFix(Rule):\n"
+    '    MESSAGE = "Break."\n\n'
+    "    def visit_Constant(self, node: ast.Constant) -> None:\n"
+    "        if node.value == 1:\n"
+    '            self.report(node, replacement="(")\n'
+)
 # A rule whose fix changes nothing.
 SAME = HEAD + (
     "\n\nclass Same(Rule):\n"
@@ -308,6 +316,22 @@ class FixitBytesTest(TestCase):
         # and 100 fixes applied do not tell it (#40).
         self.assertEqual(results[-1].remaining, 1)
         self.assertEqual(returned, ("x = 1\n" * 100 + "y = 2\n").encode())
+
+    def test_fix_that_breaks_the_code(self) -> None:
+        # Not applied, with a warning that names the rule: the violation is
+        # left, and the file is not changed (#147). The engine raised an
+        # exception, with a traceback, as the file was linted again.
+        with (
+            files({"rules.py": BREAK}) as root,
+            chdir(root),
+            self.assertLogs("tukuroi.api", "WARNING") as logs,
+        ):
+            results, returned = run(config(root), "x = 1\n", autofix=True)
+        warning = "t.py: the fix of BrokenFix would break the code: not applied"
+        self.assertEqual([r.getMessage() for r in logs.records], [warning])
+        self.assertEqual([r.error for r in results], [None])
+        self.assertIsNotNone(results[0].violation)
+        self.assertIsNone(returned)
 
     def test_metrics(self) -> None:
         metrics: list[Metrics] = []

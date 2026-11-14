@@ -238,6 +238,10 @@ def fixit_bytes(
         formatter = ruff_formatter if config.formatter is Formatter.ruff else None
         choose = None if autofix else chosen.__contains__
         fixed = fix(source, rules, choose=choose, formatter=formatter)
+        for report in fixed.broken:
+            # The report stays, without its fix (#147).
+            message = "%s: the fix of %s would break the code: not applied"
+            LOG.warning(message, _shown(path), report.rule)
         if not fixed.converged:
             rounds = f"{MAX_ROUNDS} rounds"
             LOG.warning("%s: fixes did not converge after %s", _shown(path), rounds)

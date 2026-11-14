@@ -59,6 +59,16 @@ class CallFToG(Rule):
             self.report(node, replacement="g" + text[1:])
 
 
+class Breaks(Rule):
+    """``one`` becomes ``(``: a fix that breaks the code (#147)."""
+
+    MESSAGE = "Break."
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if node.id == "one":
+            self.report(node, replacement="(")
+
+
 class Grows(Rule):
     """Always adds a line: its fixes never end."""
 
@@ -171,6 +181,33 @@ class FixTest(TestCase):
         for label, text, formatter, result in cases:
             with self.subTest(label):
                 self.assertEqual(fixed(text, NoBadName, formatter=formatter)[0], result)
+
+    def test_fixes_that_break_the_code(self) -> None:
+        # A fix after which the text does not parse is left out, and not tried
+        # again; the other fixes are applied (#147).
+        cases = (
+            # (label, text, rules, (text, fixes applied, converged), broken)
+            ("alone", "one = 1\n", (Breaks,), ("one = 1\n", 0, True), 1),
+            ("with another fix", "one = bad\n", (Breaks, NoBadName), ("one = good\n", 1, True), 1),
+            ("with fixes in two rounds", "one = f(f(1))\n", (Breaks, CallFToG), ("one = g(g(1))\n", 2, True), 1),
+            ("with an overlapping fix", "one = bad\nx = 1\n", (Breaks, AlsoBest, NoBadName), ("one = best\nx = 1\n", 1, True), 1),
+            # The same fix in two places: one warning.
+            ("two of them", "one = one\n", (Breaks,), ("one = one\n", 0, True), 1),
+        )  # fmt: skip
+        for label, text, rules, expected, broken in cases:
+            with self.subTest(label):
+                result = fix(Source.from_text(text), rules)
+                found = (result.text, result.applied, result.converged)
+                self.assertEqual(found, expected)
+                self.assertEqual(len(result.broken), broken)
+                self.assertEqual({r.rule for r in result.broken}, {"Breaks"})
+
+    def test_chosen_fix_that_breaks_the_code(self) -> None:
+        result = fix(
+            Source.from_text("one = bad\n"), [Breaks, NoBadName], choose=lambda r: True
+        )
+        self.assertEqual((result.text, result.applied), ("one = good\n", 1))
+        self.assertEqual([r.rule for r in result.broken], ["Breaks"])
 
     def test_reports_of_the_first_round(self) -> None:
         result = fix(Source.from_text("f(f(1))\n"), [CallFToG])
