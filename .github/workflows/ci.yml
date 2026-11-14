@@ -21,7 +21,7 @@ env:
   # uv installs what uv.lock has, and fails if it does not match pyproject.toml.
   UV_LOCKED: "1"
   # The uv of CI, which builds the release too (#18).
-  UV_VERSION: "0.13.5"
+  UV_VERSION: "0.13.7"
 
 jobs:
   test:
