@@ -10,7 +10,8 @@ from unittest import TestCase
 
 from ..api import print_result
 from ..core.text import Position, Range
-from ..ftypes import OutputFormat, Result, Violation
+from ..ftypes import Config, Result, Violation
+from ..output import CustomFormat
 from ..template import FIELDS, TemplateError, format_template, template_error
 
 VALUES = {
@@ -81,10 +82,11 @@ class TemplateTest(TestCase):
             format_template("{path.upper}", VALUES)
 
     def test_print_result(self) -> None:
-        # print_result, from the API, takes the names only too: the config and
-        # --output-template are checked before, but it is not.
+        # The format of output-format = "custom", from the API, takes the names
+        # only too: the config and --output-template are checked before, but it
+        # is not.
         where = Range(Position(1, 0), Position(2, 8))
         result = Result(Path.cwd() / "t.py", Violation("NoBad", where, "Bad.", False))
-        custom = OutputFormat.custom
+        output = CustomFormat(Config(output_template="{path.parent}"))
         with self.assertRaises(TemplateError):
-            print_result(result, output_format=custom, output_template="{path.parent}")
+            print_result(result, output=output)

@@ -6,7 +6,6 @@
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import (
     Any,
@@ -24,13 +23,6 @@ FileContent = bytes
 
 Metrics = dict[str, Any]
 MetricsHook = Callable[[Metrics], None]
-
-
-class OutputFormat(str, Enum):
-    custom = "custom"
-    fixit = "fixit"
-    # json = "json"  # TODO
-    vscode = "vscode"
 
 
 QualifiedRuleRegex = re.compile(
@@ -95,7 +87,8 @@ class Options:
     debug: bool | None = None
     config_file: Path | None = None
     rules: Sequence[QualifiedRule] = ()
-    output_format: OutputFormat | None = None
+    # the name of an output format plugin (#169), in any case
+    output_format: str | None = None
     output_template: str = ""
     print_metrics: bool = False
     # False: import only the built-in rules (see BUILTIN_RULE_PACKAGES).
@@ -136,8 +129,8 @@ class Config:
     # plugin (#169)
     formatter: str = "none"
 
-    # output formatting options
-    output_format: OutputFormat = OutputFormat.fixit
+    # output formatting options: the name of an output format plugin (#169)
+    output_format: str = "fixit"
     output_template: str = ""
 
     def __post_init__(self) -> None:

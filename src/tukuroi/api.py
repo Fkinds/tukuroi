@@ -12,7 +12,6 @@ import traceback
 from collections.abc import Generator, Iterable, Sequence
 from functools import partial
 from pathlib import Path
-from typing import assert_never
 
 import click
 import trailrunner
@@ -33,22 +32,14 @@ from .ftypes import (
     Metrics,
     MetricsHook,
     Options,
-    OutputFormat,
     Result,
     Violation,
 )
+from .output import FixitFormat, OutputFormatPlugin
+from .output import shown as _shown
 from .plugins import formatter_of
-from .template import format_template
 
 LOG = logging.getLogger(__name__)
-
-
-def _shown(path: Path) -> Path:
-    """``path`` relative to the current directory, if it is under it."""
-    try:
-        return path.relative_to(Path.cwd())
-    except ValueError:
-        return path
 
 
 def _describe(error: Exception) -> str:
@@ -81,11 +72,11 @@ def print_result(
     *,
     show_diff: bool = False,
     stderr: bool = False,
-    output_format: OutputFormat = OutputFormat.fixit,
-    output_template: str = "",
+    output: OutputFormatPlugin | None = None,
 ) -> int:
     """
-    Print linting results in a simple format designed for human eyes.
+    Print ``result``: what ``output``, an output format plugin (#169), gives for
+    it (by default, that of ``fixit``), and an exception with its traceback.
 
     Setting ``show_diff=True`` will output autofixes or suggested changes in unified
     diff format, using ANSI colors when possible.
@@ -93,38 +84,11 @@ def print_result(
     Returns ``True`` if the result is "dirty" - either a lint error or exception.
     """
     path = _shown(result.path)
-
-    if result.violation:
-        rule_name = result.violation.rule_name
-        start_line = result.violation.range.start.line
-        start_col = result.violation.range.start.column
-        message = result.violation.message
-        if result.violation.autofixable:
-            message += " (has autofix)"
-
-        # The value as the enum, which a string of it is equal to: then `is`.
-        output_format = OutputFormat(output_format)
-        if output_format is OutputFormat.fixit:
-            line = f"{path}@{start_line}:{start_col} {rule_name}: {message}"
-        elif output_format is OutputFormat.vscode:
-            line = f"{path}:{start_line}:{start_col} {rule_name}: {message}"
-        elif output_format is OutputFormat.custom:
-            # The names only, and strings and numbers (#14).
-            end = result.violation.range.end
-            values = {
-                "end_col": end.column,
-                "end_line": end.line,
-                "message": message,
-                "path": str(path),
-                "rule_name": rule_name,
-                "start_col": start_col,
-                "start_line": start_line,
-            }
-            line = format_template(output_template, values)
-        else:
-            assert_never(output_format)
+    line = (output or FixitFormat(Config())).result(result)
+    if line is not None:
         click.secho(line, fg="yellow", err=stderr)
 
+    if result.violation:
         if show_diff and result.violation.diff:
             _echo_diff(result.violation.diff, err=stderr)
         return True

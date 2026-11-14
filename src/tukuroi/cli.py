@@ -24,7 +24,9 @@ from .config import (
     validate_config,
 )
 from .core.testing import generate_test_cases
-from .ftypes import STDIN, LSPOptions, Options, OutputFormat, QualifiedRule
+from .ftypes import STDIN, Config, LSPOptions, Options, QualifiedRule
+from .output import OutputFormatPlugin
+from .plugins import PluginError, output_format_names, output_format_of
 from .template import template_error
 from .util import capture
 
@@ -109,10 +111,46 @@ def check_template(ctx: click.Context, param: click.Parameter, value: str) -> st
     return value
 
 
+class OutputFormatChoice(click.Choice[str]):
+    """
+    ``--output-format``: the name of an output format plugin (#169), in any
+    case. The names are read when the option is used, not when tukuroi is
+    imported.
+    """
+
+    def __init__(self) -> None:
+        super().__init__((), case_sensitive=False)
+
+    @property
+    def choices(self) -> tuple[str, ...]:
+        return tuple(output_format_names())
+
+    @choices.setter
+    def choices(self, value: tuple[str, ...]) -> None:
+        """The names are those registered: :class:`click.Choice` sets none."""
+
+
 class ConfigFailure(click.ClickException):
     """A config that tukuroi cannot use: exit with 2, as with a usage error."""
 
     exit_code = 2
+
+
+def output_of(config: Config) -> OutputFormatPlugin:
+    """
+    The output format of ``config`` (#169). One that cannot be loaded is a
+    config that tukuroi cannot use.
+    """
+    try:
+        return output_format_of(config)
+    except PluginError as error:
+        raise ConfigFailure(f"output-format: {error}") from error
+
+
+def echo(text: str | None, *, err: bool = False) -> None:
+    """Print what an output format gives at the start or the end, if anything."""
+    if text is not None:
+        click.echo(text, err=err)
 
 
 class _TukuroiGroup(click.Group):
@@ -168,7 +206,7 @@ class _TukuroiGroup(click.Group):
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice([o.name for o in OutputFormat], case_sensitive=False),
+    type=OutputFormatChoice(),
     show_choices=True,
     default=None,
     help="Select output format type",
@@ -187,7 +225,7 @@ def main(
     config_file: Path | None,
     rules: list[QualifiedRule],
     custom_rules: bool,
-    output_format: OutputFormat | None,
+    output_format: str | None,
     output_template: str,
     print_metrics: bool,
 ) -> None:
@@ -235,17 +273,13 @@ def lint(
     visited: set[Path] = set()
     dirty: set[Path] = set()
     autofixes = 0
-    config = generate_config(options=options)
+    output = output_of(generate_config(options=options))
+    echo(output.start())
     for result in fixit_paths(
         paths, options=options, metrics_hook=print if options.print_metrics else None
     ):
         visited.add(result.path)
-        if print_result(
-            result,
-            show_diff=diff,
-            output_format=config.output_format,
-            output_template=config.output_template,
-        ):
+        if print_result(result, show_diff=diff, output=output):
             dirty.add(result.path)
             if result.violation:
                 exit_code |= 1
@@ -254,6 +288,7 @@ def lint(
             if result.error:
                 exit_code |= 2
 
+    echo(output.end())
     splash(visited, dirty, autofixes)
     ctx.exit(exit_code)
 
@@ -311,17 +346,14 @@ def fix(
             metrics_hook=print if options.print_metrics else None,
         )
     )
-    config = generate_config(options=options)
+    output = output_of(generate_config(options=options))
+    echo(output.start(), err=is_stdin)
     for result in generator:
         visited.add(result.path)
         # for STDIN, we need STDOUT to equal the fixed content, so
         # move everything else to STDERR
         if print_result(
-            result,
-            show_diff=interactive or diff,
-            stderr=is_stdin,
-            output_format=config.output_format,
-            output_template=config.output_template,
+            result, show_diff=interactive or diff, stderr=is_stdin, output=output
         ):
             dirty.add(result.path)
             if autofix and result.violation and result.violation.autofixable:
@@ -344,6 +376,7 @@ def fix(
             elif answer == "q":
                 break
 
+    echo(output.end(), err=is_stdin)
     if any(left.values()):
         exit_code |= 1
     splash(visited, dirty, autofixes, fixed)

@@ -58,7 +58,7 @@ from .custom_rules_switch import CustomRulesSwitchTest
 from .examples import ExamplesTest
 from .ftypes import TypesTest
 from .lsp import DebounceTest
-from .plugins import PluginsTest
+from .plugins import OutputFormatPluginsTest, PluginsTest
 from .pool import PoolTest
 from .rules_strict import StrictRulesTest
 from .smoke import SmokeTest
