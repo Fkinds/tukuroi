@@ -526,16 +526,16 @@ wheels = [
 
 [[package]]
 name = "pygls"
-version = "2.0.1"
+version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "cattrs" },
     { name = "lsprotocol" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1b/94/cce3560f6c7296be43bd67ba342f8972b8adddfe407b62b25d1fb90c514b/pygls-2.0.1.tar.gz", hash = "sha256:2f774a669fbe2ece977d302786f01f9b0c5df7d0204ea0fa371ecb08288d6b86", size = 55796, upload-time = "2026-01-26T23:04:33.8Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/da/2e/7bbe061d175c0baddde8fc9edb908a4c31ba5d9165b8c68e3439c3a9f138/pygls-2.1.1.tar.gz", hash = "sha256:1da03ba9053201bb337dcdd8d121df70feb2a91e1a0dcc74de5da79755b1a201", size = 55091, upload-time = "2026-03-25T11:19:10.541Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/48/8b/d0d7e51f928ec6e555c943f7c07a712b992e9cf061d52cbf37fbf8622c05/pygls-2.0.1-py3-none-any.whl", hash = "sha256:d29748042cea5bedc98285eb3e2c0c60bf3fc73786319519001bf72bbe8f36cc", size = 69536, upload-time = "2026-01-26T23:04:35.197Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/1a/208293b6c350f5abea6941d5606080d4a492644052504f5312e5de30a902/pygls-2.1.1-py3-none-any.whl", hash = "sha256:510a6dea2476177230c7d851125e5948efdf3fdb9ebfd8543fc434972f8faed4", size = 68975, upload-time = "2026-03-25T11:19:11.374Z" },
 ]
 
 [[package]]
@@ -843,7 +843,7 @@ docs = [
 requires-dist = [
     { name = "click", specifier = ">=8.3.3,<9" },
     { name = "moreorless", specifier = ">=0.4.0" },
-    { name = "pygls", marker = "extra == 'lsp'", specifier = "~=2.0.0" },
+    { name = "pygls", marker = "extra == 'lsp'", specifier = "~=2.1.1" },
     { name = "rich", marker = "extra == 'pretty'", specifier = ">=12.6.0" },
     { name = "ruff", marker = "extra == 'ruff'", specifier = ">=0.17.3" },
     { name = "trailrunner", specifier = ">=1.2" },
