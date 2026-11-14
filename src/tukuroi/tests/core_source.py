@@ -185,6 +185,48 @@ class SourceContentTest(TestCase):
         self.assertIn(tokenize.COMMENT, {t.type for t in source.tokens})
         self.assertEqual(source.lines.position(7), Position(1, 7))
 
+    def test_tokens(self) -> None:
+        # The tokens with their spans and positions (#144). Each span holds
+        # the string of its token; an end past its line is the next line.
+        cases = (
+            # (label, text, type, the span of the first token of that type)
+            ("line end", "x = 1  # c\n", tokenize.NEWLINE, Span(10, 11)),
+            ("no line end at the end", "x = 1", tokenize.NEWLINE, Span(5, 5)),
+            ("end marker without a line end", "x = 1", tokenize.ENDMARKER, Span(5, 5)),
+            ("\\r\\n", "x = 1\r\ny = 2\r\n", tokenize.NEWLINE, Span(5, 7)),
+            ("string over lines", 'x = """a\nb"""\n', tokenize.STRING, Span(4, 13)),
+            ("characters beyond ASCII", 'x = "あ😀"\n', tokenize.STRING, Span(4, 8)),
+            ("indent", "if x:\n    y\n", tokenize.INDENT, Span(6, 10)),
+            ("dedent at the end", "if x:\n    y\n", tokenize.DEDENT, Span(12, 12)),
+        )  # fmt: skip
+        for label, text, kind, span in cases:
+            with self.subTest(label):
+                source = Source.from_text(text)
+                token = next(t for t in source.tokens if t.type == kind)
+                self.assertEqual(token.span, span)
+                for t in source.tokens:
+                    self.assertEqual(text[t.span.start : t.span.end], t.string)
+                    self.assertEqual(t.start, source.lines.position(t.span.start))
+                    self.assertEqual(t.end, source.lines.position(t.span.end))
+        newline = Source.from_text("x = 1\ny = 2\n").tokens[3]
+        self.assertEqual((newline.start, newline.end), (Position(1, 5), Position(2, 0)))
+
+    def test_tokens_in(self) -> None:
+        source = Source.from_text("x = f(a)  # c\n")
+        cases = (
+            # (label, span, the strings of the tokens in it)
+            ("a call", Span(4, 8), ["f", "(", "a", ")"]),
+            ("inside the call", Span(5, 7), ["(", "a"]),
+            ("a token cut at the end is left out", Span(4, 6), ["f", "("]),
+            ("a token cut at the start is left out", Span(1, 4), ["="]),
+            ("the whole text", Span(0, 14), ["x", "=", "f", "(", "a", ")", "# c", "\n", ""]),
+            ("an empty span at the end marker", Span(14, 14), [""]),
+            ("an empty span between tokens", Span(5, 5), []),
+        )  # fmt: skip
+        for label, span, strings in cases:
+            with self.subTest(label):
+                self.assertEqual([t.string for t in source.tokens_in(span)], strings)
+
     def test_span(self) -> None:
         text = 'x = "あ😀"; y = 1\r\nf(\r\n  1,\r\n)\n'
         source = Source.from_text(text)

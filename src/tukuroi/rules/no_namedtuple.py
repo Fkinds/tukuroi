@@ -291,12 +291,10 @@ class NoNamedTuple(Rule):
 
     def _parentheses(self, node: ast.ClassDef) -> tuple[int, int]:
         """The offsets of the ``(`` of the bases of ``node``, and after its ``)``."""
-        lines = self.source.lines
-        start = self.source.span(node).start
         depth, opening = 0, -1
-        for token in self.source.tokens:
-            offset = lines.offset(Position(*token.start))
-            if offset < start or token.type != tokenize.OP:
+        for token in self.source.tokens_in(self.source.span(node)):
+            offset = token.span.start
+            if token.type != tokenize.OP:
                 continue
             if token.string == "(":
                 if depth == 0:
