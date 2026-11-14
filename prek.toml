@@ -34,6 +34,15 @@ types = ["python"]
 files = "^(src/tukuroi|scripts)/"
 
 [[repos.hooks]]
+id = "import-linter"
+name = "lint-imports"
+entry = "uv run --locked lint-imports"
+language = "system"
+types = ["python"]
+files = "^src/tukuroi/"
+pass_filenames = false
+
+[[repos.hooks]]
 id = "copyright"
 name = "copyright header"
 entry = "uv run --locked python scripts/check_copyright.py"
