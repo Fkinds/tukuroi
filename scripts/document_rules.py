@@ -9,12 +9,12 @@ from textwrap import dedent, indent
 
 from jinja2 import Template
 
-from fixit.core.loader import RuleName, import_rules
-from fixit.core.rule import Invalid, Rule, Valid
+from tukuroi.core.loader import RuleName, import_rules
+from tukuroi.core.rule import Invalid, Rule, Valid
 
 # The packages of the built-in rules, as configs name them: those enabled by
 # default, and the strict ones, which a config enables by name (#123).
-RULES = ["fixit.rules", "fixit.rules.strict"]
+RULES = ["tukuroi.rules", "tukuroi.rules.strict"]
 
 RULES_DOC = Path(__file__).parent.parent / "docs" / "guide" / "builtins.rst"
 

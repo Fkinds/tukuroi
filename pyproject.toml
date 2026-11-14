@@ -3,7 +3,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "fixit"
+name = "tukuroi"
 readme = "README.rst"
 authors = [
     {name="Meta Platforms, Inc"},
@@ -63,7 +63,7 @@ docs = [
 ]
 
 [project.scripts]
-fixit = "fixit.cli:main"
+tukuroi = "tukuroi.cli:main"
 
 [project.urls]
 Home = "https://github.com/Fkinds/tukuroi"
@@ -72,7 +72,7 @@ Changelog = "https://github.com/Fkinds/tukuroi/blob/main/CHANGELOG.md"
 
 [tool.attribution]
 name = "Fixit"
-package = "fixit"
+package = "tukuroi"
 signed_tags = true
 version_file = false
 ignored_authors = ["dependabot"]
@@ -92,8 +92,8 @@ ignore-until-fixed = []
 # run, in the processes of the pool of `lint` and in subprocesses too.
 [tool.coverage.run]
 branch = true
-source = ["fixit"]
-omit = ["*/fixit/tests/*"]
+source = ["tukuroi"]
+omit = ["*/tukuroi/tests/*"]
 concurrency = ["thread", "multiprocessing"]
 patch = ["subprocess"]
 parallel = true
@@ -130,11 +130,11 @@ extend-select = ["S"]
 "__init__.py" = ["F401"]
 # The tests narrow types with assert, and run Fixit in a subprocess with
 # sys.executable.
-"src/fixit/tests/*" = ["S101", "S603"]
+"src/tukuroi/tests/*" = ["S101", "S603"]
 
 [tool.fixit]
 root = true
-enable = ["fixit.rules"]
+enable = ["tukuroi.rules"]
 
 [[tool.fixit.overrides]]
 path = "examples"
@@ -144,7 +144,7 @@ enable = [".examples.noop"]
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/fixit/__version__.py"
+version-file = "src/tukuroi/__version__.py"
 
 [tool.hatch.build]
 exclude = [
@@ -156,7 +156,7 @@ exclude = [
 [tool.pyrefly]
 project_includes = [
     # Start by adding a single file and we'll expand as we go
-    "src/fixit/util.py"
+    "src/tukuroi/util.py"
 ]
 search_path = [
     "src"

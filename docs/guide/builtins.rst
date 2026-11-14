@@ -8,14 +8,14 @@
 Built-in Rules
 --------------
 
-- :mod:`fixit.rules`
-- :mod:`fixit.rules.strict`
+- :mod:`tukuroi.rules`
+- :mod:`tukuroi.rules.strict`
 
 
-``fixit.rules``
-^^^^^^^^^^^^^^^
+``tukuroi.rules``
+^^^^^^^^^^^^^^^^^
 
-.. automodule:: fixit.rules
+.. automodule:: tukuroi.rules
 
 - :class:`NoAssertTrueForComparisons`
 - :class:`NoNamedTuple`
@@ -397,10 +397,10 @@ Built-in Rules
             x: t.Callable[..., int] = ...
 
 
-``fixit.rules.strict``
-^^^^^^^^^^^^^^^^^^^^^^
+``tukuroi.rules.strict``
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. automodule:: fixit.rules.strict
+.. automodule:: tukuroi.rules.strict
 
 - :class:`NoValueObjectDefault`
 

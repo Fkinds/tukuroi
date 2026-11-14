@@ -5,7 +5,7 @@
 
 import ast
 
-from fixit import Invalid, Rule, Valid
+from tukuroi import Invalid, Rule, Valid
 
 
 class HollywoodName(Rule):
