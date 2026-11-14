@@ -5,7 +5,7 @@
 
 """
 Tests of the switch that turns custom rules off (#12): ``--custom-rules`` /
-``--no-custom-rules`` and the environment variable ``FIXIT_CUSTOM_RULES``.
+``--no-custom-rules`` and the environment variable ``TUKUROI_CUSTOM_RULES``.
 
 With custom rules turned off, tukuroi imports only the rules that come with it
 (``tukuroi.rules``). The custom rules here create a file
@@ -49,7 +49,7 @@ from .characterization_lsp import (
     serve,
 )
 
-ENV = "FIXIT_CUSTOM_RULES"
+ENV = "TUKUROI_CUSTOM_RULES"
 BUILTIN = f"tukuroi.rules:{SI}"
 
 
@@ -82,7 +82,7 @@ def refused(*rules: str) -> str:
 
 @contextmanager
 def switch(value: str | None) -> Generator[None]:
-    """Set FIXIT_CUSTOM_RULES to ``value``, or unset it (None)."""
+    """Set TUKUROI_CUSTOM_RULES to ``value``, or unset it (None)."""
     with patch.dict(os.environ):
         os.environ.pop(ENV, None)
         if value is not None:
@@ -156,7 +156,7 @@ class CustomRulesSwitchTest(TestCase):
         on = ((BAD, UGLY, SI), "", {"rules"})
         off = ((SI,), skipped(".rules"), set())
         cases = (
-            # (label, FIXIT_CUSTOM_RULES, args, result)
+            # (label, TUKUROI_CUSTOM_RULES, args, result)
             ("default", None, (), on),
             ("--custom-rules", None, ("--custom-rules",), on),
             ("--no-custom-rules", None, ("--no-custom-rules",), off),
@@ -220,7 +220,7 @@ class CustomRulesSwitchTest(TestCase):
             args = ["--no-custom-rules", "--rules", BUILTIN]
             self.assert_lint(lint(config, RULES, args), (SI,))
         cases = (
-            # (label, FIXIT_CUSTOM_RULES, args, rules refused, site)
+            # (label, TUKUROI_CUSTOM_RULES, args, rules refused, site)
             ("in the repo", None, ["--no-custom-rules", "--rules", ".rules"], (".rules",), None),
             ("env 0", "0", ["--rules", ".rules"], (".rules",), None),
             ("installed", None, ["--no-custom-rules", "--rules", "cookie.rules"], ("cookie.rules",), COOKIE),
@@ -239,7 +239,7 @@ class CustomRulesSwitchTest(TestCase):
 
     def test_fixit_test(self) -> None:
         cases = (
-            # (label, FIXIT_CUSTOM_RULES, args)
+            # (label, TUKUROI_CUSTOM_RULES, args)
             ("--no-custom-rules", None, ["--no-custom-rules", "test", ".rules"]),
             ("env 0", "0", ["test", ".rules"]),
         )

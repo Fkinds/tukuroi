@@ -65,9 +65,9 @@ from .template import TemplateTest
 from .util import CaptureTest
 
 # Expect the default of the switch for custom rules, even when the shell sets
-# FIXIT_CUSTOM_RULES (see "Security" in the docs). custom_rules_switch sets it
+# TUKUROI_CUSTOM_RULES (see "Security" in the docs). custom_rules_switch sets it
 # where it needs it. Every test module imports this package first.
-os.environ.pop("FIXIT_CUSTOM_RULES", None)
+os.environ.pop("TUKUROI_CUSTOM_RULES", None)
 
 # The test cases of the built-in rules, named after each rule: those enabled by
 # default, and the strict ones (#123).

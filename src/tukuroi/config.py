@@ -27,7 +27,7 @@ from .ftypes import (
 )
 from .template import template_error
 
-FIXIT_CONFIG_FILENAMES = ("fixit.toml", ".fixit.toml", "pyproject.toml")
+TUKUROI_CONFIG_FILENAMES = ("tukuroi.toml", ".tukuroi.toml", "pyproject.toml")
 
 
 log = logging.getLogger(__name__)
@@ -160,7 +160,7 @@ def load_error(rule: QualifiedRule, config: Config) -> str | None:
 
 def named_rules(data: dict[str, Any]) -> Iterator[tuple[str, list[str]]]:
     """
-    The rules that ``data``, the table ``[tool.fixit]`` of a config, names, in
+    The rules that ``data``, the table ``[tool.tukuroi]`` of a config, names, in
     the order of the file: by key, with the override before the key in one.
     """
     for key, value in data.items():
@@ -227,7 +227,7 @@ def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
     path.relative_to(root)  # enforce path being inside root
 
     while True:
-        candidates = (path / filename for filename in FIXIT_CONFIG_FILENAMES)
+        candidates = (path / filename for filename in TUKUROI_CONFIG_FILENAMES)
         for candidate in candidates:
             if candidate.is_file():
                 results.append(candidate)
@@ -244,7 +244,7 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
     """
     Read config data for each path given, and return their raw toml config values.
 
-    Skips any path with no — or empty — `tool.fixit` section.
+    Skips any path with no — or empty — `tool.tukuroi` section.
     Stops early at any config with `root = true`.
 
     Maintains the same order as given in paths, minus any skipped files.
@@ -261,15 +261,17 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
             data = tomllib.loads(content)
         except tomllib.TOMLDecodeError as error:
             raise ConfigError(str(error), path=path) from error
-        outside = path.name in ("fixit.toml", ".fixit.toml")
+        outside = path.name in ("tukuroi.toml", ".tukuroi.toml")
         if outside and (error := next(outside_errors(data), None)):
             raise ConfigError(error, path=path)
-        fixit_data = table(data, "tool", path).get("fixit", {})
-        if not isinstance(fixit_data, dict):
-            raise ConfigError(must_be("tool.fixit", "a table", fixit_data), path=path)
+        tukuroi_data = table(data, "tool", path).get("tukuroi", {})
+        if not isinstance(tukuroi_data, dict):
+            raise ConfigError(
+                must_be("tool.tukuroi", "a table", tukuroi_data), path=path
+            )
 
-        if fixit_data:
-            config = RawConfig(path=path, data=fixit_data)
+        if tukuroi_data:
+            config = RawConfig(path=path, data=tukuroi_data)
             if (error := next(value_errors(config.data), None)) is not None:
                 raise ConfigError(error, config=config)
             configs.append(config)
@@ -282,17 +284,17 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
 
 def outside_errors(data: dict[str, Any]) -> Iterator[str]:
     """
-    The keys of ``data``, a fixit.toml or .fixit.toml, outside [tool.fixit],
+    The keys of ``data``, a tukuroi.toml or .tukuroi.toml, outside [tool.tukuroi],
     where tukuroi does not read them (#40). A pyproject.toml has the keys of
     other tools there, and so may a file of another name (--config-file).
     """
     for key, value in data.items():
         if key != "tool" or not isinstance(value, dict):
-            yield f"{key}: must be under [tool.fixit]"
+            yield f"{key}: must be under [tool.tukuroi]"
             continue
         for name in value:
-            if name != "fixit":
-                yield f"tool.{name}: must be under [tool.fixit]"
+            if name != "tukuroi":
+                yield f"tool.{name}: must be under [tool.tukuroi]"
 
 
 def table(data: dict[str, Any], key: str, path: Path) -> dict[str, Any]:
@@ -339,8 +341,8 @@ def must_be(key: str, expected: str, value: object) -> str:
 
 
 RULES = "an array of strings"
-OVERRIDES = "an array of tables ([[tool.fixit.overrides]])"
-# The keys of [tool.fixit], of an override, and the keys that #21 removed: any
+OVERRIDES = "an array of tables ([[tool.tukuroi.overrides]])"
+# The keys of [tool.tukuroi], of an override, and the keys that #21 removed: any
 # other key is an error (#40).
 KEYS = (
     "disable",
@@ -359,7 +361,7 @@ OUTPUT_FORMATS = {o.value: o for o in OutputFormat}
 
 def value_errors(data: dict[str, Any]) -> Iterator[str]:
     """
-    The messages for the values in ``data``, the table ``[tool.fixit]`` of a
+    The messages for the values in ``data``, the table ``[tool.tukuroi]`` of a
     config, that tukuroi cannot use: a value of the wrong type, or a rule name that
     is not valid (#40). The keys are checked in their order in the file, and
     each message starts with the key.
@@ -673,7 +675,7 @@ def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
     ``enable-root-import``. The first value that tukuroi cannot use is the only
     error returned (#40); otherwise, each rule that cannot be loaded adds one.
     An error is as the CLI shows a :class:`ConfigError`: the file, the key, and
-    the message. A file without ``[tool.fixit]`` has nothing to check.
+    the message. A file without ``[tool.tukuroi]`` has nothing to check.
 
     With ``custom_rules`` false, only the names of custom rules are checked: they
     are not imported, and each one logs a warning.

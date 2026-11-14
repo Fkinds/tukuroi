@@ -273,7 +273,7 @@ class SmokeTest(TestCase):
             path = tdp / "file.py"
 
             (tdp / "pyproject.toml").write_text(
-                "[tool.fixit]\ndisable=['tukuroi.rules']\n"
+                "[tool.tukuroi]\ndisable=['tukuroi.rules']\n"
             )
 
             path.write_text(content)
@@ -291,7 +291,7 @@ class SmokeTest(TestCase):
             path = tdp / "file.py"
 
             (tdp / "pyproject.toml").write_text(
-                "[tool.fixit]\ndisable=['tukuroi.rules']\n"
+                "[tool.tukuroi]\ndisable=['tukuroi.rules']\n"
             )
 
             path.write_text(content)

@@ -5,8 +5,8 @@ Configuration
 
 Fixit uses `TOML format <https://toml.io>`_ for configuration, and supports
 hierarchical, cascading configuration. Fixit will read values from both the
-standardized ``pyproject.toml`` file as well as a separate ``.fixit.toml`` or
-``fixit.toml`` file, with values from the latter taking precendence over the
+standardized ``pyproject.toml`` file as well as a separate ``.tukuroi.toml`` or
+``tukuroi.toml`` file, with values from the latter taking precendence over the
 former, and values from files "nearer" to those being linted taking precedence
 over values from files "further" away.
 
@@ -31,11 +31,11 @@ results, regardless of whether they are being linted externally or within the
 containing monorepo.
 
 
-``[tool.fixit]``
-^^^^^^^^^^^^^^^^
+``[tool.tukuroi]``
+^^^^^^^^^^^^^^^^^^
 
-The main configuration table. In ``fixit.toml`` and ``.fixit.toml`` too, the
-keys go under ``[tool.fixit]``: a key or a table outside it is a configuration
+The main configuration table. In ``tukuroi.toml`` and ``.tukuroi.toml`` too, the
+keys go under ``[tool.tukuroi]``: a key or a table outside it is a configuration
 error there. In ``pyproject.toml``, the keys of other tools are left alone.
 
 A key other than the ones below, a value of a type other than the one given
@@ -67,7 +67,7 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
     .. code-block:: toml
 
-        [tool.fixit]
+        [tool.tukuroi]
         enable = [
             "fixit.rules",  # all lint rules in this package (non-recursive)
             "fixit.rules:UseAssertIn",  # single lint rule by name
@@ -79,8 +79,8 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
     .. code-block:: toml
 
-        # teambread/fixit.toml
-        [tool.fixit]
+        # teambread/tukuroi.toml
+        [tool.tukuroi]
         enable = [
             ".rules",  # all rules in teambread/rules/ (non-recursive)
             ".rules.hollywood",  # all rules in teambread/rules/hollywood.py
@@ -96,7 +96,7 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
     .. code-block:: toml
 
-        [tool.fixit]
+        [tool.tukuroi]
         enable = [
             "fixit.rules",
             "fixit.rules.strict:NoValueObjectDefault",
@@ -138,7 +138,7 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
     .. code-block:: toml
 
-        [tool.fixit]
+        [tool.tukuroi]
         root = true
         enable-root-import = "src"
         enable = ["orange.rules"]
@@ -216,8 +216,8 @@ Fixit no longer supports (``python-version``, ``formatter``, ``options``,
 
 .. _overrides:
 
-``[[tool.fixit.overrides]]``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``[[tool.tukuroi.overrides]]``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Overrides provide a mechanism for hierarchical configuration within a single
 configuration file. They are defined as an
@@ -227,11 +227,11 @@ defining the subpath it applies to, along with :attr:`enable` and
 
 .. code-block:: toml
 
-    [[tool.fixit.overrides]]
+    [[tool.tukuroi.overrides]]
     path = "foo/bar"
     disable = ["fixit.rules:ExampleRule"]
 
-    [[tool.fixit.overrides]]
+    [[tool.tukuroi.overrides]]
     path = "fizz/buzz"
     enable = ["plugin:SomethingNeat"]
 
@@ -262,12 +262,12 @@ level further up disables them, and the other way round:
 .. code-block:: toml
 
     # pyproject.toml
-    [tool.fixit]
+    [tool.tukuroi]
     root = true
     enable = ["fixit.rules:UseAssertIn"]
 
-    # tests/fixit.toml
-    [tool.fixit]
+    # tests/tukuroi.toml
+    [tool.tukuroi]
     disable = ["fixit.rules"]  # UseAssertIn too, in tests/
 
 A module names its own rules, and if it is a package, those of the modules in
@@ -283,7 +283,7 @@ name in both :attr:`enable` and :attr:`disable`, the rule is disabled:
 
 .. code-block:: toml
 
-    [tool.fixit]
+    [tool.tukuroi]
     disable = ["fixit.rules"]
     enable = ["fixit.rules:UseAssertIn"]  # UseAssertIn only
 
@@ -309,7 +309,7 @@ read.
 
 Only run Fixit with custom rules on code whose configuration you trust. For
 other code, turn custom rules off with ``--no-custom-rules``, or with the
-environment variable ``FIXIT_CUSTOM_RULES=0`` (see :ref:`commands`). Then Fixit
+environment variable ``TUKUROI_CUSTOM_RULES=0`` (see :ref:`commands`). Then Fixit
 imports only the built-in rules, in :mod:`fixit.rules`:
 
 - Custom rules in :attr:`enable` are skipped with a warning. The built-in rules
@@ -330,9 +330,9 @@ For example, in a CI job:
 
 .. code:: console
 
-    $ FIXIT_CUSTOM_RULES=0 fixit lint src/
+    $ TUKUROI_CUSTOM_RULES=0 fixit lint src/
 
-To keep custom rules off by default, set ``FIXIT_CUSTOM_RULES=0`` in your
+To keep custom rules off by default, set ``TUKUROI_CUSTOM_RULES=0`` in your
 shell, and pass ``--custom-rules`` in the repos that you trust. The option on
 the command line wins over the variable. So the variable does not keep custom
 rules off when the repo can change the command line, for example with the

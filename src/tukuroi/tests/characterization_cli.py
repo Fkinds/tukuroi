@@ -39,9 +39,7 @@ SI = "NoStaticIfCondition"
 def config(*rules: str) -> str:
     """A root config that runs only ``rules``."""
     enable = ", ".join(f'"tukuroi.rules:{rule}"' for rule in rules)
-    return (
-        f'[tool.fixit]\nroot = true\ndisable = ["tukuroi.rules"]\nenable = [{enable}]\n'
-    )
+    return f'[tool.tukuroi]\nroot = true\ndisable = ["tukuroi.rules"]\nenable = [{enable}]\n'
 
 
 CONFIG = config(NA, SI)
@@ -330,7 +328,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
 
     def test_lint_stdin(self) -> None:
         sub = {
-            "sub/pyproject.toml": f'[tool.fixit]\ndisable = ["tukuroi.rules:{SI}"]\n'
+            "sub/pyproject.toml": f'[tool.tukuroi]\ndisable = ["tukuroi.rules:{SI}"]\n'
         }
         both = FIXABLE + UNFIXABLE
         cases = (
@@ -410,7 +408,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
         vscode = {"pyproject.toml": CONFIG + 'output-format = "vscode"\n'}
         upper = {"pyproject.toml": CONFIG + 'output-format = "VSCode"\n'}
         empty = {"pyproject.toml": CONFIG + 'output-format = ""\n'}
-        sub = {"sub/pyproject.toml": '[tool.fixit]\noutput-format = "vscode"\n'}
+        sub = {"sub/pyproject.toml": '[tool.tukuroi]\noutput-format = "vscode"\n'}
         # output-format in an override is an error (characterization_config).
         cases = (
             ("fixit", ["--output-format", "fixit"], {}, ".", "t.py", "@"),
@@ -519,9 +517,9 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 2)
 
     def test_rules_option_replaces_enable_and_disable(self) -> None:
-        none = '[tool.fixit]\nroot = true\ndisable = ["tukuroi.rules"]\n'
+        none = '[tool.tukuroi]\nroot = true\ndisable = ["tukuroi.rules"]\n'
         override = (
-            f'[[tool.fixit.overrides]]\npath = "."\nenable = ["tukuroi.rules:{NA}"]\n'
+            f'[[tool.tukuroi.overrides]]\npath = "."\nenable = ["tukuroi.rules:{NA}"]\n'
         )
         na = (("t.py", NA),)
         si = (("t.py", SI, "2:0"),)
@@ -591,7 +589,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
 
     def test_rules_option_over_unknown_names_in_the_config(self) -> None:
         # The rules of the config are not used, and not loaded (#40).
-        toml = '[tool.fixit]\nroot = true\nenable = ["tukuroi.nope"]\n'
+        toml = '[tool.tukuroi]\nroot = true\nenable = ["tukuroi.nope"]\n'
         files = {"pyproject.toml": toml, "t.py": FIXABLE + UNFIXABLE}
         result = invoke(files, ["--rules", f"tukuroi.rules:{SI}", "lint", "t.py"])
         self.assertEqual(result.stdout, line("t.py", SI, "2:0"))
@@ -656,11 +654,11 @@ class CliCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.files, before)
 
     def test_config_file_option(self) -> None:
-        override = (
-            f'[[tool.fixit.overrides]]\npath = "sub"\nenable = ["tukuroi.rules:{NA}"]\n'
-        )
+        override = f'[[tool.tukuroi.overrides]]\npath = "sub"\nenable = ["tukuroi.rules:{NA}"]\n'
         no_root = config(SI).replace("root = true\n", "")
-        sub = {"sub/pyproject.toml": f'[tool.fixit]\nenable = ["tukuroi.rules:{NA}"]\n'}
+        sub = {
+            "sub/pyproject.toml": f'[tool.tukuroi]\nenable = ["tukuroi.rules:{NA}"]\n'
+        }
         si = ((SI, "2:0"),)
         both = ((NA, "1:0"), (SI, "2:0"))
         c = ["-c", "c.toml"]
@@ -668,8 +666,8 @@ class CliCharacterizationTest(CharacterizationTestCase):
             ("long", ["--config-file", "c.toml"], {"c.toml": config(SI)}, "t.py", si),
             ("short", c, {"c.toml": config(SI)}, "t.py", si),
             ("no root", c, {"c.toml": no_root}, "t.py", si),
-            # The default rules run: the file has no [tool.fixit].
-            ("no tool.fixit", c, {"c.toml": "[tool.black]\n"}, "t.py", both),
+            # The default rules run: the file has no [tool.tukuroi].
+            ("no tool.tukuroi", c, {"c.toml": "[tool.black]\n"}, "t.py", both),
             ("sub config", c, {"c.toml": config(SI), **sub}, "sub/t.py", si),
             ("overrides", c, {"c.toml": config(SI) + override}, "sub/t.py", both),
             # `enable` and `disable` apply to a file outside the directory of the
