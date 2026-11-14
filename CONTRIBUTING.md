@@ -104,12 +104,13 @@ the versions that the files have; pass `--upgrade` to `uv lock` and `uv pip
 compile` for newer ones. CI uses the version of uv in `UV_VERSION` of its
 workflows.
 
-[Renovate][] keeps them up to date, as `.github/renovate.json5` says. Each
-morning (Asia/Tokyo) it opens pull requests for the versions released at least
-7 days before: the dependencies of `pyproject.toml`, the actions of the
-workflows (pinned to commit SHAs), and `UV_VERSION`. The updates that are not
-major come in one pull request for each kind, and a major update in one of its
-own. On Mondays, it updates the rest of `uv.lock` and `build-constraints.txt`.
+[Renovate][] keeps them up to date, as `.github/renovate.json5` says: the
+dependencies of `pyproject.toml`, the actions of the workflows (pinned to
+commit SHAs), and `UV_VERSION`. It opens a pull request for an update that is
+not major as soon as the version is released, one for each kind; for a major
+update, one of its own, each morning (Asia/Tokyo), for the versions released
+at least 7 days before. On Mondays, it updates the rest of `uv.lock` and
+`build-constraints.txt`.
 It opens the fixes of the vulnerabilities that GitHub finds too. The Dependency
 Dashboard issue lists what is pending. The versions of Python
 (`.python-version`, `requires-python`) are left as the project chooses them.

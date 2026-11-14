@@ -14,7 +14,8 @@
   // Each day (#164).
   schedule: ["before 9am"],
   // A version only once it has been public for 7 days: most of the bad ones
-  // are taken down by then (#7, as #18).
+  // are taken down by then (#7, as #18). Not for the updates that are not
+  // major: see packageRules.
   minimumReleaseAge: "7 days",
   labels: ["dependencies"],
   dependencyDashboard: true,
@@ -58,6 +59,14 @@
     },
   ],
   packageRules: [
+    // The updates that are not major, as soon as they are released, at any
+    // time (#164): the checks of the pull request, Audit too, are what stands
+    // between a bad version and main.
+    {
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      minimumReleaseAge: "0 days",
+      schedule: ["at any time"],
+    },
     // One pull request for the updates that are not major, of each kind; a
     // major update has one of its own, merged by hand. The kinds that Renovate
     // merges are apart from those merged by hand (#164).
