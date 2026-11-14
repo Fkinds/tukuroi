@@ -391,6 +391,36 @@ moves or deletes one. The release uploads to TestPyPI from the environment
 `v*` tags only. Pages deploys from `github-pages`, from those tags and from
 `main`.
 
+## Releasing
+
+A release is a tag `v*` on `main`, which `.github/workflows/release.yml`
+builds and publishes. Before the first one, a maintainer registers the
+workflow as a trusted publisher on PyPI and on TestPyPI (a pending publisher
+of the project `tukuroi`): the owner `Fkinds`, the repository `tukuroi`, the
+workflow `release.yml`, and the environment `pypi` or `testpypi`.
+
+1. Merge the section of the version into `CHANGELOG.md`: the GitHub release
+   takes its notes from there, under a heading `## vX.Y.Z`.
+2. Tag the merge on `main` with an annotated tag, and push it:
+
+   ```shell-session
+   $ git tag -a vX.Y.Z -m vX.Y.Z
+   $ git push origin vX.Y.Z
+   ```
+
+3. The workflow checks that the tag is annotated and on `main`, builds the
+   package once, tests the wheel on each version and system of CI, builds
+   the wheel again from the sdist, uploads both files to TestPyPI, and
+   installs the wheel from there.
+4. Approve the deployment to `pypi` on the page of the run. The workflow
+   uploads the files to PyPI, makes the GitHub release with them, and deploys
+   the documentation.
+
+A tag cannot be moved or deleted (the ruleset `tags`), and neither can a file
+on PyPI. When the workflow fails before PyPI, fix the cause on `main` and
+release the next version. The documentation can be deployed by hand too, from
+`main` or a tag: run the workflow `Pages` (`pages.yml`).
+
 ## Relationship to upstream
 
 This repository is a fork of `Instagram/Fixit`. It stopped merging upstream
