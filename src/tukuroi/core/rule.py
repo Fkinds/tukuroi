@@ -114,17 +114,25 @@ class Rule:
         *,
         replacement: str | None = None,
         edits: Sequence[Edit] = (),
+        span: Span | None = None,
     ) -> None:
         """
         Report a violation at ``node``, with ``message`` or ``MESSAGE``. The fix,
         if any, is ``replacement`` for the text of ``node``, or ``edits``.
+
+        ``span`` is where the report is, when it is not the span of ``node``:
+        for what the tree has no node for, such as an operator (#143). The
+        comments that suppress the report are still those of ``node``.
         """
         text = self.MESSAGE if message is None else message
         if not text:
             raise ValueError(f"{self.name()}: a report needs a message")
         if replacement is not None and edits:
             raise ValueError(f"{self.name()}: give replacement or edits, not both")
-        span = self.source.span(node)
-        fix = check_fix(edits) if replacement is None else (Edit(span, replacement),)
-        position = self.source.lines.position(span.start)
-        self.reports.append(Report(self.name(), span, position, text, fix, node))
+        if span is not None and span.end > len(self.source.text):
+            raise ValueError(f"{self.name()}: span {span} past the end of the text")
+        of_node = self.source.span(node)
+        fix = check_fix(edits) if replacement is None else (Edit(of_node, replacement),)
+        where = of_node if span is None else span
+        position = self.source.lines.position(where.start)
+        self.reports.append(Report(self.name(), where, position, text, fix, node))

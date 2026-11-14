@@ -161,6 +161,38 @@ class RuleReportTest(TestCase):
                 rule.report(node, **arguments)  # type: ignore[arg-type]
         self.assertEqual(rule.reports, [])
 
+    def test_span(self) -> None:
+        # Where the report is, for what the tree has no node for (#143). The
+        # fix and the node, for the comments that suppress it, stay those of
+        # the node.
+        text = "x = 'é'; bad = 1\n"
+        of_node = Span(9, 12)
+        cases = (
+            # (label, keyword arguments of report, span and position of the report, edits)
+            ("the span of the node", {}, of_node, Position(1, 9), ()),
+            ("another span", {"span": Span(13, 14)}, Span(13, 14), Position(1, 13), ()),
+            ("another span, with a replacement", {"span": Span(13, 14), "replacement": "good"}, Span(13, 14), Position(1, 13), (Edit(of_node, "good"),)),
+            ("an empty span", {"span": Span(4, 4)}, Span(4, 4), Position(1, 4), ()),
+            ("the end of the text", {"span": Span(17, 17)}, Span(17, 17), Position(2, 0), ()),
+        )  # fmt: skip
+        for label, arguments, span, position, edits in cases:
+            with self.subTest(label):
+                rule = make(NoBadName, text)
+                node = rule.source.tree.body[1].targets[0]  # type: ignore[attr-defined]
+                rule.report(node, **arguments)  # type: ignore[arg-type]
+                (report,) = rule.reports
+                self.assertEqual((report.span, report.position), (span, position))
+                self.assertEqual(report.edits, edits)
+                self.assertIs(report.node, node)
+
+    def test_span_past_the_text(self) -> None:
+        rule = make(NoBadName, "bad = 1\n")
+        node = rule.source.tree.body[0].targets[0]  # type: ignore[attr-defined]
+        with self.assertRaises(ValueError) as caught:
+            rule.report(node, span=Span(8, 9))
+        self.assertIn("past the end of the text", str(caught.exception))
+        self.assertEqual(rule.reports, [])
+
     def test_reports_in_their_order(self) -> None:
         rule = make(EveryStatement, "x = 1\nif y:\n    z = 2\n")
         for node in ast.walk(rule.source.tree):
