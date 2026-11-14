@@ -1,0 +1,296 @@
+# A release, from a tag v* that a maintainer pushes: see "Releasing" in
+# CONTRIBUTING.md. The package is built once, and that build is what each job
+# tests, uploads and attaches. It goes to TestPyPI, is installed from there,
+# and goes to PyPI once a maintainer approves the environment pypi. Then the
+# GitHub release, with the notes of CHANGELOG.md, and the documentation.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+# One release at a time, and none is cancelled halfway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.13.8"
+
+jobs:
+  check:
+    # The tag before anything is built: annotated, and on main.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # The tag object itself, as the remote has it, and main.
+          git fetch --no-tags --force origin "+refs/tags/$TAG:refs/tags/$TAG" "+refs/heads/main:refs/remotes/origin/main"
+          if [[ $(git cat-file -t "refs/tags/$TAG") != tag ]]; then
+            echo "::error::$TAG is not an annotated tag"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::$TAG is not on main"
+            exit 1
+          fi
+
+  build:
+    needs: check
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The tag, which the version comes from (hatch-vcs).
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          # Nothing that an earlier run left goes into the release (#18).
+          enable-cache: false
+          python-version: "3.14"
+      - name: Build
+        # As the build job of ci.yml: the backend checked by its hashes.
+        run: >-
+          uv build --no-cache
+          --build-constraints build-constraints.txt --require-build-hashes
+          --preview-features build-dependency-hashes
+      - name: Version
+        # The version that the tag gives, and nothing else.
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=${TAG#v}
+          for file in "tukuroi-$version.tar.gz" "tukuroi-$version-py3-none-any.whl"; do
+            if [[ ! -f dist/$file ]]; then
+              echo "::error::no $file for $TAG: $(ls dist)"
+              exit 1
+            fi
+          done
+          if [[ $(ls dist | wc -l) != 2 ]]; then
+            echo "::error::more files than the sdist and the wheel: $(ls dist)"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  test:
+    # The wheel, with its tests, on each version and system of CI, with the
+    # dependencies that PyPI has today.
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04]
+        python-version:
+          - "3.14"
+          - "3.14t"
+          - "3.15"
+          - "3.15t"
+        include:
+          - os: macos-15
+            python-version: "3.14"
+          - os: macos-15
+            python-version: "3.15"
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+          python-version: ${{ matrix.python-version }}
+      - name: Test
+        shell: bash
+        run: |
+          wheel=$(echo dist/*.whl)
+          uv venv venv
+          uv pip install --python venv "tukuroi[lsp,ruff] @ ./$wheel"
+          venv/bin/python -m tukuroi.tests
+
+  sdist:
+    # The wheel that the sdist builds: the same files.
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        # For build-constraints.txt.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+          python-version: "3.14"
+      - name: Build
+        run: >-
+          uv build --no-cache --wheel --out-dir from-sdist
+          --build-constraints build-constraints.txt --require-build-hashes
+          --preview-features build-dependency-hashes
+          dist/*.tar.gz
+      - name: Compare
+        run: |
+          diff <(unzip -Z1 dist/*.whl | grep -v RECORD | sort) <(unzip -Z1 from-sdist/*.whl | grep -v RECORD | sort)
+
+  testpypi:
+    needs: [test, sdist]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      # Trusted Publishing.
+      id-token: write
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/tukuroi
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Upload
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  from-testpypi:
+    # The files that TestPyPI serves are those built, and they install: only
+    # tukuroi from TestPyPI, its dependencies from PyPI.
+    needs: testpypi
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+          python-version: "3.14"
+      - name: Files
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # TestPyPI shows a release a little after its upload.
+          for _ in $(seq 30); do
+            if curl -fsS "https://test.pypi.org/pypi/tukuroi/${TAG#v}/json" -o release.json \
+              && [[ $(jq '.urls | length' release.json) == 2 ]]; then
+              break
+            fi
+            sleep 10
+          done
+          diff <(cd dist && sha256sum -- * | sort) \
+            <(jq -r '.urls[] | "\(.digests.sha256)  \(.filename)"' release.json | sort)
+          mkdir from-testpypi
+          url=$(jq -r '.urls[] | select(.packagetype == "bdist_wheel") | .url' release.json)
+          curl -fsS --output-dir from-testpypi -O "$url"
+      - name: Install
+        run: |
+          wheel=$(echo from-testpypi/*.whl)
+          uv venv venv
+          uv pip install --python venv "tukuroi[lsp,ruff] @ ./$wheel"
+      - name: Run
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ $(venv/bin/tukuroi --version) == "tukuroi, version ${TAG#v}" ]]
+          mkdir repo && cd repo
+          printf '[tool.tukuroi]\nroot = true\n' > pyproject.toml
+          printf 'self.assertTrue(a, 3)\n' > t.py
+          # A violation, with exit status 1, and then its fix.
+          status=0 && ../venv/bin/tukuroi lint t.py || status=$?
+          [[ $status == 1 ]]
+          ../venv/bin/tukuroi fix --automatic t.py
+          [[ $(cat t.py) == "self.assertEqual(a, 3)" ]]
+
+  pypi:
+    # Once a maintainer approves the environment.
+    needs: from-testpypi
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      # Trusted Publishing.
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tukuroi
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Upload
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
+  github-release:
+    # Immutable: the tag and the files stay as they are published.
+    needs: pypi
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python3 scripts/release_notes.py "$TAG" CHANGELOG.md > notes.md
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: >-
+          gh release create "$TAG" dist/*
+          --repo "$GITHUB_REPOSITORY" --verify-tag
+          --title "$TAG" --notes-file notes.md
+
+  docs:
+    needs: github-release
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # The commit of this run (the self-repository syntax).
+    uses: $/.github/workflows/pages.yml
