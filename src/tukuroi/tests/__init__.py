@@ -35,7 +35,7 @@ from .core_loader import (
     LoaderRuleNameTest,
     LoadTest,
 )
-from .core_names import ImportTableTest
+from .core_names import ImportTableTest, ScopedImportTableTest
 from .core_rule import RuleCasesTest, RuleNameTest, RuleReportTest, RuleVisitsTest
 from .core_source import (
     SourceContentTest,

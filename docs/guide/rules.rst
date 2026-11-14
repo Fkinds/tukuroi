@@ -131,8 +131,10 @@ that quotes, comments and spacing stay as they are:
   tree has no node for.
 - ``self.imports.qualified_names(node)`` tells what a name or an attribute
   refers to through the imports of the module: with ``import typing as t``,
-  ``t.Callable`` is ``typing.Callable``. Names bound again after the import are
-  not followed.
+  ``t.Callable`` is ``typing.Callable``. It follows the scopes of Python: an
+  import in a function counts in that function only, and a parameter, an
+  assignment or the target of a comprehension hides an import of the module.
+  In one scope, a name assigned again after its import is not followed.
 - ``tukuroi.core.imports.add_import`` gives the name to use for a module or a
   name of it, and the edit that imports it when the file does not yet.
 

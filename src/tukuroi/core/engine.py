@@ -58,7 +58,7 @@ class LintResult:
 
 def lint(source: Source, rules: Sequence[type[Rule]]) -> LintResult:
     """Run ``rules`` on ``source``."""
-    imports = ImportTable.from_tree(source.tree)
+    imports = ImportTable.from_source(source)
     instances = [rule(source, imports) for rule in rules]
     calls: dict[type[ast.AST], list[object]] = {}
     for node in _walk(source.tree):
