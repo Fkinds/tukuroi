@@ -15,7 +15,6 @@ from click.testing import CliRunner
 
 from .. import config
 from ..cli import main
-from ..core import loader
 from ..ftypes import (
     Config,
     Options,
@@ -23,7 +22,7 @@ from ..ftypes import (
     RawConfig,
 )
 from ..util import chdir
-from .core_loader import files
+from .core_loader import files, new_process
 
 
 class ConfigTest(TestCase):
@@ -745,9 +744,7 @@ class ConfigTest(TestCase):
         for label, name, text, errors in cases:
             with self.subTest(label), files(tree) as root, chdir(root):
                 (root / name).write_text(text)
-                try:
+                with new_process():
                     results = config.validate_config(root / name)
-                finally:
-                    loader._ROOT_IMPORTED.clear()
                 shown = [r.replace(str(root), "ROOT") for r in results]
                 self.assertEqual(shown, errors)

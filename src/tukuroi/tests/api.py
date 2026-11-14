@@ -35,8 +35,6 @@ from ..api import (
     print_result,
 )
 from ..config import ConfigError, RulesOptionError, generate_config
-from ..core import loader
-from ..core.loader import load as load_core_rules
 from ..core.text import Position, Range
 from ..ftypes import (
     STDIN,
@@ -53,7 +51,7 @@ from ..util import capture, chdir
 from .characterization_cli import invoke, toml_error
 from .characterization_custom_rules import run as run_cli
 from .characterization_suppression import MESSAGES
-from .core_loader import HEAD, files
+from .core_loader import HEAD, files, new_process
 
 UI = "UseAssertIn"
 SI = "NoStaticIfCondition"
@@ -183,7 +181,7 @@ class FixitBytesTest(TestCase):
     maxDiff = None
 
     def setUp(self) -> None:
-        loader._WARNED.clear()
+        self.enterContext(new_process())
 
     def test_violations(self) -> None:
         root = Path.cwd() / "repo"
@@ -487,7 +485,6 @@ class CommandTest(TestCase):
         warning = "Skipped rules '.rules': custom rules are turned off"
         for options, shown in (([], True), (["--quiet"], False)):
             with self.subTest(options=options):
-                loader._WARNED.clear()  # Each warning is given once in a process.
                 result = invoke(files_, [*options, "--no-custom-rules", "lint", "t.py"])
                 self.assertEqual(warning in result.stderr, shown)
         files_["pyproject.toml"] = "[tool.tukuroi]\nroot = true\n"
@@ -686,7 +683,8 @@ class FixitPathsTest(TestCase):
         with (
             files(tree) as root,
             chdir(root),
-            patch("tukuroi.config.load_core_rules", wraps=load_core_rules) as loaded,
+            new_process() as rules,
+            patch.object(rules, "load", wraps=rules.load) as loaded,
         ):
             list(fixit_paths([Path("a"), Path("b")], parallel=False))
         # Before any file, and not again for each file in the process.

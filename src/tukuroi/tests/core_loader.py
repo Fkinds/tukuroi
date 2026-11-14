@@ -23,11 +23,11 @@ from unittest.mock import patch
 from ..core import loader
 from ..core.loader import (
     CollectionError,
+    OnceLog,
+    RuleLoader,
     RuleName,
-    collect_rules,
     import_rules,
     is_builtin,
-    load,
 )
 
 HEAD = "import ast\n\nfrom tukuroi.core.rule import Rule\n"
@@ -60,6 +60,22 @@ def files(tree: Mapping[str, str], on_path: bool = False) -> Generator[Path]:
             sys.path[:] = path
             for name in set(sys.modules) - modules:
                 del sys.modules[name]
+
+
+@contextmanager
+def new_process() -> Generator[RuleLoader]:
+    """
+    As in a new process (#157): the loader of the process is a new one, with
+    new warnings. The modules that the old one imported must be out of
+    ``sys.modules``, as :func:`files` puts them back.
+    """
+    warnings = OnceLog()
+    new = RuleLoader(warnings)
+    with (
+        patch.object(loader, "WARNINGS", warnings),
+        patch.object(loader, "LOADER", new),
+    ):
+        yield new
 
 
 def names(rules: tuple[type, ...]) -> list[str]:
@@ -229,20 +245,17 @@ class LoadTest(TestCase):
     """``load``: the rules of one name, or why they cannot be loaded (#40)."""
 
     def setUp(self) -> None:
-        loader._ROOT_IMPORTED.clear()
-
-    def tearDown(self) -> None:
-        self.setUp()
+        self.loader = RuleLoader()
 
     def error(self, root: Path, text: str, root_import: Path | None = None) -> str:
         """The message of the CollectionError that loading ``text`` raises."""
         with self.assertRaises(CollectionError) as caught:
-            load(RuleName.parse(text, root), root_import)
+            self.loader.load(RuleName.parse(text, root), root_import)
         return str(caught.exception).replace(str(root), "ROOT")
 
     def test_rules(self) -> None:
         with files({"rules.py": BOTH}) as root:
-            rules = load(RuleName.parse(".rules", root))
+            rules = self.loader.load(RuleName.parse(".rules", root))
         self.assertEqual([r.name() for r in rules], ["NoBadName", "NoUglyName"])
 
     def test_errors(self) -> None:
@@ -271,7 +284,7 @@ class LoadTest(TestCase):
     def test_enable_root_import(self) -> None:
         with files(KETTLE) as root:
             path = list(sys.path)
-            rules = load(RuleName.parse("kettle.rules", root), root / "src")
+            rules = self.loader.load(RuleName.parse("kettle.rules", root), root / "src")
             self.assertEqual([r.name() for r in rules], ["NoBadName"])
             self.assertEqual(sys.path, path)
             other = "could not import rule(s) kettle.rules: imported from another root, ROOT/src"
@@ -282,11 +295,7 @@ class CollectRulesTest(TestCase):
     maxDiff = None
 
     def setUp(self) -> None:
-        loader._WARNED.clear()
-        loader._ROOT_IMPORTED.clear()
-
-    def tearDown(self) -> None:
-        self.setUp()
+        self.loader = RuleLoader()
 
     def collect(
         self,
@@ -299,7 +308,7 @@ class CollectRulesTest(TestCase):
         parse = lambda text: RuleName.parse(text, root)
         with self.assertLogs("tukuroi.config", "WARNING") as logs:
             logging.getLogger("tukuroi.config").warning("start")
-            rules = collect_rules(
+            rules = self.loader.collect(
                 [parse(t) for t in enable],
                 [parse(t) for t in disable],
                 **options,  # type: ignore[arg-type]
@@ -317,7 +326,7 @@ class CollectRulesTest(TestCase):
         """The message of the CollectionError that collecting the rules raises."""
         parse = lambda text: RuleName.parse(text, root)
         with self.assertRaises(CollectionError) as caught:
-            collect_rules(
+            self.loader.collect(
                 [parse(t) for t in enable],
                 [parse(t) for t in disable],
                 **options,  # type: ignore[arg-type]
@@ -416,7 +425,9 @@ class CollectRulesTest(TestCase):
             self.assertEqual(result, ([], warnings))
             self.assertNotIn("kettle", sys.modules)
             with patch.object(loader, "_on_path", wraps=loader._on_path) as on_path:
-                collect_rules([], [], root_import=root / "src", custom_rules=False)
+                self.loader.collect(
+                    [], [], root_import=root / "src", custom_rules=False
+                )
             on_path.assert_called_once_with(None)
 
     def test_builtin(self) -> None:
@@ -463,6 +474,5 @@ class CollectRulesTest(TestCase):
                 self.collect(root / "a", ["kettle.rules"], root_import=a),
                 (["NoBadName"], []),
             )
-            self.setUp()
-            loader._ROOT_IMPORTED["kettle"] = a
+            self.loader = RuleLoader(root_imported={"kettle": a})
             self.assertEqual(self.error(root / "b", ["kettle.rules"]), other)

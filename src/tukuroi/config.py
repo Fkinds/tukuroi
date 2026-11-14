@@ -13,9 +13,8 @@ from typing import (
     Any,
 )
 
-from .core.loader import CollectionError, RuleName, warn_once
-from .core.loader import collect_rules as collect_core_rules
-from .core.loader import load as load_core_rules
+from .core import loader
+from .core.loader import CollectionError, RuleName
 from .core.rule import Rule
 from .ftypes import (
     Config,
@@ -99,7 +98,8 @@ def load_rules(config: Config) -> tuple[type[Rule], ...]:
     :func:`check_rules` for that.
     """
     try:
-        return collect_core_rules(
+        # The loader of the process, as it is when called: a test sets another.
+        return loader.LOADER.collect(
             [rule_name(rule) for rule in config.enable],
             [rule_name(rule) for rule in config.disable],
             root_import=root_import_of(config),
@@ -160,11 +160,11 @@ def load_error(rule: QualifiedRule, config: Config) -> str | None:
     if not config.custom_rules:
         if not rule.builtin:
             return None
-        root_import = None  # As collect_rules: for custom rules only.
+        root_import = None  # As RuleLoader.collect: for custom rules only.
     else:
         root_import = root_import_of(config)
     try:
-        load_core_rules(rule_name(rule), root_import)
+        loader.LOADER.load(rule_name(rule), root_import)
     except CollectionError as error:
         return str(error)
     return None
@@ -479,7 +479,8 @@ def plugin_errors(
             if point is None or is_builtin(point):
                 continue
             if not custom_rules:
-                warn_once(f"Skipped {kind} {name!r}: custom rules are turned off")
+                message = f"Skipped {kind} {name!r}: custom rules are turned off"
+                loader.WARNINGS.warn(message)
                 continue
             try:
                 if group == FORMATTERS:

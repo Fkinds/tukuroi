@@ -13,10 +13,9 @@ from pathlib import Path
 from unittest import TestCase
 
 from ..config import ConfigError, load_rules, rule_name
-from ..core import loader
 from ..core.loader import RuleName
 from ..ftypes import Config, QualifiedRule
-from .core_loader import BOTH, HEAD, KETTLE, files, rule
+from .core_loader import BOTH, HEAD, KETTLE, files, new_process, rule
 
 CORE = [
     "NoAssertTrueForComparisons",
@@ -38,11 +37,7 @@ class LoadRulesTest(TestCase):
     maxDiff = None
 
     def setUp(self) -> None:
-        loader._WARNED.clear()
-        loader._ROOT_IMPORTED.clear()
-
-    def tearDown(self) -> None:
-        self.setUp()
+        self.enterContext(new_process())
 
     def load(self, config: Config) -> tuple[list[str], list[str]]:
         """The names of the rules loaded, and the warnings."""
