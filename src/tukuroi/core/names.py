@@ -74,7 +74,7 @@ class ImportTable:
         found: defaultdict[str, set[str]] = defaultdict(set)
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
-                for name, qualified in _bound(node):
+                for name, qualified in bound(node):
                     found[name].add(qualified)
         bindings = {name: frozenset(names) for name, names in found.items()}
         return cls(MappingProxyType(bindings))
@@ -97,7 +97,7 @@ class ImportTable:
         return _EMPTY
 
 
-def _bound(node: ast.Import | ast.ImportFrom) -> Iterator[tuple[str, str]]:
+def bound(node: ast.Import | ast.ImportFrom) -> Iterator[tuple[str, str]]:
     """The names that ``node`` binds, with their qualified names."""
     if isinstance(node, ast.Import):
         for alias in node.names:
@@ -146,7 +146,7 @@ class _Scopes:
             case ast.Name():
                 self.uses.append((node, table, hidden))
             case ast.Import() | ast.ImportFrom():
-                for name, qualified in _bound(node):
+                for name, qualified in bound(node):
                     self.imports[id(table)][name].add(qualified)
             case ast.FunctionDef() | ast.AsyncFunctionDef():
                 self._function(node, table, hidden)

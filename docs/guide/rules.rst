@@ -46,9 +46,10 @@ it accepts and reports, and ``visit_<node>`` methods named after the classes of
 - tukuroi walks the tree once, parents before children, and calls the methods of
   every rule for each node. ``visit_stmt`` or ``visit_expr`` takes every node of
   that kind; the most specific method runs first.
-- ``self.report(node, message=None, *, replacement=None, edits=(), span=None)``
-  reports ``node``, at the start of its range, or of ``span`` when it is given.
-  Without ``replacement`` or ``edits``, the report has no fix.
+- ``self.report(node, message=None, *, replacement=None, edits=(), span=None,
+  unused_imports=())`` reports ``node``, at the start of its range, or of
+  ``span`` when it is given. Without ``replacement`` or ``edits``, the report
+  has no fix.
 
 Where a Report Is
 ^^^^^^^^^^^^^^^^^
@@ -137,6 +138,13 @@ that quotes, comments and spacing stay as they are:
   In one scope, a name assigned again after its import is not followed.
 - ``tukuroi.core.imports.add_import`` gives the name to use for a module or a
   name of it, and the edit that imports it when the file does not yet.
+- A fix that may leave an import unused names it in ``unused_imports``, by its
+  qualified name, such as ``"typing.NamedTuple"``. After all the fixes,
+  tukuroi takes out its imports that no code reads any more: ``from typing
+  import NamedTuple``, or ``import typing`` that it was read through. A name
+  that is still read, as code or as a word in a string (``__all__``, an
+  annotation in quotes), keeps its import. ``tukuroi.core.imports.remove_import``
+  gives these edits, for a fix that needs them itself.
 
 tukuroi applies the fixes of a file in the order of their start, and skips one
 that overlaps a fix applied before it. Then it lints the result again, until no

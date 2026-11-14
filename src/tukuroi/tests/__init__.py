@@ -28,7 +28,7 @@ from .core_directives import DirectiveCoversTest, ParseDirectivesTest
 from .core_edits import ApplyFixesTest, CheckFixTest, DropsCommentsTest
 from .core_engine import DispatchTest, ReportsTest
 from .core_fix import FixTest, RuffFormatTest
-from .core_imports import AddImportTest
+from .core_imports import AddImportTest, RemoveImportTest
 from .core_loader import (
     CollectRulesTest,
     ImportRulesTest,

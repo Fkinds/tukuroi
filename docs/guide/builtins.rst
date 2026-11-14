@@ -109,7 +109,6 @@ Built-in Rules
                 pass
 
             # suggested fix
-            from typing import NamedTuple
             from dataclasses import dataclass
 
             @dataclass(frozen=True)
@@ -124,7 +123,6 @@ Built-in Rules
                 pass
 
             # suggested fix
-            from typing import NamedTuple as NT
             from dataclasses import dataclass
 
             @dataclass(frozen=True)

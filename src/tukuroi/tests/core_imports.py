@@ -8,12 +8,14 @@ Tests of ``tukuroi.core.imports``. The cases are decision tables (ISO/IEC/IEEE
 29119-4) of how a module is already imported (not at all, the same name, the
 module, an alias, another thing with the name), and of the shapes of a module
 where the import goes (empty, comments, a docstring, imports, code, line ends).
+The cases of remove_import (#141) partition the imports by what binds the name,
+where else it is read, and where the statement is.
 """
 
 from unittest import TestCase
 
 from ..core.edits import apply_fixes
-from ..core.imports import add_import
+from ..core.imports import add_import, remove_import
 from ..core.names import ImportTable
 from ..core.source import Source
 
@@ -97,3 +99,86 @@ class AddImportTest(TestCase):
         for label, text, module, use, result in cases:
             with self.subTest(label):
                 self.assertEqual(added(text, module), (use, result))
+
+
+NT = "typing.NamedTuple"
+
+
+def removed(text: str, *names: str) -> str:
+    """``text`` without the imports of ``names`` that no code reads."""
+    edits = remove_import(Source.from_text(text), *names)
+    return apply_fixes(text, [edits] if edits else []).text
+
+
+class RemoveImportTest(TestCase):
+    def test_removed(self) -> None:
+        cases = (
+            # (label, text, the text without the import)
+            ("from", "from typing import NamedTuple\nx = 1\n", "x = 1\n"),
+            ("from, as", "from typing import NamedTuple as NT\nx = 1\n", "x = 1\n"),
+            ("the module", "import typing\nx = 1\n", "x = 1\n"),
+            ("the module, as", "import typing as t\nx = 1\n", "x = 1\n"),
+            ("in a function", "def f():\n    from typing import NamedTuple\n    return 1\n", "def f():\n    return 1\n"),
+            ("the last line, without a line end", "x = 1\nfrom typing import NamedTuple", "x = 1\n"),
+            ("over lines", "from typing import (\n    NamedTuple,\n)\nx = 1\n", "x = 1\n"),
+        )  # fmt: skip
+        for label, text, expected in cases:
+            with self.subTest(label):
+                self.assertEqual(removed(text, NT), expected)
+
+    def test_a_dotted_module(self) -> None:
+        self.assertEqual(removed("import a.b.c\nx = 1\n", "a.b.c.X"), "x = 1\n")
+
+    def test_names_out_of_their_statement(self) -> None:
+        cases = (
+            # (label, text, the text without NamedTuple)
+            ("first", "from typing import NamedTuple, Protocol\n", "from typing import Protocol\n"),
+            ("last", "from typing import Protocol, NamedTuple\n", "from typing import Protocol\n"),
+            ("in the middle", "from typing import Any, NamedTuple, Protocol\n", "from typing import Any, Protocol\n"),
+            (
+                "over lines, with a trailing comma",
+                "from typing import (\n    Protocol,\n    NamedTuple,\n)\n",
+                "from typing import (\n    Protocol,\n)\n",
+            ),
+            ("two names in a run", "from typing import Any, NamedTuple, NamedTuple as N, Protocol\n", "from typing import Any, Protocol\n"),
+            ("the module, with another one", "import os, typing\nos.sep\n", "import os\nos.sep\n"),
+        )  # fmt: skip
+        for label, text, expected in cases:
+            with self.subTest(label):
+                self.assertEqual(removed(text, NT), expected)
+
+    def test_kept(self) -> None:
+        cases = (
+            # (label, text)
+            ("read as a name", "from typing import NamedTuple\nx = NamedTuple\n"),
+            ("read as an attribute of the module", "import typing\nx = typing.Any\n"),
+            (
+                "read in an annotation in quotes",
+                "from typing import NamedTuple\nx: 'NamedTuple'\n",
+            ),
+            ("in __all__", "from typing import NamedTuple\n__all__ = ['NamedTuple']\n"),
+            ("another module", "from typing_extensions import NamedTuple\nx = 1\n"),
+            ("a star import", "from typing import *\nx = 1\n"),
+            (
+                "a line with another statement",
+                "import os; from typing import NamedTuple\nos.sep\n",
+            ),
+            (
+                "the only statement of a block",
+                "if TYPE_CHECKING:\n    from typing import NamedTuple\n",
+            ),
+            (
+                "a comment at the end of the line",
+                "from typing import NamedTuple  # c\nx = 1\n",
+            ),
+            (
+                "a comment between the names",
+                "from typing import (\n    NamedTuple,  # c\n    Protocol,\n)\nx = Protocol\n",
+            ),
+        )
+        for label, text in cases:
+            with self.subTest(label):
+                self.assertEqual(removed(text, NT), text)
+
+    def test_no_names(self) -> None:
+        self.assertEqual(remove_import(Source.from_text("import typing\n")), ())

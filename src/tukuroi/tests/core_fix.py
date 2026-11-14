@@ -69,6 +69,16 @@ class Breaks(Rule):
             self.report(node, replacement="(")
 
 
+class NoAny(Rule):
+    """``Any`` becomes ``object``: its import may be left unused (#141)."""
+
+    MESSAGE = "Use object."
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if "typing.Any" in self.imports.qualified_names(node):
+            self.report(node, replacement="object", unused_imports=["typing.Any"])
+
+
 class Grows(Rule):
     """Always adds a line: its fixes never end."""
 
@@ -208,6 +218,34 @@ class FixTest(TestCase):
         )
         self.assertEqual((result.text, result.applied), ("one = good\n", 1))
         self.assertEqual([r.rule for r in result.broken], ["Breaks"])
+
+    def test_unused_imports(self) -> None:
+        # After the fixes, the imports that they marked and that no code reads
+        # any more go out (#141).
+        cases = (
+            # (label, text, text after the fixes)
+            ("unused", "from typing import Any\nx: Any\n", "x: object\n"),
+            ("in two fixes", "from typing import Any\nx: Any\ny: Any\n", "x: object\ny: object\n"),
+            ("still read", "from typing import Any\nx: Any\n__all__ = ['Any']\n", "from typing import Any\nx: object\n__all__ = ['Any']\n"),
+        )  # fmt: skip
+        for label, text, expected in cases:
+            with self.subTest(label):
+                self.assertEqual(fix(Source.from_text(text), [NoAny]).text, expected)
+
+    def test_unused_imports_of_fixes_not_chosen(self) -> None:
+        text = "from typing import Any\nx: Any\ny: Any\n"
+        source = Source.from_text(text)
+        first = fix(source, [NoAny]).reports[0]
+        result = fix(source, [NoAny], choose=lambda r: r == first)
+        # The other fix is not taken: Any is still read.
+        self.assertEqual(result.text, "from typing import Any\nx: object\ny: Any\n")
+
+    def test_unused_imports_that_would_break_the_code(self) -> None:
+        # The imports stay if the text without them would not parse.
+        broken = (Edit(Span(0, 4), "("),)
+        with patch("tukuroi.core.engine.remove_import", return_value=broken):
+            result = fix(Source.from_text("from typing import Any\nx: Any\n"), [NoAny])
+        self.assertEqual(result.text, "from typing import Any\nx: object\n")
 
     def test_reports_of_the_first_round(self) -> None:
         result = fix(Source.from_text("f(f(1))\n"), [CallFToG])
