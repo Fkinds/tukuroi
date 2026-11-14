@@ -462,7 +462,7 @@ def debug(ctx: click.Context, paths: Sequence[Path]) -> None:
         from rich import print as pprint
     except ImportError:
         # Not pprint.pprint, which takes the second argument as the stream.
-        pprint = print  # type: ignore[assignment]
+        pprint = print
 
     pprint(options)
 
