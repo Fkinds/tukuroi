@@ -86,14 +86,11 @@ def outcomes(rule: type[Rule]) -> dict[str, str]:
     (case,) = generate_test_cases([rule])
     result = unittest.TestResult()
     unittest.defaultTestLoader.loadTestsFromTestCase(case).run(result)
-    found = {
-        test._testMethodName: "ok"
-        for test in unittest.defaultTestLoader.loadTestsFromTestCase(case)
-    }  # type: ignore[attr-defined]
+    found = dict.fromkeys(unittest.defaultTestLoader.getTestCaseNames(case), "ok")
     for test, _ in result.failures:
-        found[test._testMethodName] = "FAIL"  # type: ignore[attr-defined]
+        found[test._testMethodName] = "FAIL"
     for test, _ in result.errors:
-        found[test._testMethodName] = "ERROR"  # type: ignore[attr-defined]
+        found[test._testMethodName] = "ERROR"
     return found
 
 
@@ -140,10 +137,10 @@ class GenerateTestCasesTest(TestCase):
         module: dict[str, object] = {"__package__": "pkg.tests"}
         add_rule_tests_to_module(module, [NoUglyNameRule])
         case = module["NoUglyNameRule"]
-        self.assertEqual(case.__module__, "pkg.tests")  # type: ignore[attr-defined]
+        self.assertEqual(case.__module__, "pkg.tests")
         no_package: dict[str, object] = {}
         add_rule_tests_to_module(no_package, [NoUglyNameRule])
-        self.assertEqual(no_package["NoUglyNameRule"].__module__, "tukuroi.testing")  # type: ignore[attr-defined]
+        self.assertEqual(no_package["NoUglyNameRule"].__module__, "tukuroi.testing")
 
     def test_public_module(self) -> None:
         # The test cases say they are in tukuroi.testing: it has the same names.

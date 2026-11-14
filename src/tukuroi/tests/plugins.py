@@ -118,7 +118,7 @@ def points(
     """
 
     def found_in(*, group: str) -> list[EntryPoint | Point]:
-        real = list(entry_points(group=group))
+        real: list[EntryPoint | Point] = list(entry_points(group=group))
         return [*(real if builtin else []), *found] if group == wanted else real
 
     wanted = group

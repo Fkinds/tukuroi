@@ -68,11 +68,17 @@ class RuleCasesTest(TestCase):
 
 class RuleNameTest(TestCase):
     def test_name(self) -> None:
+        class RuleRule(Rule):
+            pass
+
+        class Ruler(Rule):
+            pass
+
         cases = (
             (NoBadName, "NoBadName"),
             (NoUglyNameRule, "NoUglyName"),
-            (type("RuleRule", (Rule,), {}), "Rule"),
-            (type("Ruler", (Rule,), {}), "Ruler"),
+            (RuleRule, "Rule"),
+            (Ruler, "Ruler"),
         )
         for rule, name in cases:
             with self.subTest(rule.__name__):
