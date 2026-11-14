@@ -16,6 +16,7 @@ import codecs
 import io
 import re
 import tokenize
+from bisect import bisect_left
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
@@ -42,6 +43,23 @@ class Comment:
     text: str
 
 
+@dataclass(frozen=True, slots=True)
+class Token:
+    """
+    A token of :mod:`tokenize`: its type (such as ``tokenize.NAME``), its
+    string, its span, and the positions of the start and the end of the span
+    (#144). The end of a token past the end of its line, as tokenize gives
+    the line end tokens, is the start of the next line: a span is always in
+    the text.
+    """
+
+    type: int
+    string: str
+    span: Span
+    start: Position
+    end: Position
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class Source:
     """
@@ -59,7 +77,7 @@ class Source:
     bom: bool
     tree: ast.Module
     lines: LineIndex
-    tokens: tuple[tokenize.TokenInfo, ...]
+    tokens: tuple[Token, ...]
     comments: tuple[Comment, ...]
 
     @classmethod
@@ -106,16 +124,25 @@ class Source:
         readline = io.StringIO(text, newline="").readline
         # The text parses, so it tokenizes: since Python 3.12, tokenize has the
         # tokenizer of the parser (#116).
-        tokens = tuple(tokenize.generate_tokens(readline))
+        tokens = tuple(
+            _token(lines, len(text), t) for t in tokenize.generate_tokens(readline)
+        )
         comments = tuple(
-            Comment(
-                Span(lines.offset(Position(*t.start)), lines.offset(Position(*t.end))),
-                t.string,
-            )
-            for t in tokens
-            if t.type == tokenize.COMMENT
+            Comment(t.span, t.string) for t in tokens if t.type == tokenize.COMMENT
         )
         return cls(path, text, encoding, bom, tree, lines, tokens, comments)
+
+    def tokens_in(self, span: Span) -> tuple[Token, ...]:
+        """The tokens whose spans are in ``span``, in their order (#144)."""
+        starts = [t.span.start for t in self.tokens]
+        first = bisect_left(starts, span.start)
+        found: list[Token] = []
+        for token in self.tokens[first:]:
+            if token.span.start > span.end:
+                break
+            if token.span.end <= span.end:
+                found.append(token)
+        return tuple(found)
 
     def span(self, node: ast.AST) -> Span:
         """
@@ -141,3 +168,32 @@ class Source:
             raise ValueError("no encoding: the source was made from text")
         data = text.encode(self.encoding)
         return codecs.BOM_UTF8 + data if self.bom else data
+
+
+def _token(lines: LineIndex, length: int, token: tokenize.TokenInfo) -> Token:
+    """``token`` with its span and positions in the text."""
+    start = _token_offset(lines, length, *token.start)
+    end = _token_offset(lines, length, *token.end)
+    return Token(
+        token.type,
+        token.string,
+        Span(start, end),
+        lines.position(start),
+        lines.position(end),
+    )
+
+
+def _token_offset(lines: LineIndex, length: int, line: int, column: int) -> int:
+    """
+    The offset of a position of tokenize. A position past the end of its line,
+    the end of a line end token, is the start of the next line; past the last
+    line (``ENDMARKER``, or ``DEDENT`` at the end), it is the end of the text.
+    """
+    try:
+        return lines.offset(Position(line, column))
+    except ValueError:
+        pass
+    try:
+        return lines.offset(Position(line + 1, 0))
+    except ValueError:
+        return length

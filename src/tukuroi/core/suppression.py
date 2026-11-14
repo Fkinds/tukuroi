@@ -42,7 +42,7 @@ import tokenize
 from collections.abc import Iterator, Sequence
 
 from .directives import Directive, parse_directives
-from .source import Comment, Source
+from .source import Comment, Source, Token
 from .text import Position, Span
 
 _NOT_CODE = {
@@ -91,21 +91,21 @@ class NodeComments:
         # The offset of each NEWLINE token, and the comment right before it.
         self._newlines: list[int] = []
         self._end_comments: list[Comment | None] = []
-        previous: tokenize.TokenInfo | None = None
+        previous: Token | None = None
         for token in source.tokens:
             if token.type not in _NOT_CODE:
-                self._code_lines.update(range(token.start[0], token.end[0] + 1))
+                self._code_lines.update(range(token.start.line, token.end.line + 1))
             if token.type == tokenize.NEWLINE:
-                self._newlines.append(lines.offset(Position(*token.start)))
+                self._newlines.append(token.span.start)
                 comment = None
                 if previous is not None and previous.type == tokenize.COMMENT:
-                    comment = by_offset[lines.offset(Position(*previous.start))]
+                    comment = by_offset[previous.span.start]
                 self._end_comments.append(comment)
             previous = token
         # The tokens other than line ends and indents, with their offsets, and
         # the index of the matching bracket of each bracket.
         self._tokens = [t for t in source.tokens if t.type not in _LAYOUT]
-        self._starts = [lines.offset(Position(*t.start)) for t in self._tokens]
+        self._starts = [t.span.start for t in self._tokens]
         self._match: dict[int, int] = {}
         opened: list[int] = []
         for index, token in enumerate(self._tokens):
@@ -215,7 +215,7 @@ class NodeComments:
             comment = tokens[after + 1]
             if (
                 comment.type == tokenize.COMMENT
-                and comment.start[0] == tokens[after].end[0]
+                and comment.start.line == tokens[after].end.line
             ):
                 yield self._comment(after + 1)
 
@@ -256,8 +256,8 @@ class NodeComments:
             ),
             closing,
         )
-        first_line = tokens[first].start[0]
-        for line in range(tokens[opening].start[0] + 1, first_line):
+        first_line = tokens[first].start.line
+        for line in range(tokens[opening].start.line + 1, first_line):
             if line in self._line_comments:
                 yield self._line_comments[line]
         last = max(
@@ -268,7 +268,7 @@ class NodeComments:
         if (
             last > opening
             and comment.type == tokenize.COMMENT
-            and comment.start[0] == tokens[last].end[0]
+            and comment.start.line == tokens[last].end.line
         ):
             yield self._comment(last + 1)
 
