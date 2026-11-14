@@ -1,28 +1,19 @@
 name: Audit
 # The known vulnerabilities of the dependencies and of the actions, each day:
 # they come out with no change to this repository (#25). A run that finds one
-# fails, and GitHub notifies whoever last changed the cron line below.
+# fails, and GitHub notifies whoever last changed the cron line below. Each
+# change is checked by the audit job of CI (#173).
 on:
   schedule:
     # 09:17 in Asia/Tokyo, off the hour, when GitHub has fewer runs to start.
     - cron: "17 0 * * *"
-  # A pull request that changes the dependencies is checked before it is
-  # merged, and one that changes this workflow runs it.
-  pull_request:
-    paths:
-      - uv.lock
-      - build-constraints.txt
-      - pyproject.toml
-      - .github/workflows/audit.yml
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# A new push to a pull request cancels the run of the one before.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}
 
 env:
   UV_LOCKED: "1"
@@ -60,9 +51,8 @@ jobs:
 
   workflows:
     # The actions are pinned to commit SHAs, for which GitHub sends no alerts:
-    # zizmor checks them against the advisories of GitHub. On pull requests,
-    # the lint job of CI runs it.
-    if: github.event_name != 'pull_request'
+    # zizmor checks them against the advisories of GitHub, as the lint job of
+    # CI does on each change.
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:

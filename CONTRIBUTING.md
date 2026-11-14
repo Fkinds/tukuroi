@@ -117,8 +117,8 @@ Dashboard issue lists what is pending. The versions of Python
 
 Renovate merges the updates that are not major of the development tools (the
 groups of `pyproject.toml`), of the actions, of `UV_VERSION`, and of `uv.lock`,
-once every check of the pull request passes, Audit and CodeQL too, and it is up
-to date with `main`. A maintainer merges the others: the dependencies of the
+once every check of the pull request passes, CodeQL too, and it is up to date
+with `main`. A maintainer merges the others: the dependencies of the
 package, which reach its users, the major updates, and `build-constraints.txt`.
 
 To check what `uv.lock` pins, with every extra and group, against the known
@@ -128,10 +128,13 @@ vulnerabilities of [osv.dev][osv]:
 $ make audit
 ```
 
-`.github/workflows/audit.yml` runs it each day, and on the pull requests that
-change the dependencies. Each day it runs zizmor with GitHub too, for the
-actions: they are pinned to commit SHAs, for which GitHub sends no alerts. A
-failed run is the alert. A vulnerability that tukuroi cannot fix yet goes in
+The `audit` job of CI runs it on each pull request and each push to `main`, and
+`required` waits for it: a pull request with a known vulnerability is not
+merged. When osv.dev cannot be reached, the job fails; run it again.
+`.github/workflows/audit.yml` runs it each day too, for the vulnerabilities
+found with no change here, and zizmor with GitHub, for the actions: they are
+pinned to commit SHAs, for which GitHub sends no alerts. A failed run is the
+alert. A vulnerability that tukuroi cannot fix yet goes in
 `[tool.uv.audit]` of `pyproject.toml`, with its reason and its issue in a
 comment: in `ignore-until-fixed` while no release fixes it, in `ignore` when it
 does not affect tukuroi. Renovate opens the fixes of what osv.dev has for
