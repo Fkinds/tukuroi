@@ -44,6 +44,10 @@ vulnerability_alerts: true
 automated_security_fixes: false
 private_vulnerability_reporting: true
 
+# PUT /repos/{name}/immutable-releases: a published release keeps its tag and
+# its assets, and GitHub attests it.
+immutable_releases: true
+
 actions:
   # PUT /repos/{name}/actions/permissions: the actions of GitHub, and those
   # that selected_actions names, each pinned to a full commit SHA (#16).
@@ -57,6 +61,8 @@ actions:
     verified_allowed: false
     patterns_allowed:
       - astral-sh/setup-uv@*
+      # The upload to PyPI and TestPyPI, with Trusted Publishing (release.yml).
+      - pypa/gh-action-pypi-publish@*
   # PUT /repos/{name}/actions/permissions/workflow
   workflow:
     default_workflow_permissions: read
@@ -78,6 +84,53 @@ code_scanning_default_setup:
     - python
   query_suite: extended
   threat_model: remote_and_local
+
+# POST /repos/{name}/pages, or PUT once it is there: the documentation, which
+# pages.yml builds and deploys from GitHub Actions.
+pages:
+  build_type: workflow
+
+# The environments, exactly, by name: --apply deletes the others, and sets the
+# branches and tags that may deploy to each (policies). PUT
+# /repos/{name}/environments/{environment}, with its deployment-branch-policies.
+environments:
+  # pages.yml deploys the documentation: from a release, or by hand from main.
+  - name: github-pages
+    wait_timer: 0
+    prevent_self_review: false
+    reviewers: []
+    deployment_branch_policy:
+      protected_branches: false
+      custom_branch_policies: true
+    policies:
+      - name: main
+        type: branch
+      - name: "v*"
+        type: tag
+  # release.yml uploads to PyPI once the maintainer approves it, after the
+  # package from TestPyPI passed its checks. The id is that of the account.
+  - name: pypi
+    wait_timer: 0
+    prevent_self_review: false
+    reviewers:
+      - type: User
+        id: 126588856 # Fkinds
+    deployment_branch_policy:
+      protected_branches: false
+      custom_branch_policies: true
+    policies:
+      - name: "v*"
+        type: tag
+  - name: testpypi
+    wait_timer: 0
+    prevent_self_review: false
+    reviewers: []
+    deployment_branch_policy:
+      protected_branches: false
+      custom_branch_policies: true
+    policies:
+      - name: "v*"
+        type: tag
 
 # The rulesets, exactly, by name: --apply creates and updates them with
 # POST /repos/{name}/rulesets and PUT /repos/{name}/rulesets/{id}, and deletes
@@ -119,6 +172,19 @@ rulesets:
               integration_id: 15368
             - context: commits
               integration_id: 15368
+  # The tags of the releases: once pushed, nobody moves or deletes one.
+  - name: tags
+    target: tag
+    enforcement: active
+    bypass_actors: []
+    conditions:
+      ref_name:
+        include:
+          - "refs/tags/v*"
+        exclude: []
+    rules:
+      - type: deletion
+      - type: update
 
 # The labels, exactly: --apply deletes the others.
 labels:
