@@ -689,7 +689,7 @@ class PublicNamesTest(TestCase):
     def test_rule_api(self) -> None:
         # The names to write a rule with come from the new engine (#21).
         import tukuroi
-        from tukuroi.core import edits, rule, text
+        from tukuroi.core import edits, names, rule, source, text
 
         found = (
             tukuroi.Rule,
@@ -697,8 +697,18 @@ class PublicNamesTest(TestCase):
             tukuroi.Invalid,
             tukuroi.Edit,
             tukuroi.Position,
+            # The types of Rule.__init__, for a rule that keeps a state (#145).
+            tukuroi.Source,
+            tukuroi.ImportTable,
         )
-        self.assertEqual(
-            found, (rule.Rule, rule.Valid, rule.Invalid, edits.Edit, text.Position)
+        expected = (
+            rule.Rule,
+            rule.Valid,
+            rule.Invalid,
+            edits.Edit,
+            text.Position,
+            source.Source,
+            names.ImportTable,
         )
+        self.assertEqual(found, expected)
         self.assertTrue(all(hasattr(tukuroi, name) for name in tukuroi.__all__))
