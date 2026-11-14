@@ -13,7 +13,7 @@ from unittest import TestCase
 
 from click.testing import CliRunner
 
-from .. import config
+from .. import config, config_values
 from ..cli import main
 from ..ftypes import (
     Config,
@@ -569,21 +569,21 @@ class ConfigTest(TestCase):
         tables = "must be an array of tables ([[tool.tukuroi.overrides]]), got"
         cases = (
             (
-                config.outside_errors({"a": 1, "tool": {"black": {}, "tukuroi": {}}}),
+                config_values.outside_errors({"a": 1, "tool": {"black": {}, "tukuroi": {}}}),
                 ["a: must be under [tool.tukuroi]", "tool.black: must be under [tool.tukuroi]"],
             ),
             (
-                config.rule_errors("enable", ["a b", "c d"]),
+                config_values.rule_errors("enable", ["a b", "c d"]),
                 ["enable: invalid rule name 'a b'", "enable: invalid rule name 'c d'"],
             ),
             # One message, and no more for the rest of the value.
-            (config.rule_errors("enable", 1), ["enable: must be an array of strings, got an integer"]),
-            (config.rule_errors("enable", [1, "a b"]), ["enable: must be an array of strings, got an array with an integer"]),
-            (config.override_errors(1), [f"overrides: {tables} an integer"]),
-            (config.override_errors([1, {}]), [f"overrides: {tables} an array with an integer"]),
-            (config.override_errors([{}, 1]), ["overrides: a table has no path"]),
-            (config.override_errors([{"path": 1}, 1]), ["overrides: path: must be a string, got an integer"]),
-            (config.override_errors([{"path": ""}, 1]), ["overrides: path: must not be an empty string"]),
+            (config_values.rule_errors("enable", 1), ["enable: must be an array of strings, got an integer"]),
+            (config_values.rule_errors("enable", [1, "a b"]), ["enable: must be an array of strings, got an array with an integer"]),
+            (config_values.override_errors(1), [f"overrides: {tables} an integer"]),
+            (config_values.override_errors([1, {}]), [f"overrides: {tables} an array with an integer"]),
+            (config_values.override_errors([{}, 1]), ["overrides: a table has no path"]),
+            (config_values.override_errors([{"path": 1}, 1]), ["overrides: path: must be a string, got an integer"]),
+            (config_values.override_errors([{"path": ""}, 1]), ["overrides: path: must not be an empty string"]),
         )  # fmt: skip
         for messages, expected in cases:
             with self.subTest(expected[0]):
@@ -608,7 +608,7 @@ class ConfigTest(TestCase):
         for value, expected in cases:
             with self.subTest(value):
                 parsed = tomllib.loads(f"x = {value}")["x"]
-                self.assertEqual(config.toml_type(parsed), expected)
+                self.assertEqual(config_values.toml_type(parsed), expected)
 
     def test_removed_keys(self) -> None:
         # #21 removed these settings. A config that sets one is an error that
