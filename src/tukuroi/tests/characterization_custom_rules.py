@@ -124,6 +124,32 @@ FAILING_RESULTS = (
 )
 PASSED = (("INVALID_0", "ok"), ("VALID_0", "ok"))
 
+# The example of the guide (docs/guide/rules.rst) for a report at a span.
+IS_LITERAL_PY = """\
+import ast
+
+from tukuroi import Invalid, Position, Rule, Span, Valid
+
+
+class IsLiteral(Rule):
+    MESSAGE = "Compare with a literal with ==, not with is."
+    VALID = (Valid("x is None\\n"), Valid("x == 1\\n"))
+    INVALID = (Invalid("if (x) is 1:\\n    pass\\n", position=Position(1, 7)),)
+
+    def visit_Compare(self, node: ast.Compare) -> None:
+        right = node.comparators[0]
+        if not (
+            isinstance(node.ops[0], ast.Is)
+            and isinstance(right, ast.Constant)
+            and type(right.value) in (int, float, str)
+        ):
+            return
+        between = Span(
+            self.source.span(node.left).end, self.source.span(right).start
+        )
+        is_ = next(t for t in self.source.tokens_in(between) if t.string == "is")
+        self.report(node, span=is_.span)
+"""
 PACKAGE = {"rules/__init__.py": BAD_PY, "rules/ugly.py": UGLY_PY}
 # Not loaded with the package; it would report line 2.
 SUB_PACKAGE = {"rules/extra/__init__.py": EXTRA_PY}
@@ -308,6 +334,21 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(records(result.stdout), sorted(found(r, path) for r in rules))
         self.assertEqual(result.stderr, warning + summary(rules))
         self.assertEqual(result.exit_code, 1 if rules else 0)
+
+    def test_report_at_a_span(self) -> None:
+        # A rule reports the token "is" of a comparison, which has no node
+        # (#143): the line and the column of the token. A comment on the
+        # statement of the node suppresses it, as for any report of the node.
+        files = {
+            "pyproject.toml": root(".rules"),
+            "rules/__init__.py": IS_LITERAL_PY,
+            "t.py": 'if x is 1:  # lint-fixme: IsLiteral\n    pass\ny = (z) is "a"\n',
+        }
+        result = run(files, ["lint", "t.py"])
+        message = "Compare with a literal with ==, not with is."
+        self.assertEqual(result.stdout, f"t.py@3:8 IsLiteral: {message}\n")
+        self.assertEqual(result.stderr, DIRTY)
+        self.assertEqual(result.exit_code, 1)
 
     def test_rules_in_the_repo(self) -> None:
         both = {"rules.py": BOTH_PY}

@@ -46,9 +46,43 @@ it accepts and reports, and ``visit_<node>`` methods named after the classes of
 - tukuroi walks the tree once, parents before children, and calls the methods of
   every rule for each node. ``visit_stmt`` or ``visit_expr`` takes every node of
   that kind; the most specific method runs first.
-- ``self.report(node, message=None, *, replacement=None, edits=())`` reports
-  ``node``, at the start of its range. Without ``replacement`` or ``edits``, the
-  report has no fix.
+- ``self.report(node, message=None, *, replacement=None, edits=(), span=None)``
+  reports ``node``, at the start of its range, or of ``span`` when it is given.
+  Without ``replacement`` or ``edits``, the report has no fix.
+
+Where a Report Is
+^^^^^^^^^^^^^^^^^
+
+Some code has no node of its own: an operator such as ``is``, the ``@`` of a
+decorator, or the module of ``from a.b import c``. To report it, give the node
+that holds it, and its ``span``, from the tokens of the source. The comments
+that suppress the report are still those of the node:
+
+.. code:: python
+
+    import ast
+
+    from tukuroi import Invalid, Position, Rule, Span, Valid
+
+
+    class IsLiteral(Rule):
+        MESSAGE = "Compare with a literal with ==, not with is."
+        VALID = (Valid("x is None\n"), Valid("x == 1\n"))
+        INVALID = (Invalid("if (x) is 1:\n    pass\n", position=Position(1, 7)),)
+
+        def visit_Compare(self, node: ast.Compare) -> None:
+            right = node.comparators[0]
+            if not (
+                isinstance(node.ops[0], ast.Is)
+                and isinstance(right, ast.Constant)
+                and type(right.value) in (int, float, str)
+            ):
+                return
+            between = Span(
+                self.source.span(node.left).end, self.source.span(right).start
+            )
+            is_ = next(t for t in self.source.tokens_in(between) if t.string == "is")
+            self.report(node, span=is_.span)
 
 State
 ^^^^^
