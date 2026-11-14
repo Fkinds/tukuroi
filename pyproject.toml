@@ -51,9 +51,9 @@ pretty = [
 dev = [
     "attribution == 1.8.0",
     "commitizen == 4.19.3",
-    "coverage == 7.17.2",
+    "coverage ==7.17.3",
     "prek == 0.5.10",
-    "ruff == 0.17.4",
+    "ruff ==0.17.5",
     "pyrefly ==1.4.1",
     # scripts/repository_settings.py reads .github/repository.yml.
     "pyyaml == 6.0.3",
