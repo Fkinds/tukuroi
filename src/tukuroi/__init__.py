@@ -10,6 +10,7 @@ Linting framework built on ``ast``, with automatic fixes
 from .__version__ import __version__
 from .api import fixit_bytes, fixit_file, fixit_paths, print_result
 from .core.edits import Edit
+from .core.format import FormatterPlugin
 from .core.names import ImportTable
 from .core.rule import Invalid, Rule, Valid
 from .core.source import Source
@@ -29,6 +30,7 @@ __all__ = [
     "Edit",
     "Error",
     "FileContent",
+    "FormatterPlugin",
     "ImportTable",
     "Invalid",
     "Options",

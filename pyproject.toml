@@ -70,6 +70,11 @@ docs = [
 [project.scripts]
 tukuroi = "tukuroi.cli:main"
 
+# The plugins of tukuroi itself (#169), registered as those of other
+# distributions are: `formatter = "<name>"` of a config.
+[project.entry-points."tukuroi.formatters"]
+ruff = "tukuroi.core.format:RuffFormatter"
+
 [project.urls]
 Home = "https://github.com/Fkinds/tukuroi"
 Github = "https://github.com/Fkinds/tukuroi"

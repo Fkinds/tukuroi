@@ -209,7 +209,7 @@ def collect_rules(
     with _on_path(root_import):
         for name in enable:
             if not (custom_rules or is_builtin(name)):
-                _warn(f"Skipped rules '{name}': custom rules are turned off")
+                warn_once(f"Skipped rules '{name}': custom rules are turned off")
                 continue
             for rule in _load(name, root_import):
                 enabled[rule] = max(enabled.get(rule, -1), _specificity(name))
@@ -290,7 +290,8 @@ def _on_path(path: Path | None) -> Iterator[None]:
         sys.path.remove(str(path))
 
 
-def _warn(message: str) -> None:
+def warn_once(message: str) -> None:
+    """Log ``message`` as a warning, once in a process."""
     if message not in _WARNED:
         _WARNED.add(message)
         log.warning(message)
