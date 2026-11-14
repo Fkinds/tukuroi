@@ -57,8 +57,8 @@ class LSP:
     https://microsoft.github.io/language-server-protocol/
     """
 
-    def __init__(self, fixit_options: Options, lsp_options: LSPOptions) -> None:
-        self.fixit_options = fixit_options
+    def __init__(self, tukuroi_options: Options, lsp_options: LSPOptions) -> None:
+        self.tukuroi_options = tukuroi_options
         self.lsp_options = lsp_options
 
         # separate debounce timer per URI so that linting one URI
@@ -94,7 +94,7 @@ class LSP:
         is the error of the document, as with :func:`~tukuroi.api.fixit_file`.
         """
         try:
-            config = generate_config(path, options=self.fixit_options, check=True)
+            config = generate_config(path, options=self.tukuroi_options, check=True)
         except ConfigError as error:
             yield Result(path, violation=None, error=_error(error))
             return None
@@ -151,7 +151,7 @@ class LSP:
 
     def _validate(self, uri: str, version: int) -> None:
         """
-        Effect: publishes Fixit diagnostics to the LSP client. The traceback of
+        Effect: publishes tukuroi diagnostics to the LSP client. The traceback of
         an exception goes to the log of the client (#96).
         """
         doc = self.lsp.workspace.text_documents.get(uri)
@@ -173,7 +173,7 @@ class LSP:
 
     def validate(self, uri: str, version: int) -> None:
         """
-        Effect: may publish Fixit diagnostics to the LSP client after a debounce delay.
+        Effect: may publish tukuroi diagnostics to the LSP client after a debounce delay.
         """
         if uri not in self._validate_uri:
             self._validate_uri[uri] = debounce(self.lsp_options.debounce_interval)(

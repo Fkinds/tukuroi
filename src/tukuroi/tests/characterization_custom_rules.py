@@ -635,7 +635,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(result.stderr, TWO_FIXED)
         self.assertEqual(result.exit_code, 0)
 
-    def test_fixit_test_with_passing_rules(self) -> None:
+    def test_tukuroi_test_with_passing_rules(self) -> None:
         both_ran = sorted(ran(BAD, *PASSED) + ran(f"{UGLY}Rule", *PASSED))
         all_ = (both_ran, footer(4, "OK"))
         one = (ran(BAD, *PASSED), footer(2, "OK"))
@@ -655,7 +655,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 0)
 
-    def test_fixit_test_with_failing_cases(self) -> None:
+    def test_tukuroi_test_with_failing_cases(self) -> None:
         result = run({"rules.py": FAILING_PY}, ["test", ".rules"])
         # unittest prints the errors, then the failures, each in the order run.
         failures = sorted((r, t) for t, r in FAILING_RESULTS if r != "ok")
@@ -668,7 +668,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.exit_code, 1)
 
-    def test_fixit_test_without_tests(self) -> None:
+    def test_tukuroi_test_without_tests(self) -> None:
         # `tukuroi test` exits with 5 when no test ran, as unittest and pytest do
         # (#21). The libcst engine exited with 0.
         no_cases = HEAD + "\n\nclass NoCases(Rule):\n    MESSAGE = 'No cases.'\n"
@@ -678,7 +678,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(stderr, "\n" + footer(0, "NO TESTS RAN"))
         self.assertEqual(result.exit_code, 5)
 
-    def test_fixit_test_of_an_unknown_rule(self) -> None:
+    def test_tukuroi_test_of_an_unknown_rule(self) -> None:
         # An error, without the config: the rules are named on the command line
         # (#40). It was a warning, and no test ran.
         result = run({"rules.py": BOTH_PY}, ["test", ".rules:Nope"])
@@ -687,7 +687,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.exit_code, 2)
 
-    def test_fixit_test_reads_the_config(self) -> None:
+    def test_tukuroi_test_reads_the_config(self) -> None:
         # `tukuroi test` reads the config of the current directory (#21), so
         # kettle.rules is imported with enable-root-import, and its tests run.
         # The libcst engine read no config, and found no rule. The rules named

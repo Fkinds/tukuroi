@@ -290,7 +290,7 @@ class FixitBytesTest(TestCase):
             results, _ = run(config(root), "x = 1\n")
         [result] = results
         assert result.error is not None
-        self.assertRegex(result.error.type, r"^__fixit_local_\w+__\.rules\.Mute$")
+        self.assertRegex(result.error.type, r"^__tukuroi_local_\w+__\.rules\.Mute$")
         # As traceback writes it.
         self.assertEqual(result.error.message, "<exception str() failed>")
 

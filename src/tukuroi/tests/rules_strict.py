@@ -49,7 +49,7 @@ class StrictRulesTest(TestCase):
         expected.append(Position(12, 21))
         self.assertEqual(positions, expected)
 
-    def test_not_in_fixit_rules(self) -> None:
+    def test_not_in_tukuroi_rules(self) -> None:
         """Enabling tukuroi.rules does not enable them: its subpackages are apart."""
         names = [rule.name() for rule in import_rules(RuleName("tukuroi.rules"))]
         self.assertNotIn("NoValueObjectDefault", names)
@@ -57,7 +57,7 @@ class StrictRulesTest(TestCase):
         self.assertEqual(list(strict), [NoValueObjectDefault])
 
     def test_builtin(self) -> None:
-        """They come with Fixit: they load with the custom rules turned off."""
+        """They come with tukuroi: they load with the custom rules turned off."""
         self.assertTrue(QualifiedRule("tukuroi.rules.strict").builtin)
         config = Config(
             root=Path.cwd(),

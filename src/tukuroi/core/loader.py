@@ -120,7 +120,7 @@ def import_rules(name: RuleName) -> tuple[type[Rule], ...]:
 def _package(root: Path) -> str:
     """The top-level package of the modules in ``root``, made the first time."""
     digest = hashlib.sha256(str(root).encode()).hexdigest()[:16]
-    package = f"__fixit_local_{digest}__"
+    package = f"__tukuroi_local_{digest}__"
     if package not in sys.modules:
         spec = importlib.machinery.ModuleSpec(package, None, is_package=True)
         spec.submodule_search_locations = [str(root)]
@@ -162,7 +162,7 @@ def _is_rule(value: object) -> bool:
     return isinstance(value, type) and issubclass(value, Rule) and value is not Rule
 
 
-# The packages of the rules that come with Fixit. With custom rules turned off
+# The packages of the rules that come with tukuroi. With custom rules turned off
 # (#12), the engine imports no other rules.
 BUILTIN_PACKAGES = ("tukuroi.rules",)
 
@@ -177,7 +177,7 @@ _ROOT_IMPORTED: dict[str, Path] = {}
 
 
 def is_builtin(name: RuleName) -> bool:
-    """Whether ``name`` names rules that come with Fixit, not custom rules."""
+    """Whether ``name`` names rules that come with tukuroi, not custom rules."""
     return any(
         name.module == package or name.module.startswith(f"{package}.")
         for package in BUILTIN_PACKAGES
