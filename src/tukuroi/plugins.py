@@ -13,8 +13,8 @@ from functools import cache
 from importlib.metadata import EntryPoint, entry_points
 from typing import Any
 
+from .core import loader
 from .core.format import FormatterPlugin
-from .core.loader import warn_once
 from .ftypes import Config
 from .output import OutputFormatPlugin
 
@@ -132,6 +132,7 @@ def output_format_of(config: Config) -> OutputFormatPlugin:
     name = config.output_format
     point = registered(OUTPUT_FORMATS).get(name)
     if point is not None and not config.custom_rules and not is_builtin(point):
-        warn_once(f"Skipped output format {name!r}: custom rules are turned off")
+        message = f"Skipped output format {name!r}: custom rules are turned off"
+        loader.WARNINGS.warn(message)
         name = DEFAULT_OUTPUT_FORMAT
     return load_output_format(name, config)

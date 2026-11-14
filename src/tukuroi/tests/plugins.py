@@ -34,6 +34,7 @@ from .characterization_cli import (
     invoke,
     line,
 )
+from .core_loader import new_process
 
 
 class Upper:
@@ -268,9 +269,9 @@ class OutputFormatPluginsTest(TestCase):
             with (
                 self.subTest(name, custom=custom),
                 points(*found, group=OUTPUT, builtin=True),
+                new_process(),
                 patch.object(loader.log, "warning") as warn,
             ):
-                loader._WARNED.clear()  # Each warning is given once in a process.
                 config = Config(output_format=name, custom_rules=custom)
                 self.assertIs(type(plugins.output_format_of(config)), made)
                 self.assertEqual(warn.call_args_list, warnings)
@@ -297,7 +298,6 @@ class OutputFormatPluginsTest(TestCase):
         )  # fmt: skip
         for label, files, args, stdout, stderr in cases:
             with self.subTest(label), points(found, group=OUTPUT, builtin=True):
-                loader._WARNED.clear()  # Each warning is given once in a process.
                 result = invoke(files, args)
                 self.assertEqual(result.stdout, stdout)
                 self.assertEqual(result.stderr, stderr)

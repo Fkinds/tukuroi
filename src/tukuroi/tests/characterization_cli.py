@@ -28,9 +28,9 @@ from unittest import TestCase
 from click.testing import CliRunner
 
 from ..cli import main
-from ..core import loader
 from ..util import chdir
 from .characterization_suppression import MESSAGES
+from .core_loader import new_process
 
 NA = "NoAssertTrueForComparisons"
 SI = "NoStaticIfCondition"
@@ -111,9 +111,12 @@ def invoke(
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(text.encode())
         # As in a new process: the new loader warns once in a process (#21).
-        loader._WARNED.clear()
-        loader._ROOT_IMPORTED.clear()
-        with chdir(root / cwd), fresh_logging(), warnings.catch_warnings():
+        with (
+            new_process(),
+            chdir(root / cwd),
+            fresh_logging(),
+            warnings.catch_warnings(),
+        ):
             # As in a real run: unittest shows the deprecation warnings of the
             # libraries, which change with their versions.
             warnings.simplefilter("ignore", DeprecationWarning)

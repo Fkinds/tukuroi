@@ -21,13 +21,13 @@ restart of ``tukuroi lsp``).
 The errors keep the name and the words of the libcst engine
 (``CollectionError: could not import rule(s) .rules from <dir>``).
 
-:func:`collect_rules` turns the ``enable`` and ``disable`` of a config into
-rules. A name whose rules cannot be loaded is a :class:`CollectionError` (#40):
-the module cannot be imported, its code raises, it has no rules, or the rule is
-not in it. A package imported through ``enable-root-import`` cannot be used for
-a file of another root: its module is the one of the root that imported it
-first. The rules skipped with custom rules turned off are a warning (on the
-logger ``tukuroi.config``), given once in a process.
+:meth:`RuleLoader.collect` turns the ``enable`` and ``disable`` of a config
+into rules. A name whose rules cannot be loaded is a :class:`CollectionError`
+(#40): the module cannot be imported, its code raises, it has no rules, or the
+rule is not in it. A package imported through ``enable-root-import`` cannot be
+used for a file of another root: its module is the one of the root that
+imported it first. The rules skipped with custom rules turned off are a warning
+(on the logger ``tukuroi.config``), given once in a process (:class:`OnceLog`).
 """
 
 import hashlib
@@ -168,12 +168,22 @@ BUILTIN_PACKAGES = ("tukuroi.rules",)
 
 log = logging.getLogger("tukuroi.config")
 
-# The warnings already given: each one is given once in a process (#21).
-_WARNED: set[str] = set()
 
-# The top-level packages imported through enable-root-import, and the path
-# that they were imported from.
-_ROOT_IMPORTED: dict[str, Path] = {}
+@dataclass
+class OnceLog:
+    """
+    Warnings given once (#21), on the logger ``tukuroi.config``: the rules and
+    the plugins (#169) skipped with custom rules turned off. :data:`WARNINGS`
+    are those of the process.
+    """
+
+    given: set[str] = field(default_factory=set)
+
+    def warn(self, message: str) -> None:
+        """Log ``message`` as a warning, unless it was given."""
+        if message not in self.given:
+            self.given.add(message)
+            log.warning(message)
 
 
 def is_builtin(name: RuleName) -> bool:
@@ -184,41 +194,101 @@ def is_builtin(name: RuleName) -> bool:
     )
 
 
-def collect_rules(
-    enable: Sequence[RuleName],
-    disable: Sequence[RuleName],
-    *,
-    root_import: Path | None = None,
-    custom_rules: bool = True,
-) -> tuple[type[Rule], ...]:
+@dataclass
+class RuleLoader:
     """
-    The rules of ``enable`` without those of ``disable``, sorted by name. For a
-    rule in both, the more specific name wins (#40, see :func:`_specificity`),
-    and ``disable`` if they are as specific. A name whose rules cannot be
-    loaded raises a :class:`CollectionError` (see :func:`load`). ``root_import``
-    is the path that ``enable-root-import`` adds to ``sys.path``. With
-    ``custom_rules`` false, only the built-in rules are imported: the others in
-    ``enable`` are skipped with a warning, those in ``disable`` and
-    ``root_import`` silently.
+    Loads the rules that configs name, and warns with ``warnings``. It keeps
+    the top-level packages that it imported through ``enable-root-import``,
+    with the path that they were imported from (``root_imported``).
+
+    Python imports a module once in a process (``sys.modules``), and the
+    packages it keeps are among them: a process uses one loader,
+    :data:`LOADER`. Another one is for a ``sys.modules`` without the packages
+    that the first one imported, as in the tests.
     """
-    if not custom_rules:
-        root_import = None
-    # Each rule, with the most specific of the names that give it.
-    enabled: dict[type[Rule], int] = {}
-    disabled: dict[type[Rule], int] = {}
-    with _on_path(root_import):
-        for name in enable:
-            if not (custom_rules or is_builtin(name)):
-                warn_once(f"Skipped rules '{name}': custom rules are turned off")
-                continue
-            for rule in _load(name, root_import):
-                enabled[rule] = max(enabled.get(rule, -1), _specificity(name))
-        for name in disable:
-            if custom_rules or is_builtin(name):
-                for rule in _load(name, root_import):
-                    disabled[rule] = max(disabled.get(rule, -1), _specificity(name))
-    rules = (rule for rule, n in enabled.items() if n > disabled.get(rule, -1))
-    return tuple(sorted(rules, key=lambda r: (r.name(), r.__module__)))
+
+    warnings: OnceLog = field(default_factory=OnceLog)
+    root_imported: dict[str, Path] = field(default_factory=dict)
+
+    def collect(
+        self,
+        enable: Sequence[RuleName],
+        disable: Sequence[RuleName],
+        *,
+        root_import: Path | None = None,
+        custom_rules: bool = True,
+    ) -> tuple[type[Rule], ...]:
+        """
+        The rules of ``enable`` without those of ``disable``, sorted by name.
+        For a rule in both, the more specific name wins (#40, see
+        :func:`_specificity`), and ``disable`` if they are as specific. A name
+        whose rules cannot be loaded raises a :class:`CollectionError` (see
+        :meth:`load`). ``root_import`` is the path that
+        ``enable-root-import`` adds to ``sys.path``. With ``custom_rules``
+        false, only the built-in rules are imported: the others in ``enable``
+        are skipped with a warning, those in ``disable`` and ``root_import``
+        silently.
+        """
+        if not custom_rules:
+            root_import = None
+        # Each rule, with the most specific of the names that give it.
+        enabled: dict[type[Rule], int] = {}
+        disabled: dict[type[Rule], int] = {}
+        with _on_path(root_import):
+            for name in enable:
+                if not (custom_rules or is_builtin(name)):
+                    message = f"Skipped rules '{name}': custom rules are turned off"
+                    self.warnings.warn(message)
+                    continue
+                for rule in self._load(name, root_import):
+                    enabled[rule] = max(enabled.get(rule, -1), _specificity(name))
+            for name in disable:
+                if custom_rules or is_builtin(name):
+                    for rule in self._load(name, root_import):
+                        specificity = _specificity(name)
+                        disabled[rule] = max(disabled.get(rule, -1), specificity)
+        rules = (rule for rule, n in enabled.items() if n > disabled.get(rule, -1))
+        return tuple(sorted(rules, key=lambda r: (r.name(), r.__module__)))
+
+    def load(
+        self, name: RuleName, root_import: Path | None = None
+    ) -> tuple[type[Rule], ...]:
+        """
+        The rules of ``name``, with ``root_import`` on ``sys.path``, as
+        :meth:`collect` loads them. Raises a :class:`CollectionError`.
+        """
+        with _on_path(root_import):
+            return self._load(name, root_import)
+
+    def _load(self, name: RuleName, root_import: Path | None) -> tuple[type[Rule], ...]:
+        """
+        The rules of ``name``. Raises a :class:`CollectionError` for each reason
+        that they cannot be loaded, with the exception of the code of the
+        module in the message; ``--debug`` logs its traceback.
+        """
+        top = name.module.partition(".")[0]
+        imported = self.root_imported.get(top)
+        if not name.local and imported is not None and imported != root_import:
+            message = (
+                f"could not import rule(s) {name}: imported from another root, "
+                f"{imported}"
+            )
+            raise CollectionError(message)
+        where = f" from {name.root}" if name.local else ""
+        try:
+            rules = import_rules(name)
+        except CollectionError:
+            raise
+        # Importing a rule runs its code, which can raise any exception.
+        except Exception as e:
+            log.debug("Exception while importing %s", name, exc_info=e)
+            message = f"could not import rule(s) {name}{where}: {type(e).__name__}: {e}"
+            raise CollectionError(message) from e
+        if not rules:
+            raise CollectionError(f"no rules in {name}{where}")
+        if root_import is not None and not name.local and _is_under(top, root_import):
+            self.root_imported.setdefault(top, root_import)
+        return rules
 
 
 def _specificity(name: RuleName) -> int:
@@ -231,43 +301,6 @@ def _specificity(name: RuleName) -> int:
     if name.name is not None:
         return sys.maxsize
     return name.module.count(".")
-
-
-def load(name: RuleName, root_import: Path | None = None) -> tuple[type[Rule], ...]:
-    """
-    The rules of ``name``, with ``root_import`` on ``sys.path``, as
-    :func:`collect_rules` loads them. Raises a :class:`CollectionError`.
-    """
-    with _on_path(root_import):
-        return _load(name, root_import)
-
-
-def _load(name: RuleName, root_import: Path | None) -> tuple[type[Rule], ...]:
-    """
-    The rules of ``name``. Raises a :class:`CollectionError` for each reason
-    that they cannot be loaded, with the exception of the code of the module in
-    the message; ``--debug`` logs its traceback.
-    """
-    top = name.module.partition(".")[0]
-    if not name.local and top in _ROOT_IMPORTED and _ROOT_IMPORTED[top] != root_import:
-        path = _ROOT_IMPORTED[top]
-        message = f"could not import rule(s) {name}: imported from another root, {path}"
-        raise CollectionError(message)
-    where = f" from {name.root}" if name.local else ""
-    try:
-        rules = import_rules(name)
-    except CollectionError:
-        raise
-    # Importing a rule runs its code, which can raise any exception.
-    except Exception as e:
-        log.debug("Exception while importing %s", name, exc_info=e)
-        message = f"could not import rule(s) {name}{where}: {type(e).__name__}: {e}"
-        raise CollectionError(message) from e
-    if not rules:
-        raise CollectionError(f"no rules in {name}{where}")
-    if root_import is not None and not name.local and _is_under(top, root_import):
-        _ROOT_IMPORTED.setdefault(top, root_import)
-    return rules
 
 
 def _is_under(package: str, path: Path) -> bool:
@@ -290,8 +323,6 @@ def _on_path(path: Path | None) -> Iterator[None]:
         sys.path.remove(str(path))
 
 
-def warn_once(message: str) -> None:
-    """Log ``message`` as a warning, once in a process."""
-    if message not in _WARNED:
-        _WARNED.add(message)
-        log.warning(message)
+# The warnings of this process, and its loader, which warns with them.
+WARNINGS = OnceLog()
+LOADER = RuleLoader(WARNINGS)
