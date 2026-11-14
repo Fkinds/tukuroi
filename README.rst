@@ -21,9 +21,9 @@ tukuroi makes it quick and easy to write new lint rules and offer suggested
 changes for any errors found, which can then be accepted automatically,
 or presented to the user for consideration.
 
-For more details, see the `user guide`__ in ``docs/``.
+For more details, see the `user guide`__.
 
-.. __: https://github.com/Fkinds/tukuroi/tree/main/docs/guide
+.. __: https://fkinds.github.io/tukuroi/guide.html
 
 .. QUICKSTART
 
@@ -54,7 +54,7 @@ tukuroi reads none of the names of Fixit. Rename them:
     * - the pre-commit hooks ``fixit-lint`` and ``fixit-fix``
       - ``tukuroi-lint`` and ``tukuroi-fix``
 
-.. __: https://github.com/Fkinds/tukuroi/blob/main/docs/guide/ruff.rst
+.. __: https://fkinds.github.io/tukuroi/guide.html#ruff-rules
 
 The settings of Fixit that tukuroi does not support (``python-version``,
 ``options``, ``tags``) are configuration errors that say so. ``formatter`` takes
@@ -83,7 +83,7 @@ tukuroi uses ``ast``. To port a rule:
 
 See `Writing Rules`__ for the details.
 
-.. __: https://github.com/Fkinds/tukuroi/blob/main/docs/guide/rules.rst
+.. __: https://fkinds.github.io/tukuroi/guide.html#writing-rules
 
 
 License

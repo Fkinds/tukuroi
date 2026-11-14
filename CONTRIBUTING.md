@@ -400,7 +400,15 @@ of the project `tukuroi`): the owner `Fkinds`, the repository `tukuroi`, the
 workflow `release.yml`, and the environment `pypi` or `testpypi`.
 
 1. Merge the section of the version into `CHANGELOG.md`: the GitHub release
-   takes its notes from there, under a heading `## vX.Y.Z`.
+   takes its notes from there, under a heading `## vX.Y.Z`. commitizen writes
+   it from the commits since the last tag: their first lines, by type
+   (`feat`, `fix`, `perf`, `revert`), and the paragraphs of `BREAKING CHANGE`.
+   Edit it as needed in the same pull request.
+
+   ```shell-session
+   $ uv run cz changelog --unreleased-version vX.Y.Z
+   ```
+
 2. Tag the merge on `main` with an annotated tag, and push it:
 
    ```shell-session

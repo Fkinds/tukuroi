@@ -1,32 +1,85 @@
 # Changelog
 
+## v3.0.0 (unreleased)
+
+The first release of tukuroi, an unofficial fork of `Instagram/Fixit` after its
+version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
+
+### BREAKING CHANGE
+
+- **names**: the package, the command, the configuration (`[tool.tukuroi]`,
+  `tukuroi.toml`, `.tukuroi.toml`), the environment variable
+  `TUKUROI_CUSTOM_RULES`, the built-in rules (`tukuroi.rules`) and the
+  pre-commit hooks are named tukuroi. The names of Fixit are not read.
+- **engine**: the rules run on `tukuroi.core`, built on Python's `ast`, in place
+  of LibCST. A rule is a subclass of `tukuroi.Rule`: the rules of Fixit need to
+  be ported.
+- **python**: CPython 3.14 and 3.15 only, with their free-threaded builds.
+- **rules**: fewer built-in rules: ruff has the others.
+- **config**: an unknown key, a value of the wrong type, and a rule that cannot
+  be loaded are errors, with exit status 2. `python-version`, `options` and
+  `tags` are no longer supported.
+- **format**: the fixed files are formatted only with `formatter = "ruff"`
+  (`pip install "tukuroi[ruff]"`); `black` and `ufmt` are gone.
+- **output**: `output-template` takes the names of its fields only.
+- **lsp**: the server talks over stdio only.
+- **api**: `print_result()` takes an output format as `output=`, and
+  `Config.formatter` and `Config.output_format` are names.
+
+### Feat
+
+- **security**: `--no-custom-rules` (or `TUKUROI_CUSTOM_RULES`) loads only the
+  built-in rules, for a repository that you do not trust, and the search for
+  configurations stops at the root of the repository.
+- **plugins**: other packages add formatters and output formats through entry
+  points.
+- **rules**: `report()` takes the span to report (`span=`) and the imports that
+  its fix leaves unused (`unused_imports=`), which tukuroi takes out;
+  `add_import()` and `remove_import()`; the names of imports follow the scopes
+  of Python.
+- **fix**: a fix that would break the code is not applied, with a warning.
+- **cli**: `validate-config` loads the rules and the plugins that a config names.
+
+### Fix
+
+- **lint**: a rule that ends its process (a crash, `os._exit`) gives that file
+  an error, and the other files their results.
+- **lsp**: the server reads the configuration again for each change.
+
+[Coming from Fixit]: https://github.com/Fkinds/tukuroi#coming-from-fixit
+
+## Fixit
+
+The versions below are those of `Instagram/Fixit`, with the numbers of its
+issues and pull requests.
+
 ## 2.2.0 - 2025-11-04
 
 New:
 
-- Add `fixit lsp` subcommands for LSP support by @llllvvuu (#390)
-- Add `fixit validate-config` command by @surge119 (#480)
-- Make format of fixit's terminal output configurable by @jvllmr (#437)
-- Allow a targeted (named rule) enable to override a module disable by @amyreese (#464)
-- Lintrule collections abc by @surge119 (#460)
-- Add fixit rule for variadic callable syntax by @yangdanny97 (#501)
+- Add `fixit lsp` subcommands for LSP support by @llllvvuu (`Instagram/Fixit#390`)
+- Add `fixit validate-config` command by @surge119 (`Instagram/Fixit#480`)
+- Make format of fixit's terminal output configurable by @jvllmr (`Instagram/Fixit#437`)
+- Allow a targeted (named rule) enable to override a module disable by @amyreese (`Instagram/Fixit#464`)
+- Lintrule collections abc by @surge119 (`Instagram/Fixit#460`)
+- Add fixit rule for variadic callable syntax by @yangdanny97 (`Instagram/Fixit#501`)
 
 Fixed:
 
-- Fix Minor Typo in the Docs by @max-muoto (#407)
-- Add Logging for Timing Metrics by @surge119 (#473)
-- Update DeprecatedABCImport Rule by @surge119 (#474)
-- Add More Metrics to be Logged by LoggerHook by @surge119 (#475)
-- Improved the Handling of Errors in Rule Collection by @surge119 (#479)
-- Fix validate config by @surge119 (#481)
-- Allow dash in rule names by @zsol (#503)
-- Add basic pyrefly configuration by @maggiemoss (#505)
-- Update pyrefly configuration. by @rchen152 (#507)
-- Make 3.9 minimum supported Python by @amyreese (#510)
-- Replace hatch with make+uv, separate docs builds by @amyreese (#511)
-- Fix version specifier matching for prerelease versions by @amyreese (#515)
-- Enable testing on 3.14/3.14t by @amyreese (#516)
-- Better generated docs, add no-index by @amyreese (#517)
+- Fix Minor Typo in the Docs by @max-muoto (`Instagram/Fixit#407`)
+- Add Logging for Timing Metrics by @surge119 (`Instagram/Fixit#473`)
+- Update DeprecatedABCImport Rule by @surge119 (`Instagram/Fixit#474`)
+- Add More Metrics to be Logged by LoggerHook by @surge119 (`Instagram/Fixit#475`)
+- Improved the Handling of Errors in Rule Collection by @surge119 (`Instagram/Fixit#479`)
+- Fix validate config by @surge119 (`Instagram/Fixit#481`)
+- Allow dash in rule names by @zsol (`Instagram/Fixit#503`)
+- Add basic pyrefly configuration by @maggiemoss (`Instagram/Fixit#505`)
+- Update pyrefly configuration. by @rchen152 (`Instagram/Fixit#507`)
+- Make 3.9 minimum supported Python by @amyreese (`Instagram/Fixit#510`)
+- Replace hatch with make+uv, separate docs builds by @amyreese (`Instagram/Fixit#511`)
+- Fix version specifier matching for prerelease versions by @amyreese (`Instagram/Fixit#515`)
+- Enable testing on 3.14/3.14t by @amyreese (`Instagram/Fixit#516`)
+- Better generated docs, add no-index by @amyreese (`Instagram/Fixit#517`)
 
 
 ## 2.1.0 - 2023-10-25
@@ -35,15 +88,15 @@ Minor feature release
 
 New:
 
-- Lint and fix via STDIN by passing `-` as path (#388)
-- Skip linting files when no rules enabled (#379)
+- Lint and fix via STDIN by passing `-` as path (`Instagram/Fixit#388`)
+- Skip linting files when no rules enabled (`Instagram/Fixit#379`)
 
 Fixed:
 
-- Reporting violations on `Module` nodes (#368, #367)
-- Incorrect auto-fixes from `CompareSingletonPrimitivesByIs` (#391, #378, #375)
-- Parsing error for `typing.Literal` in `NoStringTypeAnnotation` rule (#400, #377)
-- Error handling when rules fail to import in child processes (#401, #381)
+- Reporting violations on `Module` nodes (`Instagram/Fixit#368`, `Instagram/Fixit#367`)
+- Incorrect auto-fixes from `CompareSingletonPrimitivesByIs` (`Instagram/Fixit#391`, `Instagram/Fixit#378`, `Instagram/Fixit#375`)
+- Parsing error for `typing.Literal` in `NoStringTypeAnnotation` rule (`Instagram/Fixit#400`, `Instagram/Fixit#377`)
+- Error handling when rules fail to import in child processes (`Instagram/Fixit#401`, `Instagram/Fixit#381`)
 
 Thanks:
 
@@ -80,8 +133,8 @@ CLI commands, and lint rule APIs. Existing users should look at the
 
 ### New Rules
 
-- Added `UseAsyncSleepInAsyncDef` (#297)
-- Added `DeprecatedUnittestAsserts` (#314)
+- Added `UseAsyncSleepInAsyncDef` (`Instagram/Fixit#297`)
+- Added `DeprecatedUnittestAsserts` (`Instagram/Fixit#314`)
 
 ## 2.0.0b1 - 2023-06-26
 
@@ -98,15 +151,15 @@ A migration guide is planned, but not yet available.
 
 ### Major Changes
 
-- New `test` command for validating local lint rules (#300)
-- Support for configurable target version and selection of applicable rules (#332)
-- Support for selecting and filtering rules by tags at runtime (#333)
-- Support for `# lint-ignore` and `# lint-fixme` directives (#334)
+- New `test` command for validating local lint rules (`Instagram/Fixit#300`)
+- Support for configurable target version and selection of applicable rules (`Instagram/Fixit#332`)
+- Support for selecting and filtering rules by tags at runtime (`Instagram/Fixit#333`)
+- Support for `# lint-ignore` and `# lint-fixme` directives (`Instagram/Fixit#334`)
 
 ### New Rules
 
-- Added `UseAsyncSleepInAsyncDefRule` (#297)
-- Added `DeprecatedUnittestAssertsRule` (#314)
+- Added `UseAsyncSleepInAsyncDefRule` (`Instagram/Fixit#297`)
+- Added `DeprecatedUnittestAssertsRule` (`Instagram/Fixit#314`)
 
 ## 2.0.0a1 - 2023-04-07
 
