@@ -20,18 +20,21 @@ from .core.rule import Rule
 from .ftypes import (
     Config,
     Options,
-    OutputFormat,
     QualifiedRule,
     QualifiedRuleRegex,
     RawConfig,
 )
 from .plugins import (
+    DEFAULT_OUTPUT_FORMAT,
     FORMATTERS,
     NO_FORMATTER,
+    OUTPUT_FORMATS,
     PluginError,
     formatter_names,
     is_builtin,
     load_formatter,
+    load_output_format,
+    output_format_names,
     registered,
 )
 from .template import template_error
@@ -365,8 +368,6 @@ KEYS = (
 )
 OVERRIDE_KEYS = ("disable", "enable", "formatter", "path")
 REMOVED_KEYS = ("options", "python-version", "tags")
-# In any case, as the option (#40).
-OUTPUT_FORMATS = {o.value: o for o in OutputFormat}
 
 
 def value_errors(data: dict[str, Any]) -> Iterator[str]:
@@ -463,22 +464,31 @@ def plugin_errors(
     configs: Sequence[RawConfig], custom_rules: bool
 ) -> Iterator[ConfigError]:
     """
-    The messages for the formatter plugins of other distributions that
-    ``configs`` name, at any level: each one is loaded, with custom rules on
-    (``custom_rules``); with them off, it is skipped with a warning (#169).
+    The errors of the plugins of other distributions that ``configs`` name:
+    the formatters, at any level, and the output format. Each one is loaded,
+    with custom rules on (``custom_rules``); with them off, it is skipped with
+    a warning (#169).
     """
     for config in configs:
-        for name in _formatters_named(config.data):
-            point = registered(FORMATTERS).get(name)
+        named = [("formatter", FORMATTERS, n) for n in _formatters_named(config.data)]
+        output = config.data.get("output-format")
+        if isinstance(output, str) and output:
+            named.append(("output format", OUTPUT_FORMATS, output.lower()))
+        for kind, group, name in named:
+            point = registered(group).get(name)
             if point is None or is_builtin(point):
                 continue
             if not custom_rules:
-                warn_once(f"Skipped formatter {name!r}: custom rules are turned off")
+                warn_once(f"Skipped {kind} {name!r}: custom rules are turned off")
                 continue
             try:
-                load_formatter(name)
+                if group == FORMATTERS:
+                    load_formatter(name)
+                else:
+                    load_output_format(name, Config())
             except PluginError as error:
-                yield ConfigError(f"formatter: {error}", config)
+                key = "formatter" if group == FORMATTERS else "output-format"
+                yield ConfigError(f"{key}: {error}", config)
 
 
 def _formatters_named(data: dict[str, Any]) -> list[str]:
@@ -489,11 +499,14 @@ def _formatters_named(data: dict[str, Any]) -> list[str]:
 
 
 def output_format_errors(value: object) -> Iterator[str]:
-    """The messages for ``value`` of ``output-format``: an empty string is unset."""
+    """
+    The messages for ``value`` of ``output-format``: the name of an output format
+    plugin (#169), in any case, as the option (#40). An empty string is unset.
+    """
     if not isinstance(value, str):
         yield must_be("output-format", "a string", value)
-    elif value and value.lower() not in OUTPUT_FORMATS:
-        choices = ", ".join(map(repr, OUTPUT_FORMATS))
+    elif value and value.lower() not in registered(OUTPUT_FORMATS):
+        choices = ", ".join(map(repr, output_format_names()))
         yield f"output-format: unknown value {value!r}, not one of {choices}"
 
 
@@ -575,7 +588,7 @@ def merge_configs(
     enable_root_import: bool | Path = Config.enable_root_import
     enable_rules: set[QualifiedRule] = {QualifiedRule("tukuroi.rules")}
     disable_rules: set[QualifiedRule] = set()
-    output_format: OutputFormat = OutputFormat.fixit
+    output_format = DEFAULT_OUTPUT_FORMAT
     output_template: str = ""
     formatter = NO_FORMATTER
 
@@ -597,7 +610,7 @@ def merge_configs(
             enable_root_import = Path(value) if isinstance(value, str) else True
 
         if value := data.get("output-format", ""):
-            output_format = OUTPUT_FORMATS[value.lower()]
+            output_format = value.lower()
 
         if value := data.get("output-template", ""):
             output_template = value
@@ -708,7 +721,8 @@ def generate_config(
             config.disable = []
 
         if options.output_format:
-            config.output_format = options.output_format
+            # In any case, as in a config (#40).
+            config.output_format = options.output_format.lower()
 
         if options.output_template:
             config.output_template = options.output_template

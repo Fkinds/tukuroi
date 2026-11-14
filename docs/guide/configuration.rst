@@ -200,6 +200,8 @@ Fixit that tukuroi does not support (``python-version``, ``options``,
       option below.
     - ``fixit``: the default output format.
     - ``vscode``: A format that provides clickable paths for Visual Studio Code.
+    - The name of an output format that another package registers (see
+      :ref:`plugins`).
 
     .. note::
 

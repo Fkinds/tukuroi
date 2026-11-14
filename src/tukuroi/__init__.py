@@ -24,6 +24,7 @@ from .ftypes import (
     Result,
     Violation,
 )
+from .output import OutputFormatPlugin
 
 __all__ = [
     "Config",
@@ -34,6 +35,7 @@ __all__ = [
     "ImportTable",
     "Invalid",
     "Options",
+    "OutputFormatPlugin",
     "Position",
     "QualifiedRule",
     "Range",

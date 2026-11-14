@@ -48,6 +48,7 @@ from ..ftypes import (
     Result,
     Violation,
 )
+from ..output import FixitFormat, VscodeFormat
 from ..util import capture, chdir
 from .characterization_cli import invoke, toml_error
 from .characterization_custom_rules import run as run_cli
@@ -501,16 +502,33 @@ class CommandTest(TestCase):
 
 
 class PrintResultTest(TestCase):
-    def test_output_format_as_a_string(self) -> None:
-        # The value of the enum, as before (#116); another string is an error.
+    def test_output(self) -> None:
+        # The output format that it is given (#169), or else that of fixit.
         where = Range(Position(1, 0), Position(1, 1))
         result = Result(Path.cwd() / "t.py", Violation("X", where, "m", False))
-        runner = CliRunner()
-        with runner.isolation() as (out, _, _):
-            print_result(result, output_format="vscode")  # type: ignore[arg-type]
-        self.assertEqual(out.getvalue(), b"t.py:1:0 X: m\n")
-        with self.assertRaisesRegex(ValueError, "'nope' is not a valid OutputFormat"):
-            print_result(result, output_format="nope")  # type: ignore[arg-type]
+        cases = (
+            # (output, printed)
+            (None, b"t.py@1:0 X: m\n"),
+            (VscodeFormat(Config()), b"t.py:1:0 X: m\n"),
+        )
+        for output, printed in cases:
+            with self.subTest(output), CliRunner().isolation() as (out, _, _):
+                self.assertEqual(print_result(result, output=output), 1)
+                self.assertEqual(out.getvalue(), printed)
+
+    def test_output_of_nothing(self) -> None:
+        # A format that gives nothing for a violation: the diff is still shown.
+        class Quiet(FixitFormat):
+            def result(self, result: Result) -> str | None:
+                return None
+
+        where = Range(Position(1, 0), Position(1, 1))
+        diff = "--- a\n+++ b\n"
+        violation = Violation("X", where, "m", True, diff=diff)
+        result = Result(Path.cwd() / "t.py", violation)
+        with CliRunner().isolation() as (out, _, _):
+            print_result(result, show_diff=True, output=Quiet(Config()))
+        self.assertEqual(out.getvalue(), diff.encode())
 
 
 class FixitStdinAndFileTest(TestCase):

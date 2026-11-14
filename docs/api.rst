@@ -30,6 +30,9 @@ Plugins
 .. autoclass:: FormatterPlugin
     :members: available, format
 
+.. autoclass:: OutputFormatPlugin
+    :members: start, result, end
+
 
 Frontends
 ---------

@@ -75,6 +75,11 @@ tukuroi = "tukuroi.cli:main"
 [project.entry-points."tukuroi.formatters"]
 ruff = "tukuroi.core.format:RuffFormatter"
 
+[project.entry-points."tukuroi.output_formats"]
+custom = "tukuroi.output:CustomFormat"
+fixit = "tukuroi.output:FixitFormat"
+vscode = "tukuroi.output:VscodeFormat"
+
 [project.urls]
 Home = "https://github.com/Fkinds/tukuroi"
 Github = "https://github.com/Fkinds/tukuroi"

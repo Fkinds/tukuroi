@@ -19,7 +19,6 @@ from ..core import loader
 from ..ftypes import (
     Config,
     Options,
-    OutputFormat,
     QualifiedRule,
     RawConfig,
 )
@@ -516,7 +515,7 @@ class ConfigTest(TestCase):
                 "root with options",
                 self.tdp / "foo.py",
                 None,
-                Options(output_format=OutputFormat.custom, output_template="foo-bar"),
+                Options(output_format="Custom", output_template="foo-bar"),
                 Config(
                     path=self.tdp / "foo.py",
                     root=self.tdp,
@@ -526,7 +525,7 @@ class ConfigTest(TestCase):
                         QualifiedRule("tukuroi.rules"),
                     ],
                     disable=[QualifiedRule("tukuroi.rules.SomethingSpecific")],
-                    output_format=OutputFormat.custom,
+                    output_format="custom",
                     output_template="foo-bar",
                 ),
             ),
