@@ -366,6 +366,104 @@ class CodeScanning(Setting):
             time.sleep(5)
 
 
+@dataclass(frozen=True)
+class Pages(Setting):
+    """The site of GitHub Pages: none until --apply creates it."""
+
+    path: str = "pages"
+
+    def get(self) -> Any:
+        # 404 while the repository has no site.
+        try:
+            return self.github.call("GET", self.path)
+        except GhError as e:
+            if e.status == 404:
+                return None
+            raise
+
+    def apply(self) -> None:
+        method = "POST" if self.get() is None else "PUT"
+        self.github.call(method, self.path, self.want)
+
+
+@dataclass(frozen=True)
+class Environments(Setting):
+    """
+    The environments, exactly, by name: --apply deletes the others. Each one
+    has its protection (the wait, the reviewers), its deployment branch policy,
+    and with custom branch policies, the branches and tags that may deploy to
+    it (``policies``).
+    """
+
+    @classmethod
+    def of(cls, github: GitHub, listed: list[Mapping[str, Any]]) -> Environments:
+        want = {
+            environment["name"]: {
+                key: value for key, value in environment.items() if key != "name"
+            }
+            for environment in listed
+        }
+        return cls(github, "environments", want)
+
+    def get(self) -> Any:
+        listed = self.github.read("environments", {})["environments"]
+        return {environment["name"]: self._have(environment) for environment in listed}
+
+    def apply(self) -> None:
+        have = self.get()
+        for name in have:
+            if name not in self.want:
+                self.github.call("DELETE", f"environments/{quote(name)}")
+        for name, environment in self.want.items():
+            body = {k: v for k, v in environment.items() if k != "policies"}
+            self.github.call("PUT", f"environments/{quote(name)}", body)
+            if environment.get("policies"):
+                self._set_policies(name, environment["policies"])
+
+    def changes(self, have: Any) -> list[str]:
+        return named_changes(self.want, have, self.name)
+
+    def _have(self, environment: Mapping[str, Any]) -> dict[str, Any]:
+        """``environment`` as GitHub has it, in the form of the config."""
+        rules = environment["protection_rules"]
+        timer = next((rule for rule in rules if "wait_timer" in rule), None)
+        reviewers = next((rule for rule in rules if "reviewers" in rule), None)
+        branch_policy = environment["deployment_branch_policy"]
+        custom = bool(branch_policy and branch_policy["custom_branch_policies"])
+        return {
+            "wait_timer": timer["wait_timer"] if timer else 0,
+            "prevent_self_review": bool(reviewers and reviewers["prevent_self_review"]),
+            "reviewers": [
+                {"type": reviewer["type"], "id": reviewer["reviewer"]["id"]}
+                for reviewer in (reviewers["reviewers"] if reviewers else [])
+            ],
+            "deployment_branch_policy": branch_policy,
+            "policies": [
+                {"name": policy["name"], "type": policy["type"]}
+                for policy in (self._policies(environment["name"]) if custom else [])
+            ],
+        }
+
+    def _policies(self, name: str) -> list[dict[str, Any]]:
+        """The branches and tags that may deploy to ``name``, with their ids."""
+        path = f"environments/{quote(name)}/deployment-branch-policies"
+        return [
+            {"name": policy["name"], "type": policy["type"], "id": policy["id"]}
+            for policy in self.github.read(path, {})["branch_policies"]
+        ]
+
+    def _set_policies(self, name: str, want: list[Mapping[str, Any]]) -> None:
+        path = f"environments/{quote(name)}/deployment-branch-policies"
+        have = self._policies(name)
+        for policy in have:
+            if {"name": policy["name"], "type": policy["type"]} not in want:
+                self.github.call("DELETE", f"{path}/{policy['id']}")
+        kept = [{"name": p["name"], "type": p["type"]} for p in have]
+        for policy in want:
+            if policy not in kept:
+                self.github.call("POST", path, policy)
+
+
 def settings(config: Mapping[str, Any]) -> list[Setting]:
     """The settings of ``config``, in the order to set them."""
     github = GitHub(config["name"])
@@ -400,6 +498,12 @@ def settings(config: Mapping[str, Any]) -> list[Setting]:
             path="private-vulnerability-reporting",
             unavailable=PUBLIC_ONLY,
         ),
+        SwitchSetting(
+            github,
+            "immutable_releases",
+            config["immutable_releases"],
+            path="immutable-releases",
+        ),
         # Before the selected actions, which need allowed_actions "selected".
         RestSetting(github, "actions.permissions", actions["permissions"], path=base),
         SelectedActions(
@@ -421,6 +525,9 @@ def settings(config: Mapping[str, Any]) -> list[Setting]:
         CodeScanning(
             github, "code_scanning_default_setup", config["code_scanning_default_setup"]
         ),
+        # Before the environments: the site makes github-pages.
+        Pages(github, "pages", config["pages"]),
+        Environments.of(github, config["environments"]),
         # After CodeQL and the actions: the ruleset requires checks of CI.
         Rulesets.of(github, config["rulesets"]),
         Labels.of(github, config["labels"]),

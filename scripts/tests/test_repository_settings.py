@@ -37,6 +37,7 @@ CONFIG: dict[str, Any] = {
     "vulnerability_alerts": True,
     "automated_security_fixes": False,
     "private_vulnerability_reporting": True,
+    "immutable_releases": True,
     "actions": {
         "permissions": {"enabled": True, "allowed_actions": "selected"},
         "selected_actions": {"patterns_allowed": ["owner/action@*"]},
@@ -46,6 +47,20 @@ CONFIG: dict[str, Any] = {
         },
     },
     "code_scanning_default_setup": {"state": "configured", "languages": ["python"]},
+    "pages": {"build_type": "workflow"},
+    "environments": [
+        {
+            "name": "pypi",
+            "wait_timer": 0,
+            "prevent_self_review": False,
+            "reviewers": [{"type": "User", "id": 1}],
+            "deployment_branch_policy": {
+                "protected_branches": False,
+                "custom_branch_policies": True,
+            },
+            "policies": [{"name": "v*", "type": "tag"}],
+        }
+    ],
     "rulesets": [
         {
             "name": "main",
@@ -73,11 +88,14 @@ NAMES = [
     "vulnerability_alerts",
     "automated_security_fixes",
     "private_vulnerability_reporting",
+    "immutable_releases",
     "actions.permissions",
     "actions.selected_actions",
     "actions.workflow",
     "actions.fork_pr_contributor_approval",
     "code_scanning_default_setup",
+    "pages",
+    "environments",
     "rulesets",
     "labels",
 ]
@@ -119,6 +137,45 @@ REPOSITORY = {
 }
 
 
+# An environment, as GitHub lists it: the rules, and the policies apart.
+PYPI = {
+    "id": 5,
+    "name": "pypi",
+    "protection_rules": [
+        {
+            "id": 1,
+            "type": "required_reviewers",
+            "prevent_self_review": False,
+            "reviewers": [
+                {"type": "User", "reviewer": {"id": 1, "login": "maintainer"}}
+            ],
+        },
+        {"id": 2, "type": "branch_policy"},
+    ],
+    "deployment_branch_policy": {
+        "protected_branches": False,
+        "custom_branch_policies": True,
+    },
+}
+POLICIES = f"repos/{REPO}/environments/pypi/deployment-branch-policies"
+
+
+def policies(*found: tuple[int, str, str]) -> Reply:
+    """The deployment branch policies of an environment: id, name and type."""
+    listed = [{"id": i, "node_id": f"N{i}", "name": n, "type": t} for i, n, t in found]
+    return ok({"total_count": len(listed), "branch_policies": listed})
+
+
+# GET /repos/{name}/pages, as CONFIG has it.
+SITE = ok(
+    {
+        "build_type": "workflow",
+        "https_enforced": True,
+        "html_url": "https://owner.github.io/repo/",
+    }
+)
+
+
 def github() -> dict[tuple[str, str], Reply | list[Reply]]:
     """The replies of a repository whose settings are as CONFIG has them."""
     return {
@@ -131,6 +188,9 @@ def github() -> dict[tuple[str, str], Reply | list[Reply]]:
             {"enabled": False, "paused": False}
         ),
         ("GET", f"repos/{REPO}/private-vulnerability-reporting"): ok({"enabled": True}),
+        ("GET", f"repos/{REPO}/immutable-releases"): ok(
+            {"enabled": True, "enforced_by_owner": False}
+        ),
         ("GET", BASE): ok(
             {"enabled": True, "allowed_actions": "selected", "sha_pinning_required": True}
         ),
@@ -146,6 +206,9 @@ def github() -> dict[tuple[str, str], Reply | list[Reply]]:
         ("GET", f"repos/{REPO}/code-scanning/default-setup"): ok(
             {"state": "configured", "languages": ["python"], "schedule": "weekly"}
         ),
+        ("GET", f"repos/{REPO}/pages"): SITE,
+        ("GET", f"repos/{REPO}/environments"): ok({"total_count": 1, "environments": [PYPI]}),
+        ("GET", POLICIES): policies((3, "v*", "tag")),
         ("GET", f"repos/{REPO}/rulesets?includes_parents=false"): ok(
             [{"name": "main", "id": 7}]
         ),
@@ -293,11 +356,15 @@ class CheckTest(TestCase):
                 f"repos/{REPO}/vulnerability-alerts",
                 f"repos/{REPO}/automated-security-fixes",
                 f"repos/{REPO}/private-vulnerability-reporting",
+                f"repos/{REPO}/immutable-releases",
                 BASE,
                 f"{BASE}/selected-actions",
                 f"{BASE}/workflow",
                 f"{BASE}/fork-pr-contributor-approval",
                 f"repos/{REPO}/code-scanning/default-setup",
+                f"repos/{REPO}/pages",
+                f"repos/{REPO}/environments",
+                POLICIES,
                 f"repos/{REPO}/rulesets?includes_parents=false",
                 f"repos/{REPO}/rulesets/7",
                 f"repos/{REPO}/labels?per_page=100",
@@ -364,6 +431,7 @@ class CheckTest(TestCase):
             ("another status of the selected actions", f"{BASE}/selected-actions", failed(403, "No"), '{"message": "No", "status": "403"}gh: No (HTTP 403)'),
             ("a status not in unavailable", f"repos/{REPO}/topics", failed(404), '{"message": "Not Found", "status": "404"}gh: Not Found (HTTP 404)'),
             ("no status of a public-only setting", f"repos/{REPO}/code-scanning/default-setup", Reply("", "boom", 1), "boom"),
+            ("another status of pages", f"repos/{REPO}/pages", failed(500, "Oops"), '{"message": "Oops", "status": "500"}gh: Oops (HTTP 500)'),
         )  # fmt: skip
         for label, path, reply, message in cases:
             with self.subTest(label):
@@ -411,6 +479,7 @@ def differing() -> dict[tuple[str, str], Reply | list[Reply]]:
         ("GET", f"repos/{REPO}/private-vulnerability-reporting"): ok(
             {"enabled": False}
         ),
+        ("GET", f"repos/{REPO}/immutable-releases"): ok({"enabled": False}),
         ("GET", BASE): ok({"enabled": True, "allowed_actions": "all"}),
         ("GET", f"{BASE}/selected-actions"): ok({"patterns_allowed": []}),
         ("GET", f"{BASE}/workflow"): ok({"default_workflow_permissions": "write"}),
@@ -420,6 +489,29 @@ def differing() -> dict[tuple[str, str], Reply | list[Reply]]:
         ("GET", f"repos/{REPO}/code-scanning/default-setup"): ok(
             {"state": "not-configured", "languages": []}
         ),
+        # 404 while the repository has no site.
+        ("GET", f"repos/{REPO}/pages"): failed(404),
+        # An environment to delete, and one with a wait in place of the
+        # reviewer, and a branch that may deploy too.
+        ("GET", f"repos/{REPO}/environments"): ok(
+            {
+                "total_count": 2,
+                "environments": [
+                    {
+                        "name": "old",
+                        "protection_rules": [],
+                        "deployment_branch_policy": None,
+                    },
+                    {
+                        **PYPI,
+                        "protection_rules": [
+                            {"id": 6, "type": "wait_timer", "wait_timer": 5}
+                        ],
+                    },
+                ],
+            }
+        ),
+        ("GET", POLICIES): policies((3, "v*", "tag"), (4, "main", "branch")),
         ("GET", f"repos/{REPO}/rulesets?includes_parents=false"): ok(
             [{"name": "main", "id": 7}, {"name": "old", "id": 9}]
         ),
@@ -454,12 +546,18 @@ DIFFERENCES = [
     "vulnerability_alerts: False -> True",
     "automated_security_fixes: True -> False",
     "private_vulnerability_reporting: False -> True",
+    "immutable_releases: False -> True",
     "actions.permissions.allowed_actions: 'all' -> 'selected'",
     "actions.selected_actions.patterns_allowed: [] -> ['owner/action@*']",
     "actions.workflow.default_workflow_permissions: 'write' -> 'read'",
     "actions.fork_pr_contributor_approval.approval_policy: 'first_time_contributors' -> 'all_external_contributors'",
     "code_scanning_default_setup.state: 'not-configured' -> 'configured'",
     "code_scanning_default_setup.languages: [] -> ['python']",
+    "pages: None -> {'build_type': 'workflow'}",
+    "environments: delete 'old'",
+    "environments['pypi'].wait_timer: 5 -> 0",
+    "environments['pypi'].reviewers: [] -> [{'type': 'User', 'id': 1}]",
+    "environments['pypi'].policies: [{'name': 'v*', 'type': 'tag'}, {'name': 'main', 'type': 'branch'}] -> [{'name': 'v*', 'type': 'tag'}]",
     "rulesets: delete 'old'",
     "rulesets['main'].enforcement: 'disabled' -> 'active'",
     "rulesets['main'].rules: delete 'non_fast_forward'",
@@ -489,11 +587,16 @@ class ApplyTest(TestCase):
             ("PUT", f"repos/{REPO}/vulnerability-alerts"): ok(),
             ("DELETE", f"repos/{REPO}/automated-security-fixes"): ok(),
             ("PUT", f"repos/{REPO}/private-vulnerability-reporting"): ok(),
+            ("PUT", f"repos/{REPO}/immutable-releases"): ok(),
             ("PUT", BASE): ok(),
             ("PUT", f"{BASE}/selected-actions"): ok(),
             ("PUT", f"{BASE}/workflow"): ok(),
             ("PUT", f"{BASE}/fork-pr-contributor-approval"): ok(),
             ("PATCH", f"repos/{REPO}/code-scanning/default-setup"): ok({}),
+            ("POST", f"repos/{REPO}/pages"): ok({}),
+            ("DELETE", f"repos/{REPO}/environments/old"): ok(),
+            ("PUT", f"repos/{REPO}/environments/pypi"): ok({}),
+            ("DELETE", f"{POLICIES}/4"): ok(),
             ("DELETE", f"repos/{REPO}/rulesets/9"): ok(),
             ("PUT", f"repos/{REPO}/rulesets/7"): ok({}),
             ("DELETE", f"repos/{REPO}/labels/wont%20fix"): ok(),
@@ -512,11 +615,17 @@ class ApplyTest(TestCase):
                 ("PUT", f"repos/{REPO}/vulnerability-alerts", None),
                 ("DELETE", f"repos/{REPO}/automated-security-fixes", None),
                 ("PUT", f"repos/{REPO}/private-vulnerability-reporting", None),
+                ("PUT", f"repos/{REPO}/immutable-releases", None),
                 ("PUT", BASE, actions["permissions"]),
                 ("PUT", f"{BASE}/selected-actions", actions["selected_actions"]),
                 ("PUT", f"{BASE}/workflow", actions["workflow"]),
                 ("PUT", f"{BASE}/fork-pr-contributor-approval", actions["fork_pr_contributor_approval"]),
                 ("PATCH", f"repos/{REPO}/code-scanning/default-setup", CONFIG["code_scanning_default_setup"]),
+                ("POST", f"repos/{REPO}/pages", CONFIG["pages"]),
+                ("DELETE", f"repos/{REPO}/environments/old", None),
+                ("PUT", f"repos/{REPO}/environments/pypi", PYPI_BODY),
+                # The branch goes; the tag stays, and is not sent again.
+                ("DELETE", f"{POLICIES}/4", None),
                 ("DELETE", f"repos/{REPO}/rulesets/9", None),
                 ("PUT", f"repos/{REPO}/rulesets/7", main),
                 ("DELETE", f"repos/{REPO}/labels/wont%20fix", None),
@@ -589,6 +698,73 @@ class ApplyTest(TestCase):
             [("PATCH", f"repos/{REPO}/labels/good%20first%20issue", body)],
         )
 
+    def test_creates_the_site_and_an_environment(self) -> None:
+        # Neither is there: the site is created with POST, the environment
+        # with PUT, and then the tag that may deploy to it.
+        replies = github() | {
+            ("GET", f"repos/{REPO}/pages"): [failed(404), failed(404), SITE],
+            ("POST", f"repos/{REPO}/pages"): ok({}),
+            ("GET", f"repos/{REPO}/environments"): [
+                ok({"total_count": 0, "environments": []}),
+                ok({"total_count": 0, "environments": []}),
+                ok({"total_count": 1, "environments": [PYPI]}),
+            ],
+            ("PUT", f"repos/{REPO}/environments/pypi"): ok({}),
+            ("GET", POLICIES): [policies(), policies((3, "v*", "tag"))],
+            ("POST", POLICIES): ok({}),
+        }  # fmt: skip
+        result = run(["--apply"], replies)
+        self.assertEqual(
+            result.gh.writes(),
+            [
+                ("POST", f"repos/{REPO}/pages", {"build_type": "workflow"}),
+                ("PUT", f"repos/{REPO}/environments/pypi", PYPI_BODY),
+                ("POST", POLICIES, {"name": "v*", "type": "tag"}),
+            ],
+        )
+        self.assertEqual(result.code, 0)
+
+    def test_updates_the_site(self) -> None:
+        # A site that GitHub builds from a branch: PUT sets it to the workflow.
+        path = f"repos/{REPO}/pages"
+        legacy = ok(
+            {"build_type": "legacy", "source": {"branch": "gh-pages", "path": "/"}}
+        )
+        replies = github() | {
+            ("GET", path): [legacy, legacy, SITE],
+            ("PUT", path): ok(),
+        }
+        result = run(["--apply"], replies)
+        self.assertEqual(
+            result.gh.writes(), [("PUT", path, {"build_type": "workflow"})]
+        )
+        self.assertIn("pages.build_type: 'legacy' -> 'workflow'", result.lines)
+        self.assertEqual(result.code, 0)
+
+    def test_environment_of_any_branch(self) -> None:
+        # No deployment branch policy: no policies are read or sent.
+        plain = {"name": "plain", "deployment_branch_policy": None}
+        config = {**CONFIG, "environments": [plain]}
+        listed = {
+            "name": "plain",
+            "protection_rules": [],
+            "deployment_branch_policy": None,
+        }
+        replies = github() | {
+            ("GET", f"repos/{REPO}/environments"): [
+                ok({"total_count": 0, "environments": []}),
+                ok({"total_count": 0, "environments": []}),
+                ok({"total_count": 1, "environments": [listed]}),
+            ],
+            ("PUT", f"repos/{REPO}/environments/plain"): ok({}),
+        }
+        result = run(["--apply"], replies, config)
+        body = {"deployment_branch_policy": None}
+        self.assertEqual(
+            result.gh.writes(), [("PUT", f"repos/{REPO}/environments/plain", body)]
+        )
+        self.assertEqual(result.code, 0)
+
     def test_waits_for_code_scanning(self) -> None:
         # GitHub sets up CodeQL in a run of its own: --apply reads the setting
         # every 5 seconds, until it is as wanted.
@@ -643,6 +819,12 @@ class ApplyTest(TestCase):
                 ("PUT", f"repos/{REPO}/automated-security-fixes", None),
             ],
         )
+
+
+# What --apply sends for the environment of CONFIG: all but the policies.
+PYPI_BODY = {
+    k: v for k, v in CONFIG["environments"][0].items() if k not in ("name", "policies")
+}
 
 
 def json_of_labels() -> Reply:
