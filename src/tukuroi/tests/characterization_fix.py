@@ -47,9 +47,9 @@ VC = "VariadicCallableSyntax"
 IMPORT_NT = "from typing import NamedTuple\n\n\n"
 IMPORT_CB = "from typing import Callable\n\n"
 DC = "@dataclass(frozen=True)\n"
-# NoNamedTuple imports dataclass after the imports (#21, issuecomment-6709426366);
-# ruff format then puts 2 blank lines after it.
-IMPORT_DC = "from typing import NamedTuple\nfrom dataclasses import dataclass\n\n\n"
+# NoNamedTuple imports dataclass after the imports (#21, issuecomment-6709426366),
+# and the import of NamedTuple goes out (#141).
+IMPORT_DC = "from dataclasses import dataclass\n\n\n"
 DOC = '    """@sorted-attributes"""\n\n'
 A40 = "a" * 40
 A60 = "a" * 60
@@ -161,7 +161,7 @@ FIXES = (
         NT,
         "import typing\n\n\nclass Foo(typing.NamedTuple):\n    a: int\n",
         "4:0",
-        f"import typing\nfrom dataclasses import dataclass\n\n\n{DC}class Foo:\n    a: int\n",
+        f"from dataclasses import dataclass\n\n\n{DC}class Foo:\n    a: int\n",
     ),
     (
         NT,
@@ -284,7 +284,7 @@ NESTED = (
         (NT, VC),
         "from typing import Callable, NamedTuple\n\n\nclass Foo(NamedTuple):\n    f: Callable[[...], int]\n",
         ((NT, "4:0"), (VC, "5:7")),
-        f"from typing import Callable, NamedTuple\nfrom dataclasses import dataclass\n\n\n{DC}class Foo:\n    f: Callable[..., int]\n",
+        f"from typing import Callable\nfrom dataclasses import dataclass\n\n\n{DC}class Foo:\n    f: Callable[..., int]\n",
     ),
     (
         "class in class",
@@ -767,11 +767,12 @@ class FixCharacterizationTest(CharacterizationTestCase):
     def test_fix_sorts_an_added_import_with_ruff(self) -> None:
         # An import that a fix adds goes after the last import; with
         # formatter = "ruff", ruff sorts it among the others (#140).
-        source = "from typing import NamedTuple\n\nfrom app import x\n\n\nclass Foo(NamedTuple):\n    a: int\n"
+        # NamedTuple goes out of its import (#141); Protocol stays.
+        source = "from typing import NamedTuple, Protocol\n\nfrom app import x\n\n\nclass Foo(NamedTuple):\n    a: int\n"
         after = "\n\n@dataclass(frozen=True)\nclass Foo:\n    a: int\n"
         cases = (
-            ("default", "", f"from typing import NamedTuple\n\nfrom app import x\nfrom dataclasses import dataclass\n{after}"),
-            ("ruff", 'formatter = "ruff"\n', f"from dataclasses import dataclass\nfrom typing import NamedTuple\n\nfrom app import x\n{after}"),
+            ("default", "", f"from typing import Protocol\n\nfrom app import x\nfrom dataclasses import dataclass\n{after}"),
+            ("ruff", 'formatter = "ruff"\n', f"from dataclasses import dataclass\nfrom typing import Protocol\n\nfrom app import x\n{after}"),
         )  # fmt: skip
         for label, extra, expected in cases:
             with self.subTest(label):

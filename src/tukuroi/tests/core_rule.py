@@ -185,6 +185,19 @@ class RuleReportTest(TestCase):
                 self.assertEqual(report.edits, edits)
                 self.assertIs(report.node, node)
 
+    def test_unused_imports(self) -> None:
+        # The qualified names whose imports the fix may leave unused (#141):
+        # only with a fix.
+        rule = make(NoBadName, "bad = 1\n")
+        node = rule.source.tree.body[0].targets[0]  # type: ignore[attr-defined]
+        rule.report(node, replacement="good", unused_imports=["typing.Any"])
+        self.assertEqual(rule.reports[0].unused_imports, ("typing.Any",))
+        rule.report(node, replacement="good")
+        self.assertEqual(rule.reports[1].unused_imports, ())
+        with self.assertRaises(ValueError) as caught:
+            rule.report(node, unused_imports=["typing.Any"])
+        self.assertIn("unused_imports needs a fix", str(caught.exception))
+
     def test_span_past_the_text(self) -> None:
         rule = make(NoBadName, "bad = 1\n")
         node = rule.source.tree.body[0].targets[0]  # type: ignore[attr-defined]

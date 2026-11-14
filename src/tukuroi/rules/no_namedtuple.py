@@ -86,7 +86,6 @@ class NoNamedTuple(Rule):
                 pass
             """,
             expected_replacement="""
-            from typing import NamedTuple
             from dataclasses import dataclass
 
             @dataclass(frozen=True)
@@ -102,7 +101,6 @@ class NoNamedTuple(Rule):
                 pass
             """,
             expected_replacement="""
-            from typing import NamedTuple as NT
             from dataclasses import dataclass
 
             @dataclass(frozen=True)
@@ -118,7 +116,6 @@ class NoNamedTuple(Rule):
                 pass
             """,
             expected_replacement="""
-            import typing as typ
             from dataclasses import dataclass
 
             @dataclass(frozen=True)
@@ -134,7 +131,6 @@ class NoNamedTuple(Rule):
                 pass
             """,
             expected_replacement="""
-            from typing import NamedTuple
             from dataclasses import dataclass
 
             @dataclass(frozen=True)
@@ -151,7 +147,6 @@ class NoNamedTuple(Rule):
                     pass
             """,
             expected_replacement="""
-            from typing import NamedTuple
             from dataclasses import dataclass
 
             class OuterClass(SomeBase):
@@ -169,7 +164,6 @@ class NoNamedTuple(Rule):
                 pass
             """,
             expected_replacement="""
-            from typing import NamedTuple
             from dataclasses import dataclass
 
             @some_other_decorator
@@ -187,7 +181,6 @@ class NoNamedTuple(Rule):
                 pass
             """,
             expected_replacement="""
-            from typing import NamedTuple
             import dataclasses
 
             @dataclasses.dataclass(frozen=True)
@@ -203,7 +196,6 @@ class NoNamedTuple(Rule):
                 pass
             """,
             expected_replacement="""
-            from typing import NamedTuple
             from dataclasses import dataclass
 
             @dataclass(frozen=True)
@@ -220,7 +212,6 @@ class NoNamedTuple(Rule):
                 pass
             """,
             expected_replacement="""
-            from typing import NamedTuple
             from dataclasses import dataclass
 
             @dataclass(frozen=True)
@@ -265,7 +256,8 @@ class NoNamedTuple(Rule):
             edits.append(Edit(Span(start, start), decorator))
             if imported.edit is not None:
                 edits.append(imported.edit)
-        self.report(node, edits=edits)
+        # Its import goes, when no other code reads it (#141).
+        self.report(node, edits=edits, unused_imports=("typing.NamedTuple",))
 
     def _without_bases(self, node: ast.ClassDef, bases: list[ast.expr]) -> list[Edit]:
         """The edits that drop ``bases`` from the bases of ``node``."""

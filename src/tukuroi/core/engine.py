@@ -29,7 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .directives import InvalidDirective, parse_directives
-from .edits import Applied, apply_fixes, drops_comments
+from .edits import apply_fixes, drops_comments
+from .imports import remove_import
 from .names import ImportTable
 from .rule import Report, Rule
 from .source import ParseError, Source
@@ -146,6 +147,8 @@ def fix(
     text, applied, converged = source.text, 0, False
     result = first
     broken: dict[tuple[str, tuple[str, ...]], Report] = {}
+    # The qualified names that the applied fixes may leave unused (#141).
+    unused: set[str] = set()
     for round_ in range(1 if choose else rounds):
         if round_:
             result = lint(Source.from_text(text, source.path), rules)
@@ -158,14 +161,17 @@ def fix(
         if not fixes:
             converged = True
             break
-        done, failed = _apply(text, fixes, source.path)
+        done, taken, failed = _apply(text, fixes, source.path)
         broken.update((_fix_key(r), r) for r in failed)
-        if done.text == text:
+        if done == text:
             converged = True
             break
-        text, applied = done.text, applied + len(done.applied)
+        text, applied = done, applied + len(taken)
+        unused.update(name for r in taken for name in r.unused_imports)
     else:
         converged = choose is not None
+    if unused:
+        text = _without_imports(text, source.path, unused)
     if formatter is not None and text != source.text:
         text = formatter(text, source.path)
     return FixResult(text, first.reports, applied, converged, tuple(broken.values()))
@@ -178,15 +184,16 @@ def _fix_key(report: Report) -> tuple[str, tuple[str, ...]]:
 
 def _apply(
     text: str, fixes: Sequence[Report], path: Path | None
-) -> tuple[Applied, list[Report]]:
+) -> tuple[str, list[Report], list[Report]]:
     """
-    Apply ``fixes`` to ``text``, as :func:`apply_fixes` does. If the result
-    does not parse, apply them one at a time, in their order, and leave out
-    each that the text does not parse after: those are returned (#147).
+    Apply ``fixes`` to ``text``, as :func:`apply_fixes` does: the text, the
+    fixes applied, and those left out. If the result does not parse, apply
+    them one at a time, in their order, and leave out each that the text does
+    not parse after (#147).
     """
     done = apply_fixes(text, [r.edits for r in fixes])
     if _parses(done.text, path):
-        return done, []
+        return done.text, [fixes[i] for i in done.applied], []
     kept: list[Report] = []
     failed: list[Report] = []
     for report in fixes:
@@ -198,7 +205,19 @@ def _apply(
             kept.append(report)
         else:
             failed.append(report)
-    return apply_fixes(text, [r.edits for r in kept]), failed
+    return apply_fixes(text, [r.edits for r in kept]).text, kept, failed
+
+
+def _without_imports(text: str, path: Path | None, names: set[str]) -> str:
+    """
+    ``text`` without the imports of ``names`` that no code reads (#141), if it
+    still parses without them.
+    """
+    edits = remove_import(Source.from_text(text, path), *sorted(names))
+    if not edits:
+        return text
+    removed = apply_fixes(text, [edits]).text
+    return removed if _parses(removed, path) else text
 
 
 def _parses(text: str, path: Path | None) -> bool:

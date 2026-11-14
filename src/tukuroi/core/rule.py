@@ -24,7 +24,7 @@ a violation with :meth:`Rule.report`, with a fix or without one::
 
 import ast
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import ClassVar
 
@@ -56,7 +56,10 @@ class Invalid:
 
 @dataclass(frozen=True, slots=True)
 class Report:
-    """A violation: the rule, where, the message, and the edits of its fix."""
+    """
+    A violation: the rule, where, the message, the edits of its fix, and the
+    qualified names whose imports the fix may leave unused (#141).
+    """
 
     rule: str
     span: Span
@@ -66,6 +69,7 @@ class Report:
     edits: tuple[Edit, ...]
     # The node reported, for the comments that may suppress it.
     node: ast.AST = field(compare=False, repr=False, default_factory=ast.Module)
+    unused_imports: tuple[str, ...] = ()
 
 
 class Rule:
@@ -115,6 +119,7 @@ class Rule:
         replacement: str | None = None,
         edits: Sequence[Edit] = (),
         span: Span | None = None,
+        unused_imports: Sequence[str] = (),
     ) -> None:
         """
         Report a violation at ``node``, with ``message`` or ``MESSAGE``. The fix,
@@ -123,16 +128,25 @@ class Rule:
         ``span`` is where the report is, when it is not the span of ``node``:
         for what the tree has no node for, such as an operator (#143). The
         comments that suppress the report are still those of ``node``.
+
+        ``unused_imports`` are the qualified names (such as
+        ``"typing.NamedTuple"``) that the fix may leave unused: after the fixes,
+        the engine takes out their imports that no code reads any more (#141).
         """
         text = self.MESSAGE if message is None else message
         if not text:
             raise ValueError(f"{self.name()}: a report needs a message")
         if replacement is not None and edits:
             raise ValueError(f"{self.name()}: give replacement or edits, not both")
+        if unused_imports and replacement is None and not edits:
+            raise ValueError(f"{self.name()}: unused_imports needs a fix")
         if span is not None and span.end > len(self.source.text):
             raise ValueError(f"{self.name()}: span {span} past the end of the text")
         of_node = self.source.span(node)
         fix = check_fix(edits) if replacement is None else (Edit(of_node, replacement),)
         where = of_node if span is None else span
         position = self.source.lines.position(where.start)
-        self.reports.append(Report(self.name(), where, position, text, fix, node))
+        report = Report(self.name(), where, position, text, fix, node)
+        if unused_imports:
+            report = replace(report, unused_imports=tuple(unused_imports))
+        self.reports.append(report)
