@@ -141,7 +141,10 @@ that quotes, comments and spacing stay as they are:
 tukuroi applies the fixes of a file in the order of their start, and skips one
 that overlaps a fix applied before it. Then it lints the result again, until no
 fix is left (at most 100 rounds). A fix that would drop a comment inside the
-range it replaces is not applied: the report has no fix.
+range it replaces is not applied: the report has no fix. Nor is a fix after
+which the file would not parse: tukuroi warns, with the name of the rule, and
+applies the other fixes. Test the replacements of a rule with its
+``INVALID`` cases.
 
 Tests
 ^^^^^

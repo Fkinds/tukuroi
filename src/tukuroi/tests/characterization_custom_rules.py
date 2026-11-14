@@ -124,6 +124,14 @@ FAILING_RESULTS = (
 )
 PASSED = (("INVALID_0", "ok"), ("VALID_0", "ok"))
 
+# The rule of #147: its fix replaces 1 with "(".
+BREAKS_PY = HEAD + (
+    "\n\nclass BrokenFix(Rule):\n"
+    '    MESSAGE = "Break."\n\n'
+    "    def visit_Constant(self, node: ast.Constant) -> None:\n"
+    "        if node.value == 1:\n"
+    '            self.report(node, replacement="(")\n'
+)
 # The example of the guide (docs/guide/rules.rst) for a report at a span.
 IS_LITERAL_PY = """\
 import ast
@@ -334,6 +342,22 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(records(result.stdout), sorted(found(r, path) for r in rules))
         self.assertEqual(result.stderr, warning + summary(rules))
         self.assertEqual(result.exit_code, 1 if rules else 0)
+
+    def test_fix_that_breaks_the_code(self) -> None:
+        # The fix is not applied, with a warning that names the rule: the file
+        # stays as it was, and the violation is left (#147). The engine printed
+        # an exception with its traceback, and exited with 3.
+        files = {
+            "pyproject.toml": root(".rules"),
+            "rules/__init__.py": BREAKS_PY,
+            "t.py": "x = 1\n",
+        }
+        result = run(files, ["fix", "--automatic", "t.py"])
+        self.assertEqual(result.stdout, "t.py@1:4 BrokenFix: Break. (has autofix)\n")
+        warning = "WARNING:tukuroi.api:t.py: the fix of BrokenFix would break the code: not applied\n"
+        self.assertEqual(result.stderr, warning + DIRTY_A)
+        self.assertEqual(result.files["t.py"], "x = 1\n")
+        self.assertEqual(result.exit_code, 1)
 
     def test_report_at_a_span(self) -> None:
         # A rule reports the token "is" of a comparison, which has no node
