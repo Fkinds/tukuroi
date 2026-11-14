@@ -77,10 +77,11 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.14"
+      # Every extra and group: pyrefly reads what all the code imports (#179).
       - name: Install
-        run: make SYNC= install
+        run: make install
       - name: Pyrefly
-        run: uv run pyrefly check -c pyproject.toml
+        run: make typecheck
 
   lint:
     runs-on: ubuntu-26.04

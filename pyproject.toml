@@ -215,12 +215,16 @@ exclude = [
     "/legacy",
 ]
 
+# All the code of tukuroi (#179): the package with its tests, the scripts, and
+# the config of the docs. examples/ is text to lint, with errors on purpose.
+# `make typecheck` checks it on the oldest Python that tukuroi supports, here,
+# and on the newest.
 [tool.pyrefly]
-project_includes = [
-    # Start by adding a single file and we'll expand as we go
-    "src/tukuroi/util.py"
-]
-search_path = [
-    "src"
-]
-python_version = "3.12"
+project_includes = ["src/tukuroi", "scripts", "docs/conf.py"]
+search_path = ["src"]
+python_version = "3.14"
+
+# An ignore that is not needed any more is an error (#179).
+[tool.pyrefly.errors]
+unused-ignore = true
+unused-type-ignore = true
