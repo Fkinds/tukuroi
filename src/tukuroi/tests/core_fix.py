@@ -13,10 +13,11 @@ import ast
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 from ..core.edits import Edit
 from ..core.engine import fix
-from ..core.format import FormatError, ruff_format
+from ..core.format import FormatError, ruff_format, ruff_installed
 from ..core.rule import Rule
 from ..core.source import Source
 from ..core.text import Span
@@ -152,14 +153,18 @@ class FixTest(TestCase):
         self.assertEqual((text, applied), ("g(f(1))\n", 1))
 
     def test_formatted_when_changed(self) -> None:
+        # With a formatter, a text that the fixes changed is formatted. Without
+        # one, the default (#108), it stays as the fixes left it.
         cases = (
-            ("changed", "bad = [1,2]\n", "good = [1, 2]\n"),
-            ("not changed", "x = [1,2]\n", "x = [1,2]\n"),
-            ("\\r\\n", "bad = [1,2]\r\ny = 1\r\n", "good = [1, 2]\r\ny = 1\r\n"),
-        )
-        for label, text, result in cases:
+            # (label, text, formatter, result)
+            ("changed", "bad = [1,2]\n", ruff_format, "good = [1, 2]\n"),
+            ("not changed", "x = [1,2]\n", ruff_format, "x = [1,2]\n"),
+            ("\\r\\n", "bad = [1,2]\r\ny = 1\r\n", ruff_format, "good = [1, 2]\r\ny = 1\r\n"),
+            ("no formatter", "bad = [1,2]\n", None, "good = [1,2]\n"),
+        )  # fmt: skip
+        for label, text, formatter, result in cases:
             with self.subTest(label):
-                self.assertEqual(fixed(text, NoBadName)[0], result)
+                self.assertEqual(fixed(text, NoBadName, formatter=formatter)[0], result)
 
     def test_reports_of_the_first_round(self) -> None:
         result = fix(Source.from_text("f(f(1))\n"), [CallFToG])
@@ -167,6 +172,13 @@ class FixTest(TestCase):
 
 
 class RuffFormatTest(TestCase):
+    def test_installed(self) -> None:
+        # The package is optional (#108): found without importing it.
+        self.assertTrue(ruff_installed())
+        with patch("importlib.util.find_spec", return_value=None) as find_spec:
+            self.assertFalse(ruff_installed())
+        find_spec.assert_called_once_with("ruff")
+
     def test_format(self) -> None:
         self.assertEqual(ruff_format("x = [1,2]\n", None), "x = [1, 2]\n")
         self.assertEqual(ruff_format("x = [1,2]\r\n", None), "x = [1, 2]\r\n")

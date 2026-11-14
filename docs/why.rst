@@ -15,9 +15,9 @@ The `AST <https://docs.python.org/3/library/ast.html>`_ doesn't preserve formatt
 information (comments, whitespaces, etc), so tukuroi never turns a tree back into
 code. Rules find problematic code in the AST, and fix it by replacing ranges of
 the original text: everything outside those ranges is left as it was, and a fix
-that would drop a comment is not applied. tukuroi then formats the fixed files
-with `ruff <https://docs.astral.sh/ruff/>`_, and leaves to ruff the many rules
-that it already has.
+that would drop a comment is not applied. If a project chooses it, tukuroi then
+formats the fixed files with `ruff <https://docs.astral.sh/ruff/>`_. It leaves to
+ruff the many rules that ruff already has.
 
 Learning from building a Flake8 plugin
 ======================================

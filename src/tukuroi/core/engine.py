@@ -17,8 +17,9 @@ range it replaces is taken off its report (:func:`tukuroi.core.edits.drops_comme
 An exception in a rule is not caught. The directives that do not fit the
 grammar come back with the reports, for the caller to warn about them.
 
-:func:`fix` applies the fixes round after round, as ruff does, and formats the
-text with ``ruff format`` when the fixes changed it (#21).
+:func:`fix` applies the fixes round after round, as ruff does. With a formatter
+(``ruff format``, when a config chooses it), it formats the text that the fixes
+changed (#21, #108).
 """
 
 import ast
@@ -29,7 +30,6 @@ from pathlib import Path
 
 from .directives import InvalidDirective, parse_directives
 from .edits import apply_fixes, drops_comments
-from .format import ruff_format
 from .names import ImportTable
 from .rule import Report, Rule
 from .source import Source
@@ -127,15 +127,15 @@ def fix(
     *,
     choose: Callable[[Report], bool] | None = None,
     rounds: int = MAX_ROUNDS,
-    formatter: Callable[[str, Path | None], str] = ruff_format,
+    formatter: Callable[[str, Path | None], str] | None = None,
 ) -> FixResult:
     """
     Apply the fixes of ``rules`` to ``source``, round after round: in each round,
     lint, and apply the fixes by the start of their edits, then by rule, skipping
     those that overlap one applied before. Stop when no fix is left, or when the
     fixes no longer change the text. With ``choose``, apply only the fixes it
-    takes, in one round. Format the text with ``formatter`` (``ruff format``) if
-    it changed.
+    takes, in one round. Format the text with ``formatter`` if one is given and
+    the text changed (#108).
     """
     first = lint(source, rules)
     text, applied, converged = source.text, 0, False
@@ -155,6 +155,6 @@ def fix(
         text, applied = done.text, applied + len(done.applied)
     else:
         converged = choose is not None
-    if text != source.text:
+    if formatter is not None and text != source.text:
         text = formatter(text, source.path)
     return FixResult(text, first.reports, applied, converged)

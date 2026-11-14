@@ -13,8 +13,9 @@ maintainers of Fixit. Its main differences from upstream:
 
 tukuroi provides a highly configurable linting framework with support for
 auto-fixes, custom "local" lint rules, and hierarchical configuration, built
-on Python's ``ast`` module, with fixed files formatted by
-`ruff <https://docs.astral.sh/ruff/>`_.
+on Python's ``ast`` module. A fix replaces only the code that it fixes; a
+project can choose to format the fixed files with
+`ruff <https://docs.astral.sh/ruff/>`_ (``pip install "tukuroi[ruff]"``).
 
 tukuroi makes it quick and easy to write new lint rules and offer suggested
 changes for any errors found, which can then be accepted automatically,
@@ -56,7 +57,8 @@ tukuroi reads none of the names of Fixit. Rename them:
 .. __: https://github.com/Fkinds/tukuroi/blob/main/docs/guide/ruff.rst
 
 The settings of Fixit that tukuroi does not support (``python-version``,
-``formatter``, ``options``, ``tags``) are configuration errors that say so.
+``options``, ``tags``) are configuration errors that say so. ``formatter`` takes
+``"ruff"`` or ``"none"`` only, not ``"black"`` or ``"ufmt"``.
 
 The rules of Fixit do not run on tukuroi: they are written for LibCST, and
 tukuroi uses ``ast``. To port a rule:
@@ -78,9 +80,6 @@ tukuroi uses ``ast``. To port a rule:
     * - ``fixit.config.collect_rules(Config(...))``
       - ``tukuroi.config.load_rules(Config(...))``; ``Config`` has no
         ``python_version``
-    * - ``expected_replacement`` compared as it is written
-      - ``expected_replacement`` compared after ``ruff format``, with its
-        default settings
 
 See `Writing Rules`__ for the details.
 

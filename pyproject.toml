@@ -27,7 +27,6 @@ requires-python = ">=3.14"
 dependencies = [
     "click >= 8.3.3, < 9",
     "moreorless >= 0.4.0",
-    "ruff >= 0.17.3",
     "trailrunner >= 1.2",
 ]
 
@@ -37,6 +36,10 @@ description = "A lint framework that writes better Python code for you."
 [project.optional-dependencies]
 lsp = [
     "pygls ~= 2.0.0",
+]
+# ruff format for the fixed files, with formatter = "ruff" (#108).
+ruff = [
+    "ruff >= 0.17.3",
 ]
 pretty = [
     "rich >= 12.6.0",
@@ -135,6 +138,7 @@ extend-select = ["S"]
 [tool.tukuroi]
 root = true
 enable = ["tukuroi.rules"]
+formatter = "ruff"
 
 [[tool.tukuroi.overrides]]
 path = "examples"

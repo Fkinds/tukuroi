@@ -116,35 +116,35 @@ FIXES = (
         "3:3",
         "from typing import Callable as C\n\nx: C[..., int]\n",
     ),
-    # The fix alone leaves ")" after the arguments; ruff format puts it on its
-    # own line.
+    # The fix keeps the lines of the call, and ")" on its own line: tukuroi
+    # does not format by default (#108).
     (
         UI,
         f"self.assertTrue(\n    {A40} in {A40}\n)\n",
         "1:0",
         f"self.assertIn(\n    {A40}, {A40}\n)\n",
     ),
-    # ruff format joins the call into one line.
+    # The same: the arguments that are left stay on their lines.
     (
         NA,
         f"self.assertTrue(\n    {A40},\n    None,\n)\n",
         "1:0",
-        f"self.assertIsNone({A40})\n",
+        f"self.assertIsNone(\n    {A40}\n)\n",
     ),
     (
         NN,
         f"self.assertTrue(\n    {A60} is not None\n)\n",
         "1:0",
-        f"self.assertIsNotNone({A60})\n",
+        f"self.assertIsNotNone(\n    {A60}\n)\n",
     ),
-    # The blank line above `b` moves with it.
+    # The blank line above `b` moves with it, from below the docstring.
     (
         SA,
         f"class C:\n{DOC}    b = 1\n    a = 2\n",
         "1:0",
-        f"class C:\n{DOC}    a = 2\n\n    b = 1\n",
+        'class C:\n    """@sorted-attributes"""\n    a = 2\n\n    b = 1\n',
     ),
-    # ruff format keeps each element on its own line, for the trailing comma.
+    # The fix keeps each element on its own line.
     (
         VC,
         f"{IMPORT_CB}x: Callable[\n    [...],\n    int,\n]\n",
@@ -376,13 +376,19 @@ DIFF = diff(
 
 # In a file that is not formatted, ruff format changes the rest of the file too.
 # (source, the file after `fix --automatic`)
+# (source, the file after the fix, and after the fix with formatter = "ruff")
 UNFORMATTED = (
     (
         "x=1\nself.assertTrue( a  in  b )\ny = [1,2]\n",
+        "x=1\nself.assertIn( a, b )\ny = [1,2]\n",
         "x = 1\nself.assertIn(a, b)\ny = [1, 2]\n",
     ),
-    # It adds the newline at the end.
-    ("x = 1\nself.assertTrue(a in b)", "x = 1\nself.assertIn(a, b)\n"),
+    # ruff format adds the newline at the end.
+    (
+        "x = 1\nself.assertTrue(a in b)",
+        "x = 1\nself.assertIn(a, b)",
+        "x = 1\nself.assertIn(a, b)\n",
+    ),
 )
 
 # A comment inside the range that the fix replaces, kept in the result: the
@@ -400,7 +406,7 @@ COMMENTS = (
         UI,
         "self.assertTrue(\n    a in b  # c\n)\n",
         "1:0",
-        "self.assertIn(\n    a,\n    b,  # c\n)\n",
+        "self.assertIn(\n    a, b  # c\n)\n",
     ),
     (
         NN,
@@ -717,18 +723,26 @@ class FixCharacterizationTest(CharacterizationTestCase):
         self.assertEqual(result.stderr, line("t.py", UI, "2:0") + DIFF + DIRTY_F)
         self.assertEqual(result.exit_code, 0)
 
-    def test_fix_formats_the_whole_file(self) -> None:
-        for source, fixed in UNFORMATTED:
-            with self.subTest("file", source=source):
-                result = fix((UI,), source)
-                self.assertEqual(result.stdout, line("t.py", UI, "2:0"))
-                self.assertEqual(result.stderr, DIRTY_F)
-                self.assertEqual(result.files["t.py"], fixed)
-            with self.subTest("stdin", source=source):
-                files = {"pyproject.toml": config(UI)}
-                result = invoke(files, ["fix", "-", "t.py"], stdin=source)
-                self.assertEqual(result.stdout, fixed)
-                self.assertEqual(result.stderr, line("t.py", UI, "2:0") + DIRTY_F)
+    def test_fix_formats_with_ruff_only_if_chosen(self) -> None:
+        # By default, only the ranges that the fixes replace change. With
+        # formatter = "ruff", ruff format formats the whole file (#108).
+        for source, fixed, formatted in UNFORMATTED:
+            for label, extra, expected in (
+                ("default", "", fixed),
+                ("ruff", 'formatter = "ruff"\n', formatted),
+            ):
+                files = {"pyproject.toml": config(UI) + extra}
+                with self.subTest(label, to="file", source=source):
+                    result = invoke(
+                        {**files, "t.py": source}, ["fix", "--automatic", "t.py"]
+                    )
+                    self.assertEqual(result.stdout, line("t.py", UI, "2:0"))
+                    self.assertEqual(result.stderr, DIRTY_F)
+                    self.assertEqual(result.files["t.py"], expected)
+                with self.subTest(label, to="stdin", source=source):
+                    result = invoke(files, ["fix", "-", "t.py"], stdin=source)
+                    self.assertEqual(result.stdout, expected)
+                    self.assertEqual(result.stderr, line("t.py", UI, "2:0") + DIRTY_F)
 
     def test_fix_keeps_a_comment_in_its_range(self) -> None:
         for rule, source, position, fixed in COMMENTS:
@@ -750,19 +764,14 @@ class FixCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 1)
                 self.assertEqual(result.files["t.py"], source)
 
-    def test_sources_are_stable_under_ruff_format(self) -> None:
-        # Not a test of tukuroi: checks that the cases above fit the new engine.
-        pairs = [(source, fixed) for _, source, _, fixed in FIXES + COMMENTS]
-        pairs += [(row[2], row[4]) for row in MULTI + NESTED + SUPPRESSED]
-        pairs += [ONE_CLASS]
-        pairs += [(DIFF_SOURCE, "x = 1\nself.assertIn(a, b)\ny = 2\n")]
-        stable = [text for pair in pairs for text in pair]
-        stable += [source for _, source, _ in COMMENTS_DROPPED]
-        stable += [fixed for _, fixed in UNFORMATTED]
-        for source, formatted in zip(stable, ruff_format(*stable), strict=True):
-            with self.subTest(source=source):
-                self.assertEqual(formatted, source)
-        sources = [source for source, _ in UNFORMATTED]
+    def test_unformatted_cases(self) -> None:
+        # Not a test of tukuroi: checks that the cases of formatting would
+        # change with ruff format, and that what they expect would not.
+        sources = [source for source, _, _ in UNFORMATTED]
         for source, formatted in zip(sources, ruff_format(*sources), strict=True):
             with self.subTest("not formatted", source=source):
                 self.assertNotEqual(formatted, source)
+        stable = [formatted for _, _, formatted in UNFORMATTED]
+        for source, formatted in zip(stable, ruff_format(*stable), strict=True):
+            with self.subTest("formatted", source=source):
+                self.assertEqual(formatted, source)

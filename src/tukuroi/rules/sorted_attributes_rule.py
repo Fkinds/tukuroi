@@ -45,9 +45,8 @@ class SortedAttributes(Rule):
                 \"\"\"
                 @sorted-attributes
                 \"\"\"
-
-                A = "zzz123"
-                B = "aaa234"
+                A = 'zzz123'
+                B = 'aaa234'
                 Daaa = "banana"
                 cab = "foo bar"
                 z = "hehehe"
@@ -69,7 +68,6 @@ class SortedAttributes(Rule):
             expected_replacement="""
             class C:
                 \"\"\"@sorted-attributes\"\"\"
-
                 a = 2
 
                 # about b
@@ -136,19 +134,17 @@ class SortedAttributes(Rule):
             expected_replacement="""
             class C:
                 \"\"\"@sorted-attributes\"\"\"
-
                 # about a
                 a = 2
 
                 b = 1
 
-                def f(self):
-                    pass
+                def f(self): pass
             """,
         ),
         Invalid(
             'class C:\n    """@sorted-attributes"""\n\n    b = 1\n    a = 2',
-            expected_replacement='class C:\n    """@sorted-attributes"""\n\n    a = 2\n\n    b = 1\n',
+            expected_replacement='class C:\n    """@sorted-attributes"""\n    a = 2\n\n    b = 1\n',
         ),
     )
 

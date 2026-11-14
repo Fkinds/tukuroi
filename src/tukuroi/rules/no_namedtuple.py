@@ -89,7 +89,6 @@ class NoNamedTuple(Rule):
             from typing import NamedTuple
             from dataclasses import dataclass
 
-
             @dataclass(frozen=True)
             class Foo:
                 pass
@@ -105,7 +104,6 @@ class NoNamedTuple(Rule):
             expected_replacement="""
             from typing import NamedTuple as NT
             from dataclasses import dataclass
-
 
             @dataclass(frozen=True)
             class Foo:
@@ -123,7 +121,6 @@ class NoNamedTuple(Rule):
             import typing as typ
             from dataclasses import dataclass
 
-
             @dataclass(frozen=True)
             class Foo:
                 pass
@@ -139,7 +136,6 @@ class NoNamedTuple(Rule):
             expected_replacement="""
             from typing import NamedTuple
             from dataclasses import dataclass
-
 
             @dataclass(frozen=True)
             class Foo(AnotherBase, YetAnotherBase):
@@ -157,7 +153,6 @@ class NoNamedTuple(Rule):
             expected_replacement="""
             from typing import NamedTuple
             from dataclasses import dataclass
-
 
             class OuterClass(SomeBase):
                 @dataclass(frozen=True)
@@ -177,7 +172,6 @@ class NoNamedTuple(Rule):
             from typing import NamedTuple
             from dataclasses import dataclass
 
-
             @some_other_decorator
             @dataclass(frozen=True)
             class Foo:
@@ -196,7 +190,6 @@ class NoNamedTuple(Rule):
             from typing import NamedTuple
             import dataclasses
 
-
             @dataclasses.dataclass(frozen=True)
             class Foo(Base):
                 pass
@@ -212,7 +205,6 @@ class NoNamedTuple(Rule):
             expected_replacement="""
             from typing import NamedTuple
             from dataclasses import dataclass
-
 
             @dataclass(frozen=True)
             class Foo(metaclass=M):
@@ -230,7 +222,6 @@ class NoNamedTuple(Rule):
             expected_replacement="""
             from typing import NamedTuple
             from dataclasses import dataclass
-
 
             @dataclass(frozen=True)
             class Foo:

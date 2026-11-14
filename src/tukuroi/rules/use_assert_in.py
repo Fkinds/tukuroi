@@ -83,7 +83,7 @@ class UseAssertIn(Rule):
         ),
         Invalid(
             "self.assertTrue(\n    a in b  # c\n)\n",
-            expected_replacement="self.assertIn(\n    a,\n    b,  # c\n)\n",
+            expected_replacement="self.assertIn(\n    a, b  # c\n)\n",
         ),
     )
 

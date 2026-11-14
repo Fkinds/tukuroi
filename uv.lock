@@ -806,7 +806,6 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "moreorless" },
-    { name = "ruff" },
     { name = "trailrunner" },
 ]
 
@@ -816,6 +815,9 @@ lsp = [
 ]
 pretty = [
     { name = "rich" },
+]
+ruff = [
+    { name = "ruff" },
 ]
 
 [package.dev-dependencies]
@@ -841,10 +843,10 @@ requires-dist = [
     { name = "moreorless", specifier = ">=0.4.0" },
     { name = "pygls", marker = "extra == 'lsp'", specifier = "~=2.0.0" },
     { name = "rich", marker = "extra == 'pretty'", specifier = ">=12.6.0" },
-    { name = "ruff", specifier = ">=0.17.3" },
+    { name = "ruff", marker = "extra == 'ruff'", specifier = ">=0.17.3" },
     { name = "trailrunner", specifier = ">=1.2" },
 ]
-provides-extras = ["lsp", "pretty"]
+provides-extras = ["lsp", "pretty", "ruff"]
 
 [package.metadata.requires-dev]
 dev = [

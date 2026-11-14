@@ -22,6 +22,7 @@ from . import pool
 from .config import ConfigError, check_configs, generate_config, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
+from .core.format import ruff_format
 from .core.rule import Report, Rule
 from .core.source import ParseError, Source
 from .core.text import Range
@@ -30,6 +31,7 @@ from .ftypes import (
     Config,
     Error,
     FileContent,
+    Formatter,
     Metrics,
     MetricsHook,
     Options,
@@ -192,7 +194,7 @@ def fixit_bytes(
 
     It runs the new engine (#21). The fixes that ``autofix`` takes are applied
     round after round; those sent back to the generator, in one round. The fixed
-    text is formatted with ``ruff format``.
+    text is formatted with ``ruff format`` when the config chooses it (#108).
 
     A rule of ``config`` that cannot be loaded is the error of the file, without
     a traceback, and no rule runs (#40).
@@ -233,7 +235,9 @@ def fixit_bytes(
         if not chosen:
             return None
 
-        fixed = fix(source, rules, choose=None if autofix else chosen.__contains__)
+        formatter = ruff_format if config.formatter is Formatter.ruff else None
+        choose = None if autofix else chosen.__contains__
+        fixed = fix(source, rules, choose=choose, formatter=formatter)
         if not fixed.converged:
             rounds = f"{MAX_ROUNDS} rounds"
             LOG.warning("%s: fixes did not converge after %s", _shown(path), rounds)
