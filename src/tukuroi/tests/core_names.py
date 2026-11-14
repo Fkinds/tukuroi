@@ -10,7 +10,8 @@ cases where libcst, which the old engine uses, follows scopes.
 """
 
 import ast
-from unittest import TestCase
+import sys
+from unittest import TestCase, skipUnless
 
 from ..core.names import ImportTable
 from ..core.source import Source
@@ -83,6 +84,12 @@ class ScopedImportTableTest(TestCase):
         for label, code, (line, name), names in cases:
             with self.subTest(label):
                 self.assertEqual(scoped(code, line, name), names)
+
+    @skipUnless(sys.version_info >= (3, 15), "unpacking in comprehensions: 3.15")
+    def test_unpacking_in_a_dict_comprehension(self) -> None:
+        # Its value is None (PEP 798): only the key is read (#179).
+        code = "from re import match\nxs = {**match(y) for y in ys}\n"
+        self.assertEqual(scoped(code, 2, "match"), {RM})
 
     def test_bindings_of_the_module_scope(self) -> None:
         code = "import a\ndef f():\n    import b\nclass C:\n    import c\nif x:\n    import d\n"
