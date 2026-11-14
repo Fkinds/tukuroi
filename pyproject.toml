@@ -221,7 +221,8 @@ exclude = [
 # and on the newest.
 [tool.pyrefly]
 project_includes = ["src/tukuroi", "scripts", "docs/conf.py"]
-search_path = ["src"]
+# scripts/: its tests import the scripts by name, as `make test-scripts` runs them.
+search_path = ["src", "scripts"]
 python_version = "3.14"
 
 # An ignore that is not needed any more is an error (#179).
