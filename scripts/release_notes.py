@@ -6,12 +6,13 @@
 """
 The notes of a release: the section of its tag in the changelog.
 
-    python scripts/release_notes.py v3.0.0 [CHANGELOG.md]
+    python scripts/release_notes.py v3.0.0
 
-It prints the section under the heading of the tag (``## v3.0.0`` or
-``## 3.0.0``, with a date after it or not), without the heading, up to the
-next heading of the same level. release.yml makes it the body of the GitHub
-release. A tag without a section, or with an empty one, exits with 1.
+It reads CHANGELOG.md of the repository, and no other file, and prints the
+section under the heading of the tag (``## v3.0.0`` or ``## 3.0.0``, with a
+date after it or not), without the heading, up to the next heading of the
+same level. release.yml makes it the body of the GitHub release. A tag
+without a section, or with an empty one, exits with 1.
 """
 
 import re
@@ -39,13 +40,12 @@ def notes(tag: str, changelog: str) -> str | None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) not in (2, 3):
-        print(f"usage: {argv[0]} TAG [CHANGELOG]", file=sys.stderr)
+    if len(argv) != 2:
+        print(f"usage: {argv[0]} TAG", file=sys.stderr)
         return 2
-    path = Path(argv[2]) if len(argv) == 3 else CHANGELOG
-    text = notes(argv[1], path.read_text())
+    text = notes(argv[1], CHANGELOG.read_text())
     if text is None:
-        print(f"{path}: no notes for {argv[1]}", file=sys.stderr)
+        print(f"{CHANGELOG.name}: no notes for {argv[1]}", file=sys.stderr)
         return 1
     print(text)
     return 0

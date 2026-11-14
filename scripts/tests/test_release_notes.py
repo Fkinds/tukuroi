@@ -10,6 +10,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 import release_notes
 
@@ -68,27 +69,36 @@ class NotesTest(TestCase):
 
 class MainTest(TestCase):
     def run_main(self, *args: str) -> tuple[int, str, str]:
+        """main() with ``args``, and CHANGELOG as the changelog of the repository."""
         out, err = io.StringIO(), io.StringIO()
         with TemporaryDirectory() as directory:
             path = Path(directory) / "CHANGELOG.md"
             path.write_text(CHANGELOG)
-            argv = [arg.replace("CHANGELOG", str(path)) for arg in args]
-            with redirect_stdout(out), redirect_stderr(err):
-                code = release_notes.main(["release_notes.py", *argv])
-        return code, out.getvalue(), err.getvalue().replace(str(path), "PATH")
+            with (
+                patch.object(release_notes, "CHANGELOG", path),
+                redirect_stdout(out),
+                redirect_stderr(err),
+            ):
+                code = release_notes.main(["release_notes.py", *args])
+        return code, out.getvalue(), err.getvalue()
 
     def test_prints_the_notes(self) -> None:
-        code, out, err = self.run_main("v2.2.1", "CHANGELOG")
+        code, out, err = self.run_main("v2.2.1")
         self.assertEqual((code, out, err), (0, "- upstream\n", ""))
 
     def test_no_notes(self) -> None:
-        code, out, err = self.run_main("v4.0.0", "CHANGELOG")
-        self.assertEqual((code, out, err), (1, "", "PATH: no notes for v4.0.0\n"))
+        code, out, err = self.run_main("v4.0.0")
+        self.assertEqual(
+            (code, out, err), (1, "", "CHANGELOG.md: no notes for v4.0.0\n")
+        )
 
     def test_usage(self) -> None:
-        code, out, err = self.run_main()
-        self.assertEqual((code, out), (2, ""))
-        self.assertEqual(err, "usage: release_notes.py TAG [CHANGELOG]\n")
+        # The tag only: the changelog is that of the repository.
+        for args in ((), ("v3.0.0", "CHANGELOG.md")):
+            with self.subTest(args=args):
+                code, out, err = self.run_main(*args)
+                self.assertEqual((code, out), (2, ""))
+                self.assertEqual(err, "usage: release_notes.py TAG\n")
 
     def test_changelog_of_the_repository(self) -> None:
         # By default, CHANGELOG.md at the top of the repository.
