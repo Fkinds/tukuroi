@@ -155,7 +155,7 @@ class NodeComments:
         the element (a key with its value), the import, the ``with`` item.
         """
         span = self._source.span
-        lists: list[list[ast.AST]] = []
+        lists: Sequence[Sequence[ast.AST]] = ()
         if isinstance(parent, ast.Call):
             lists = [parent.args, parent.keywords]
         elif isinstance(parent, ast.ClassDef):
@@ -406,7 +406,7 @@ class NodeComments:
         index = _index(siblings, node)
         return siblings[index - 1] if index else None
 
-    def _is_elif_of(self, node: ast.If, parent: ast.AST) -> bool:
+    def _is_elif_of(self, node: ast.AST, parent: ast.AST) -> bool:
         """Whether ``node`` is the ``elif`` of ``parent``, not an ``if`` in an ``else``."""
         if not (
             isinstance(parent, ast.If) and parent.orelse and parent.orelse[0] is node

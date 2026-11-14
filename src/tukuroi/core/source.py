@@ -152,10 +152,9 @@ class Source:
         if isinstance(node, ast.Module):
             return Span(0, len(self.text))
         names = ("lineno", "col_offset", "end_lineno", "end_col_offset")
-        values = [getattr(node, name, None) for name in names]
-        if None in values:
+        line, column, end_line, end_column = (getattr(node, n, None) for n in names)
+        if line is None or column is None or end_line is None or end_column is None:
             raise TypeError(f"{type(node).__name__} has no position")
-        line, column, end_line, end_column = values
         start = self.lines.offset_from_utf8(line, column)
         return Span(start, self.lines.offset_from_utf8(end_line, end_column))
 

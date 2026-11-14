@@ -274,8 +274,8 @@ def read_configs(paths: list[Path]) -> list[RawConfig]:
         except tomllib.TOMLDecodeError as error:
             raise ConfigError(str(error), path=path) from error
         outside = path.name in ("tukuroi.toml", ".tukuroi.toml")
-        if outside and (error := next(outside_errors(data), None)):
-            raise ConfigError(error, path=path)
+        if outside and (message := next(outside_errors(data), None)):
+            raise ConfigError(message, path=path)
         tukuroi_data = table(data, "tool", path).get("tukuroi", {})
         if not isinstance(tukuroi_data, dict):
             raise ConfigError(
