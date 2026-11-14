@@ -17,7 +17,13 @@ from unittest.mock import patch
 
 from ..core.edits import Edit
 from ..core.engine import fix
-from ..core.format import FormatError, ruff_format, ruff_installed
+from ..core.format import (
+    FormatError,
+    ruff_format,
+    ruff_formatter,
+    ruff_installed,
+    ruff_sort_imports,
+)
 from ..core.rule import Rule
 from ..core.source import Source
 from ..core.text import Span
@@ -194,6 +200,47 @@ class RuffFormatTest(TestCase):
             self.assertEqual(ruff_format(text, None), text)
 
     def test_syntax_error(self) -> None:
-        with self.assertRaises(FormatError) as caught:
-            ruff_format("x = (\n", Path("t.py"))
-        self.assertIn("t.py", str(caught.exception))
+        for function in (ruff_format, ruff_sort_imports):
+            with self.subTest(function.__name__):
+                with self.assertRaises(FormatError) as caught:
+                    function("x = (\n", Path("t.py"))
+                self.assertIn("t.py", str(caught.exception))
+
+    def test_sort_imports(self) -> None:
+        # The fix of ruff's isort rule (I001) only: the rest of the text stays
+        # as it is (#140).
+        cases = (
+            # (label, text, sorted)
+            ("sorted", "import os\n\nx=1\n", "import os\n\nx=1\n"),
+            ("unsorted", "import sys\nimport os\nx=1\n", "import os\nimport sys\n\nx=1\n"),
+            ("\\r\\n", "import sys\r\nimport os\r\n", "import os\r\nimport sys\r\n"),
+            (
+                "an import added after the others",
+                "from typing import NamedTuple\n\nfrom app import x\nfrom dataclasses import dataclass\n",
+                "from dataclasses import dataclass\nfrom typing import NamedTuple\n\nfrom app import x\n",
+            ),
+        )  # fmt: skip
+        for label, text, expected in cases:
+            with self.subTest(label):
+                self.assertEqual(ruff_sort_imports(text, None), expected)
+
+    def test_sort_imports_with_the_settings_of_the_path(self) -> None:
+        # The sections of isort that the project sets: app is its own package.
+        text = "import app\nimport os\nimport requests\n"
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "ruff.toml").write_text(
+                '[lint.isort]\nknown-first-party = ["app"]\n'
+            )
+            (root / "sub").mkdir()
+            expected = "import os\n\nimport requests\n\nimport app\n"
+            self.assertEqual(ruff_sort_imports(text, root / "sub" / "t.py"), expected)
+            default = "import os\n\nimport app\nimport requests\n"
+            self.assertEqual(ruff_sort_imports(text, None), default)
+
+    def test_formatter(self) -> None:
+        # formatter = "ruff": the imports sorted, then formatted.
+        text = "import sys\nimport os\nx=[1,2]\n"
+        self.assertEqual(
+            ruff_formatter(text, None), "import os\nimport sys\n\nx = [1, 2]\n"
+        )
