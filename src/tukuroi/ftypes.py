@@ -26,6 +26,13 @@ Metrics = dict[str, Any]
 MetricsHook = Callable[[Metrics], None]
 
 
+class Formatter(str, Enum):
+    """What formats a fixed file (#108): nothing, or ``ruff format``."""
+
+    none = "none"
+    ruff = "ruff"
+
+
 class OutputFormat(str, Enum):
     custom = "custom"
     fixit = "fixit"
@@ -131,6 +138,9 @@ class Config:
         default_factory=lambda: [QualifiedRule("tukuroi.rules")]
     )
     disable: list[QualifiedRule] = field(default_factory=list)
+
+    # what formats a fixed file (#108)
+    formatter: Formatter = Formatter.none
 
     # output formatting options
     output_format: OutputFormat = OutputFormat.fixit

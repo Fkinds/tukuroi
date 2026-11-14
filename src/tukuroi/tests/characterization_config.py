@@ -17,6 +17,7 @@ Each case lints a file with SOURCE and pins which of two rules report it.
 
 from collections.abc import Mapping
 from pathlib import Path
+from unittest.mock import patch
 
 from .characterization_cli import (
     CLEAN,
@@ -56,7 +57,8 @@ def override(path: str, *lines: str) -> str:
 
 
 ONLY_NA = toml(ROOT, f"disable = [{ALL}]", f"enable = [{NA_}]")
-ONLY_SI = toml(ROOT, f"disable = [{ALL}]", f"enable = [{SI_}]")
+ONLY_SI_LINES = (ROOT, f"disable = [{ALL}]", f"enable = [{SI_}]")
+ONLY_SI = toml(*ONLY_SI_LINES)
 NONE = toml(ROOT, f"disable = [{ALL}]")
 
 Cases = tuple[tuple[str, Mapping[str, str], str, tuple[str, ...]], ...]
@@ -345,6 +347,16 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 "disable: invalid rule name 'tukuroi rules'",
             ),
             ("output-format = 1", "output-format: must be a string, got an integer"),
+            ("formatter = 1", "formatter: must be a string, got an integer"),
+            # The formatters of Fixit are not tukuroi's (#108).
+            (
+                "formatter = 'black'",
+                "formatter: unknown value 'black', not one of 'none', 'ruff'",
+            ),
+            (
+                override("sub", "formatter = 'ufmt'"),
+                f"{sub} formatter: unknown value 'ufmt', not one of 'none', 'ruff'",
+            ),
             (
                 "output-template = 1",
                 "output-template: must be a string, got an integer",
@@ -445,7 +457,9 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         # A config error, before any file is linted (#40). The libcst engine
         # logged a warning (three times, with the checks of #40), and ignored
         # the keys of an override without one.
-        keys = "'disable', 'enable', 'enable-root-import', 'output-format',"
+        keys = (
+            "'disable', 'enable', 'enable-root-import', 'formatter', 'output-format',"
+        )
         keys += " 'output-template', 'overrides', 'root'"
         where = 'overrides (path = "."):'
         override = '[[tool.tukuroi.overrides]]\npath = "."\n'
@@ -453,7 +467,7 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
             # (label, lines, error)
             ("in [tool.tukuroi]", "bogus = 1\n", f"bogus: unknown key, not one of {keys}"),
             ("removed by #21", "tags = ['x']\n", "tags: no longer supported"),
-            ("in overrides", f"{override}bogus = 1\n", f"{where} bogus: unknown key, not one of 'disable', 'enable', 'path'"),
+            ("in overrides", f"{override}bogus = 1\n", f"{where} bogus: unknown key, not one of 'disable', 'enable', 'formatter', 'path'"),
             ("not in an override", f"{override}output-format = 'vscode'\n", f"{where} output-format: not allowed in an override"),
             ("removed, in overrides", f"{override}options = {{}}\n", f"{where} options: no longer supported"),
         )  # fmt: skip
@@ -464,6 +478,88 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.stderr, f"Error: pyproject.toml: {error}\n")
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(result.exit_code, 2)
+
+    def test_formatter(self) -> None:
+        # formatter = "ruff" formats a fixed file; "none", the default, does not.
+        # The nearest config or override that names one wins (#108).
+        unformatted = "x=1\nself.assertTrue(a, 3)\n"
+        formatted = "x = 1\nself.assertEqual(a, 3)\n"
+        fixed = "x=1\nself.assertEqual(a, 3)\n"
+        only_na = (ROOT, f"disable = [{ALL}]", f"enable = [{NA_}]")
+        ruff, none = 'formatter = "ruff"', 'formatter = "none"'
+        cases = (
+            # (label, files besides the source, path of the source, result)
+            ("default", {"pyproject.toml": toml(*only_na)}, "t.py", fixed),
+            ("ruff", {"pyproject.toml": toml(*only_na, ruff)}, "t.py", formatted),
+            ("none", {"pyproject.toml": toml(*only_na, none)}, "t.py", fixed),
+            (
+                "none, nearer",
+                {
+                    "pyproject.toml": toml(*only_na, ruff),
+                    "sub/pyproject.toml": toml(none),
+                },
+                "sub/t.py",
+                fixed,
+            ),
+            (
+                "ruff, nearer",
+                {
+                    "pyproject.toml": toml(*only_na, none),
+                    "sub/pyproject.toml": toml(ruff),
+                },
+                "sub/t.py",
+                formatted,
+            ),
+            (
+                "none, in an override",
+                {"pyproject.toml": toml(*only_na, ruff) + override("sub", none)},
+                "sub/t.py",
+                fixed,
+            ),
+            (
+                "an override of another path",
+                {"pyproject.toml": toml(*only_na, ruff) + override("sub", none)},
+                "t.py",
+                formatted,
+            ),
+        )
+        for label, files, path, expected in cases:
+            with self.subTest(label):
+                result = invoke(
+                    {**files, path: unformatted}, ["fix", "--automatic", path]
+                )
+                self.assertEqual(result.files[path], expected)
+                self.assertEqual(result.exit_code, 0)
+
+    def test_formatter_without_ruff(self) -> None:
+        # ruff is optional (#108): formatter = "ruff" without it is an error of
+        # the config that names it, before any file is linted.
+        needs = 'formatter: "ruff" needs the ruff package: pip install "tukuroi[ruff]"'
+        cases = (
+            # (label, files, args, error)
+            ("lint", {"pyproject.toml": toml(ROOT, 'formatter = "ruff"')}, ["lint", "t.py"], f"pyproject.toml: {needs}"),
+            ("fix", {"pyproject.toml": toml(ROOT, 'formatter = "ruff"')}, ["fix", "t.py"], f"pyproject.toml: {needs}"),
+            ("validate-config", {"pyproject.toml": toml(ROOT, 'formatter = "ruff"')}, ["validate-config", "pyproject.toml"], f"pyproject.toml: {needs}"),
+            ("in a nearer config", {"pyproject.toml": toml(ROOT), "sub/pyproject.toml": toml('formatter = "ruff"')}, ["lint", "sub/t.py"], f"sub/pyproject.toml: {needs}"),
+            # Checked though the override does not apply to t.py, as any value.
+            ("in an override", {"pyproject.toml": toml(ROOT) + override("sub", 'formatter = "ruff"')}, ["lint", "t.py"], f'pyproject.toml: overrides (path = "sub"): {needs}'),
+        )  # fmt: skip
+        for label, files, args, error in cases:
+            with (
+                self.subTest(label),
+                patch("tukuroi.config.ruff_installed", return_value=False),
+            ):
+                path = args[-1] if args[0] != "validate-config" else "t.py"
+                result = invoke({**files, path: SOURCE}, args)
+                self.assertEqual(result.stderr, f"Error: {error}\n")
+                self.assertEqual(result.exit_code, 2)
+        with (
+            self.subTest("none"),
+            patch("tukuroi.config.ruff_installed", return_value=False),
+        ):
+            files = {"pyproject.toml": toml(*ONLY_SI_LINES, 'formatter = "none"')}
+            result = invoke({**files, "t.py": SOURCE}, ["lint", "t.py"])
+            self.assertEqual(result.exit_code, 1)
 
     def test_keys_outside_the_table(self) -> None:
         # tukuroi.toml and .tukuroi.toml are read under [tool.tukuroi] only: a key or

@@ -56,8 +56,9 @@ class SmokeTest(TestCase):
                 self.assertIs(ctx.params["debug"], expected)
 
     def test_file_with_formatting(self) -> None:
-        # Uses the rules of the new engine (#21), which formats a fixed file
-        # with ruff format: the blank lines before `def`.
+        # Uses the rules of the new engine (#21). Without formatter = "ruff",
+        # the fix leaves the rest of the file as it is (#108): one blank line
+        # before `def`, where ruff format would put two.
         content = dedent(
             """\
                 import foo
@@ -71,7 +72,6 @@ class SmokeTest(TestCase):
             """\
                 import foo
                 import bar
-
 
                 def func():
                     self.assertIn(a, b)

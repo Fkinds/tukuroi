@@ -13,12 +13,14 @@ from typing import (
     Any,
 )
 
+from .core.format import ruff_installed
 from .core.loader import CollectionError, RuleName
 from .core.loader import collect_rules as collect_core_rules
 from .core.loader import load as load_core_rules
 from .core.rule import Rule
 from .ftypes import (
     Config,
+    Formatter,
     Options,
     OutputFormat,
     QualifiedRule,
@@ -348,13 +350,16 @@ KEYS = (
     "disable",
     "enable",
     "enable-root-import",
+    "formatter",
     "output-format",
     "output-template",
     "overrides",
     "root",
 )
-OVERRIDE_KEYS = ("disable", "enable", "path")
-REMOVED_KEYS = ("formatter", "options", "python-version", "tags")
+OVERRIDE_KEYS = ("disable", "enable", "formatter", "path")
+REMOVED_KEYS = ("options", "python-version", "tags")
+# What formats a fixed file (#108): nothing, or ruff format.
+FORMATTERS = {f.value: f for f in Formatter}
 # In any case, as the option (#40).
 OUTPUT_FORMATS = {o.value: o for o in OutputFormat}
 
@@ -380,6 +385,8 @@ def value_errors(data: dict[str, Any]) -> Iterator[str]:
                 yield from rule_errors(key, value)
             case "enable-root-import":
                 yield from root_import_errors(value)
+            case "formatter":
+                yield from formatter_errors(value)
             case "output-format":
                 yield from output_format_errors(value)
             case "output-template":
@@ -426,6 +433,20 @@ def root_import_errors(value: object) -> Iterator[str]:
         yield "enable-root-import: '..' components not allowed"
 
 
+def formatter_errors(value: object) -> Iterator[str]:
+    """
+    The messages for ``value`` of ``formatter``: one of :data:`FORMATTERS`, and
+    ``"ruff"`` only with the optional ruff package installed (#108).
+    """
+    if not isinstance(value, str):
+        yield must_be("formatter", "a string", value)
+    elif value not in FORMATTERS:
+        choices = ", ".join(map(repr, FORMATTERS))
+        yield f"formatter: unknown value {value!r}, not one of {choices}"
+    elif FORMATTERS[value] is Formatter.ruff and not ruff_installed():
+        yield 'formatter: "ruff" needs the ruff package: pip install "tukuroi[ruff]"'
+
+
 def output_format_errors(value: object) -> Iterator[str]:
     """The messages for ``value`` of ``output-format``: an empty string is unset."""
     if not isinstance(value, str):
@@ -461,6 +482,8 @@ def override_errors(value: object) -> Iterator[str]:
         for key, rules in override.items():
             if key in ("enable", "disable"):
                 yield from (where + error for error in rule_errors(key, rules))
+            elif key == "formatter":
+                yield from (where + error for error in formatter_errors(rules))
             elif key in KEYS:
                 yield f"{where}{key}: not allowed in an override"
             elif key != "path":
@@ -513,6 +536,7 @@ def merge_configs(
     disable_rules: set[QualifiedRule] = set()
     output_format: OutputFormat = OutputFormat.fixit
     output_template: str = ""
+    formatter: Formatter = Formatter.none
 
     for config in reversed(raw_configs):
         if root is None:
@@ -539,6 +563,9 @@ def merge_configs(
 
         directory = config.path.parent
         for level in levels(path, config, config_file=config_file):
+            # The nearest level that names a formatter wins (#108).
+            if "formatter" in level:
+                formatter = FORMATTERS[level["formatter"]]
             disable = {
                 parse_rule(r, directory, config) for r in level.get("disable", ())
             }
@@ -560,6 +587,7 @@ def merge_configs(
         enable_root_import=enable_root_import,
         enable=sorted(enable_rules),
         disable=sorted(disable_rules),
+        formatter=formatter,
         output_format=output_format,
         output_template=output_template,
     )

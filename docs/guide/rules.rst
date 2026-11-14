@@ -6,8 +6,9 @@ Writing Rules
 tukuroi makes it easy to write new lint rules, directly in your codebase
 alongside the code they lint. A rule finds code in the syntax tree of Python's
 :mod:`ast` module, and fixes it by replacing ranges of the original text: the
-rest of the file stays as it was, comments included. tukuroi then formats each
-file it fixes with ``ruff format``.
+rest of the file stays as it was, comments included. With ``formatter = "ruff"``
+(see :attr:`formatter`), tukuroi then formats each file it fixes with
+``ruff format``. Write a replacement that reads well without it.
 
 A Rule
 ^^^^^^
@@ -78,8 +79,8 @@ Tests
 ``VALID`` and ``INVALID`` are the tests of the rule. A valid case must not be
 reported. An invalid case must be reported, with ``expected_message`` and
 ``position`` (a :class:`tukuroi.Position`) when given. When the rule fixes it,
-the case must give ``expected_replacement``: the file after all the fixes and
-``ruff format`` with its default settings.
+the case must give ``expected_replacement``: the file after all the fixes, as
+they leave it, compared as it is written. The tests do not format it.
 
 Run them with :ref:`tukuroi test <test_command>`, or add them to a test module
 of your own:

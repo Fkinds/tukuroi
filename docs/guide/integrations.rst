@@ -86,6 +86,14 @@ your repository.
         hooks:
           - id: tukuroi-fix
 
+The hooks install tukuroi without its extras. With ``formatter = "ruff"`` in
+the configuration (see :attr:`formatter`), add ruff to the hook:
+
+.. code:: yaml
+
+          - id: tukuroi-fix
+            additional_dependencies: ["ruff"]
+
 To read more about how you can customize your pre-commit configuration,
 see the `pre-commit docs <https://pre-commit.com/#pre-commit-configyaml---hooks>`__.
 

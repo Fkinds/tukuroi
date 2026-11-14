@@ -41,8 +41,8 @@ error there. In ``pyproject.toml``, the keys of other tools are left alone.
 A key other than the ones below, a value of a type other than the one given
 below, or a rule name that is not valid, is a configuration error. tukuroi checks
 the whole file as it reads it, and stops at the first error. The settings of
-Fixit that tukuroi does not support (``python-version``, ``formatter``,
-``options``, ``tags``) are errors that say so.
+Fixit that tukuroi does not support (``python-version``, ``options``,
+``tags``) are errors that say so.
 
 .. attribute:: root
     :type: bool
@@ -160,6 +160,27 @@ Fixit that tukuroi does not support (``python-version``, ``formatter``,
 
     With custom rules turned off (see :ref:`security`), this option is ignored.
 
+.. attribute:: formatter
+    :type: str
+
+    What formats a file after ``tukuroi fix`` (or the LSP server) fixed it:
+
+    - ``none``: nothing, the default. Only the ranges that the fixes replace
+      change. An import that a fix adds goes on a new line after the last
+      import, and is not sorted.
+    - ``ruff``: ``ruff format``, with the settings of ruff for the file.
+      It needs the optional ruff package: ``pip install "tukuroi[ruff]"``.
+      Without it, ``formatter = "ruff"`` is a configuration error.
+
+    The nearest configuration or override that sets it wins: a subdirectory
+    can turn formatting off with ``formatter = "none"``. The formatters of
+    Fixit (``black``, ``ufmt``) are not supported.
+
+    .. code-block:: toml
+
+        [tool.tukuroi]
+        formatter = "ruff"
+
 .. attribute:: output-format
     :type: str
 
@@ -222,8 +243,9 @@ Fixit that tukuroi does not support (``python-version``, ``formatter``,
 Overrides provide a mechanism for hierarchical configuration within a single
 configuration file. They are defined as an
 `array of tables <https://toml.io/en/v1.0.0#array-of-tables>`_, with each table
-defining the subpath it applies to, along with :attr:`enable` and
-:attr:`disable` for it. No other key is allowed in an override:
+defining the subpath it applies to, along with :attr:`enable`,
+:attr:`disable` and :attr:`formatter` for it. No other key is allowed in an
+override:
 
 .. code-block:: toml
 

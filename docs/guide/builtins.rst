@@ -112,7 +112,6 @@ Built-in Rules
             from typing import NamedTuple
             from dataclasses import dataclass
 
-
             @dataclass(frozen=True)
             class Foo:
                 pass
@@ -127,7 +126,6 @@ Built-in Rules
             # suggested fix
             from typing import NamedTuple as NT
             from dataclasses import dataclass
-
 
             @dataclass(frozen=True)
             class Foo:
@@ -230,9 +228,8 @@ Built-in Rules
                 """
                 @sorted-attributes
                 """
-
-                A = "zzz123"
-                B = "aaa234"
+                A = 'zzz123'
+                B = 'aaa234'
                 Daaa = "banana"
                 cab = "foo bar"
                 z = "hehehe"
@@ -253,7 +250,6 @@ Built-in Rules
             # suggested fix
             class C:
                 """@sorted-attributes"""
-
                 a = 2
 
                 # about b

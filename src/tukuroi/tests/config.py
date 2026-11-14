@@ -617,7 +617,6 @@ class ConfigTest(TestCase):
         # says so (#40); it was a warning, as of any unknown key.
         cases = (
             ("python-version = '3.10'", "python-version"),
-            ("formatter = 'ufmt'", "formatter"),
             ("tags = 'x'", "tags"),
             ("[tool.tukuroi.options]\nX = {a = 1}", "options"),
         )

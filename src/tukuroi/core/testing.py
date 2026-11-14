@@ -10,19 +10,16 @@ Each rule becomes a ``unittest.TestCase`` named after it, with a method for
 each case: ``test_VALID_0``, ``test_INVALID_0``. A valid case must have no
 report. An invalid case must have a report, with the message and the position
 given; when the rule fixes it, the case must give the code after the fix, as
-the engine writes it: after all the rounds of fixes and ``ruff format`` with the
-default settings of ruff, wherever the tests run.
+the engine writes it after all the rounds of fixes, without formatting (#108).
 """
 
 import re
 import textwrap
 import unittest
 from collections.abc import Callable, MutableMapping, Sequence
-from pathlib import Path
 from typing import Any, ClassVar
 
 from .engine import fix, lint
-from .format import ruff_format
 from .rule import Invalid, Rule, Valid
 from .source import Source
 
@@ -33,10 +30,6 @@ MODULE = "tukuroi.testing"
 def _dedent(code: str) -> str:
     """``code`` without a line end at its start, and dedented."""
     return textwrap.dedent(re.sub(r"\A\n", "", code))
-
-
-def _format(text: str, path: Path | None) -> str:
-    return ruff_format(text, path, isolated=True)
 
 
 class RuleTestCase(unittest.TestCase):
@@ -62,7 +55,7 @@ class RuleTestCase(unittest.TestCase):
             message = "The rule fixes this case: give its expected_replacement."
             self.assertFalse(fixed, message)
             return
-        result = fix(source, [self.rule], formatter=_format)
+        result = fix(source, [self.rule])
         self.assertMultiLineEqual(result.text, _dedent(case.expected_replacement))
 
 

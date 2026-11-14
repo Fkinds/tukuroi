@@ -274,7 +274,7 @@ FORMATTING = (
         "comment in the range",
         UI,
         "self.assertTrue(\n    a in b  # c\n)\n",
-        edit("0:0", "3:0", "self.assertIn(\n    a,\n    b,  # c\n)\n"),
+        edit("0:0", "3:0", "self.assertIn(\n    a, b  # c\n)\n"),
     ),
 )
 # The texts that ruff format changes, besides the fix.
@@ -285,6 +285,7 @@ FORMATTING_UNFORMATTED = (
         "no line break at end",
         UI,
         f"x = 1\n{CALL}",
+        edit("0:0", "1:23", f"x = 1\n{FIXED}"),
         edit("0:0", "1:23", f"x = 1\n{FIXED}\n"),
     ),
     # The end of the last line counts 😀 as 2 UTF-16 units.
@@ -292,12 +293,25 @@ FORMATTING_UNFORMATTED = (
         "emoji at the end",
         UI,
         f'{CALL}\nx = "😀"',
+        edit("0:0", "1:8", f'{FIXED}\nx = "😀"'),
         edit("0:0", "1:8", f'{FIXED}\nx = "😀"\n'),
     ),
     # ruff format keeps "\r" at the end, which libcst dropped.
-    ("CR", UI, f"x = 1\r{CALL}\r", edit("0:0", "2:0", f"x = 1\r{FIXED}\r")),
+    (
+        "CR",
+        UI,
+        f"x = 1\r{CALL}\r",
+        edit("0:0", "2:0", f"x = 1\r{FIXED}\r"),
+        edit("0:0", "2:0", f"x = 1\r{FIXED}\r"),
+    ),
     # The BOM counts as a character, and stays in newText.
-    ("BOM", UI, f"\ufeff{CALL}\n", edit("0:0", "1:0", f"\ufeff{FIXED}\n")),
+    (
+        "BOM",
+        UI,
+        f"\ufeff{CALL}\n",
+        edit("0:0", "1:0", f"\ufeff{FIXED}\n"),
+        edit("0:0", "1:0", f"\ufeff{FIXED}\n"),
+    ),
 )
 
 
@@ -498,11 +512,13 @@ class LspCharacterizationTest(CharacterizationTestCase):
                 after_ = published(*after, version=2)
                 self.assert_published(served, published(*before), after_)
 
-    def assert_formatting(self, cases: Sequence[tuple[Any, ...]]) -> None:
+    def assert_formatting(
+        self, cases: Sequence[tuple[Any, ...]], extra: str = ""
+    ) -> None:
         for label, rule, text, result in cases:
-            with self.subTest(label, text=text):
+            with self.subTest(label, text=text, config=extra):
                 messages = session(did_open(text), formatting())
-                served = serve({"pyproject.toml": config(rule)}, messages)
+                served = serve({"pyproject.toml": config(rule) + extra}, messages)
                 self.assertEqual(served.responses[10], {"result": result})
                 self.assertEqual(served.logs, [])
 
@@ -514,16 +530,19 @@ class LspCharacterizationTest(CharacterizationTestCase):
         self.assert_formatting((("syntax error", UI, f"{CALL}\nprint)\n", None),))
 
     def test_formatting_of_unformatted_text(self) -> None:
-        self.assert_formatting(FORMATTING_UNFORMATTED)
+        # The edit is the fixes alone by default, and the text formatted by
+        # ruff format with formatter = "ruff" (#108).
+        default = [case[:4] for case in FORMATTING_UNFORMATTED]
+        self.assert_formatting(default)
+        ruff = [(*case[:3], case[4]) for case in FORMATTING_UNFORMATTED]
+        self.assert_formatting(ruff, 'formatter = "ruff"\n')
 
     def test_formatting_cases_under_ruff_format(self) -> None:
-        # Not a test of tukuroi: checks that the cases above fit the new engine.
-        stable = []
-        for _, _, text, result in FORMATTING:
-            stable += [text, *(e["newText"] for e in result or ())]
-        # The engine formats the text without its BOM, and puts it back.
-        unformatted = FORMATTING_UNFORMATTED
-        stable += [e["newText"].removeprefix(BOM) for *_, r in unformatted for e in r]
+        # Not a test of tukuroi: checks that what formatter = "ruff" gives is
+        # what ruff format gives. The engine formats the text without its BOM,
+        # and puts it back.
+        cases = FORMATTING_UNFORMATTED
+        stable = [e["newText"].removeprefix(BOM) for *_, r in cases for e in r]
         self.assertEqual(ruff_format(*stable), stable)
 
     def test_formatting_of_document_not_opened(self) -> None:

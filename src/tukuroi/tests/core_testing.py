@@ -44,10 +44,10 @@ class NoBadName(Rule):
         ),  # FAIL
         Invalid("boom = 1\n"),  # ERROR: raises
         Invalid("bad = bad\n", expected_replacement="good = good\n"),  # reported twice
-        Invalid("bad = [1,2]\n", expected_replacement="good = [1, 2]\n"),
         Invalid(
-            "bad = [1,2]\n", expected_replacement="good = [1,2]\n"
-        ),  # FAIL: formatted
+            "bad = [1,2]\n", expected_replacement="good = [1, 2]\n"
+        ),  # FAIL: compared as written, not formatted (#108)
+        Invalid("bad = [1,2]\n", expected_replacement="good = [1,2]\n"),
         Invalid("\n    bad = 1\n", expected_replacement="\n    good = 1\n"),  # dedented
     )
 
@@ -72,7 +72,7 @@ class LongLine(Rule):
     INVALID = (
         Invalid(
             "bad = {'aaaa': 1, 'bbbb': 2}\n",
-            expected_replacement='good = {"aaaa": 1, "bbbb": 2}\n',
+            expected_replacement="good = {'aaaa': 1, 'bbbb': 2}\n",
         ),
     )
 
@@ -114,8 +114,8 @@ class GenerateTestCasesTest(TestCase):
             "test_INVALID_7": "FAIL",
             "test_INVALID_8": "ERROR",
             "test_INVALID_9": "ok",
-            "test_INVALID_10": "ok",
-            "test_INVALID_11": "FAIL",
+            "test_INVALID_10": "FAIL",
+            "test_INVALID_11": "ok",
             "test_INVALID_12": "ok",
         }
         self.assertEqual(outcomes(NoBadName), expected)
@@ -123,7 +123,8 @@ class GenerateTestCasesTest(TestCase):
     def test_rule_without_fix(self) -> None:
         self.assertEqual(outcomes(NoUglyNameRule), {"test_INVALID_0": "ok"})
 
-    def test_ruff_format_with_its_default_settings(self) -> None:
+    def test_compared_as_written(self) -> None:
+        # Not formatted (#108): neither the settings of ruff nor its defaults.
         with TemporaryDirectory() as td, chdir(td):
             (Path(td) / "ruff.toml").write_text("line-length = 20\n")
             self.assertEqual(outcomes(LongLine), {"test_INVALID_0": "ok"})
