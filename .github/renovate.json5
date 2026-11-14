@@ -11,18 +11,28 @@
     "helpers:pinGitHubActionDigests",
   ],
   timezone: "Asia/Tokyo",
-  schedule: ["before 9am on monday"],
+  // Each day (#164).
+  schedule: ["before 9am"],
   // A version only once it has been public for 7 days: most of the bad ones
   // are taken down by then (#7, as #18).
   minimumReleaseAge: "7 days",
   labels: ["dependencies"],
   dependencyDashboard: true,
+  // Renovate merges the updates that packageRules allow (#164), itself: once
+  // every check of the pull request passes, Audit and CodeQL too, and it is
+  // up to date with main. The auto-merge of GitHub would wait for the checks
+  // that the ruleset requires only.
   automerge: false,
+  platformAutomerge: false,
+  automergeType: "pr",
+  // The only way that the ruleset of main allows.
+  automergeStrategy: "merge-commit",
   // uv.lock and build-constraints.txt, with the versions of what they pin
   // that pyproject.toml does not name.
   lockFileMaintenance: {
     enabled: true,
-    schedule: ["before 9am on the first day of the month"],
+    schedule: ["before 9am on monday"],
+    automerge: true,
   },
   // The fixes of the vulnerabilities that GitHub finds: not Dependabot's.
   vulnerabilityAlerts: {
@@ -49,9 +59,20 @@
   ],
   packageRules: [
     // One pull request for the updates that are not major, of each kind; a
-    // major update has one of its own.
+    // major update has one of its own, merged by hand. The kinds that Renovate
+    // merges are apart from those merged by hand (#164).
     {
+      // The tools to develop tukuroi with: merged by Renovate.
       matchManagers: ["pep621"],
+      matchDepTypes: ["dependency-groups"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "Python development tools",
+      automerge: true,
+    },
+    {
+      // The dependencies of the package, which reach its users: by hand.
+      matchManagers: ["pep621"],
+      matchDepTypes: ["project.dependencies", "project.optional-dependencies"],
       matchUpdateTypes: ["minor", "patch"],
       groupName: "Python dependencies",
     },
@@ -59,11 +80,21 @@
       matchManagers: ["github-actions"],
       matchUpdateTypes: ["minor", "patch", "digest"],
       groupName: "GitHub Actions",
+      automerge: true,
     },
     {
-      matchManagers: ["pip-compile", "custom.regex"],
+      matchManagers: ["custom.regex"],
       matchUpdateTypes: ["minor", "patch"],
-      groupName: "build tools",
+      groupName: "uv",
+      automerge: true,
+    },
+    {
+      // By hand until a pull request has shown that the hashes stay
+      // (--generate-hashes, #18), then by Renovate.
+      matchManagers: ["pip-compile"],
+      matchUpdateTypes: ["minor", "patch", "lockFileMaintenance"],
+      groupName: "build constraints",
+      automerge: false,
     },
     // Lower bounds that the project chooses, not versions to keep up with:
     // the versions of Python (.python-version, requires-python).
