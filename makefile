@@ -60,9 +60,12 @@ lint:
 	$(RUN) zizmor --offline .github/workflows
 	$(RUN) lint-imports
 
+# A warning fails the build, after all of them are shown: an inventory of
+# intersphinx that cannot be fetched too, so that no page without its links is
+# deployed (#155). Run it again when the network failed.
 html: docs/*
 	$(RUN) python scripts/document_rules.py
-	$(RUN) sphinx-build -ab html docs html
+	$(RUN) sphinx-build -W --keep-going -ab html docs html
 
 format:
 	$(RUN) ruff check --select I --fix $(SRC)

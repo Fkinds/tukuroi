@@ -69,11 +69,13 @@ autodoc_typehints = "description"
 autodoc_typehints_format = "short"
 
 # highlight_language = "python3"
+# The inventories that the docs refer to, fetched on each build: a stalled
+# connection gives up after intersphinx_timeout seconds, as a warning that
+# fails the build (-W of `make html`, #155).
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "libcst": ("https://libcst.rtfd.io/en/latest", None),
-    "packaging": ("https://packaging.pypa.io/en/latest", None),
 }
+intersphinx_timeout = 30
 master_doc = "index"
 
 # -- Options for HTML output -------------------------------------------------
