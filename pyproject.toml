@@ -35,7 +35,7 @@ description = "A lint framework that writes better Python code for you."
 
 [project.optional-dependencies]
 lsp = [
-    "pygls ~= 2.0.0",
+    "pygls ~=2.1.1",
 ]
 # ruff format for the fixed files, with formatter = "ruff" (#108).
 ruff = [
