@@ -50,6 +50,36 @@ it accepts and reports, and ``visit_<node>`` methods named after the classes of
   ``node``, at the start of its range. Without ``replacement`` or ``edits``, the
   report has no fix.
 
+State
+^^^^^
+
+tukuroi makes an instance of each rule for each file. A rule that keeps a
+state, such as the names that it has seen, sets it up in ``__init__``: it takes
+the :class:`tukuroi.Source` of the file and its :class:`tukuroi.ImportTable`,
+and passes them on to ``super().__init__``:
+
+.. code:: python
+
+    import ast
+
+    from tukuroi import ImportTable, Rule, Source, Valid
+
+
+    class NoRepeatedImport(Rule):
+        MESSAGE = "This module is imported already."
+        VALID = (Valid("import os\nimport sys\n"),)
+        INVALID = ("import os\nimport os\n",)
+
+        def __init__(self, source: Source, imports: ImportTable) -> None:
+            super().__init__(source, imports)
+            self.seen: set[str] = set()
+
+        def visit_Import(self, node: ast.Import) -> None:
+            for alias in node.names:
+                if alias.name in self.seen:
+                    self.report(node)
+                self.seen.add(alias.name)
+
 Fixes
 ^^^^^
 

@@ -18,6 +18,10 @@ Lint Rules
 .. autoclass:: Position
 .. autoclass:: Span
 .. autoclass:: Range
+.. autoclass:: Source
+    :members: span
+.. autoclass:: ImportTable
+    :members: qualified_names
 
 
 Frontends
