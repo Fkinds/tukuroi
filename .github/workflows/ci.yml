@@ -60,6 +60,9 @@ jobs:
         # The tests, measured: fails below fail_under of pyproject.toml (#10),
         # on each version and system.
         run: make SYNC="--extra lsp" coverage
+      - name: Scripts
+        # The tests of the scripts (#157): a maintainer runs them on any system.
+        run: make SYNC="--extra lsp" test-scripts
       - name: Summary
         # The table, on the page of the run: the data is not sent anywhere.
         if: always()

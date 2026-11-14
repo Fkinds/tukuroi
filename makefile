@@ -29,7 +29,13 @@ audit:
 
 test:
 	$(RUN) python -m $(PKG).tests
+	$(MAKE) test-scripts
 	$(MAKE) typecheck
+
+# The tests of the scripts (#157), with scripts/ as the top: they import the
+# scripts by name. Not measured: `make coverage` measures the package.
+test-scripts:
+	$(RUN) python -m unittest discover --start-directory scripts/tests --top-level-directory scripts
 
 # The types of all the code (#179), on the oldest and the newest Python that
 # tukuroi supports: pyproject.toml has the files, and the oldest.
