@@ -18,7 +18,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase, skipUnless
 
 from ..ftypes import Error, Result
-from ..pool import BROKEN, _ended, run
+from ..pool import BROKEN, LintPool, _ended
 
 EXIT = "the process that linted the file exited with status 3"
 
@@ -62,7 +62,9 @@ class PoolTest(TestCase):
             root = Path(td)
             found = {
                 path.name: [Result(Path(r.path.name), r.violation, r.error) for r in rs]
-                for path, rs in run([root / name for name in names], lint, workers=2)
+                for path, rs in LintPool(lint, workers=2).run(
+                    [root / name for name in names]
+                )
             }
             calls = [(mark.stem, mark.suffix) for mark in root.iterdir()]
         return found, calls

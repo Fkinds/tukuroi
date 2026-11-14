@@ -17,7 +17,6 @@ import click
 import trailrunner
 from moreorless import unified_diff
 
-from . import pool
 from .config import ConfigError, ConfigReader, load_rules
 from .core.edits import apply_fixes
 from .core.engine import MAX_ROUNDS, fix, lint
@@ -38,6 +37,7 @@ from .ftypes import (
 from .output import FixitFormat, OutputFormatPlugin
 from .output import shown as _shown
 from .plugins import formatter_of
+from .pool import LintPool
 
 LOG = logging.getLogger(__name__)
 
@@ -439,7 +439,7 @@ def fixit_paths(
             options=options,
             metrics_hook=metrics_hook,
         )
-        for _, results in pool.run(expanded_paths, fn):
+        for _, results in LintPool(fn).run(expanded_paths):
             for result in results:
                 # A process of the pool linted the file: a fix sent back cannot
                 # be applied there (#179).
