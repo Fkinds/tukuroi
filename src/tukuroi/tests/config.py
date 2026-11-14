@@ -530,7 +530,7 @@ class ConfigTest(TestCase):
             ),
         ):
             with self.subTest(name):
-                actual = config.generate_config(path, root, options=options)
+                actual = config.ConfigReader(options, root).config(path)
                 self.assertDictEqual(asdict(expected), asdict(actual))
 
     def test_invalid_config(self) -> None:
@@ -541,7 +541,7 @@ class ConfigTest(TestCase):
             )
 
             with self.assertRaisesRegex(config.ConfigError, "enable-root-import"):
-                config.generate_config(self.tdp / "outer" / "foo.py")
+                config.ConfigReader().config(self.tdp / "outer" / "foo.py")
 
         with self.subTest("inner output-format"):
             (self.tdp / "pyproject.toml").write_text("[tool.tukuroi]\nroot = true\n")
@@ -550,7 +550,7 @@ class ConfigTest(TestCase):
             )
 
             with self.assertRaisesRegex(config.ConfigError, "output-format"):
-                config.generate_config(self.tdp / "outer" / "foo.py")
+                config.ConfigReader().config(self.tdp / "outer" / "foo.py")
 
     def test_describe(self) -> None:
         # The path as the CLI shows it: relative to the current directory if
@@ -623,7 +623,7 @@ class ConfigTest(TestCase):
                 text = f"[tool.tukuroi]\nroot = true\n{value}\n"
                 (self.tdp / "pyproject.toml").write_text(text)
                 with self.assertRaises(config.ConfigError) as caught:
-                    config.generate_config(self.tdp / "foo.py")
+                    config.ConfigReader().config(self.tdp / "foo.py")
                 self.assertEqual(str(caught.exception), f"{key}: no longer supported")
 
     def test_format_output(self) -> None:

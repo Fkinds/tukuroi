@@ -36,7 +36,7 @@ from click.testing import CliRunner
 
 from .. import __version__
 from ..cli import main
-from ..config import generate_config
+from ..config import ConfigReader
 from ..lsp import BOM
 from ..util import chdir
 from .characterization_cli import CharacterizationTestCase, config, fresh_logging
@@ -605,7 +605,10 @@ class LspCharacterizationTest(CharacterizationTestCase):
         # read it once for each path.
         files = {"pyproject.toml": config(UI)}
         messages = session(did_open(f"{CALL}\n"), did_change(change("0:0", "0:0", "x")))
-        with patch("tukuroi.lsp.generate_config", wraps=generate_config) as read:
+        real = ConfigReader.config
+        with patch.object(
+            ConfigReader, "config", autospec=True, side_effect=real
+        ) as read:
             serve(files, messages)
         self.assertEqual(read.call_count, 2)
 

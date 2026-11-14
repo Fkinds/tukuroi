@@ -35,7 +35,7 @@ from pygls.workspace.text_document import TextDocument
 
 from .__version__ import __version__
 from .api import _error, fixit_bytes
-from .config import ConfigError, generate_config
+from .config import ConfigError, ConfigReader
 from .ftypes import FileContent, LSPOptions, Options, Result
 from .util import capture
 
@@ -94,7 +94,7 @@ class LSP:
         is the error of the document, as with :func:`~tukuroi.api.fixit_file`.
         """
         try:
-            config = generate_config(path, options=self.tukuroi_options, check=True)
+            config = ConfigReader(self.tukuroi_options).config(path, check=True)
         except ConfigError as error:
             yield Result(path, violation=None, error=_error(error))
             return None
