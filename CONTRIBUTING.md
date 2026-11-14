@@ -206,6 +206,13 @@ rules and its `S` rules: the security checks of [bandit][]. The settings are in
 `pyproject.toml`. `make lint` and CI check them. A finding that is safe by
 design gets `# noqa` with the rule, and a comment that says why.
 
+The engine, `tukuroi.core`, imports nothing else of tukuroi, and the built-in
+rules, `tukuroi.rules`, import only the engine: the command line, the config,
+the API and the LSP server are around them. [import-linter][] checks it, with
+the contracts of `[tool.importlinter]` in `pyproject.toml` (`make lint`, prek
+and CI). A new module of tukuroi goes into the modules that the contracts
+forbid.
+
 You can ensure your changes are well formatted, and imports are sorted:
 
 ```shell-session
@@ -318,6 +325,7 @@ $ ghstack land $PR_URL
 [pipx]: https://pypa.github.io/pipx/
 [prek]: https://prek.j178.dev/
 [Renovate]: https://docs.renovatebot.com/
+[import-linter]: https://import-linter.readthedocs.io/
 [ruff]: https://docs.astral.sh/ruff/
 [uv]: https://docs.astral.sh/uv/
 [zizmor]: https://docs.zizmor.sh/

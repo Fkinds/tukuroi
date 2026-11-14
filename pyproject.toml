@@ -58,6 +58,8 @@ dev = [
     # scripts/repository_settings.py reads .github/repository.yml.
     "pyyaml == 6.0.3",
     "zizmor == 1.32.0",
+    # lint-imports checks the boundary of the engine (#169).
+    "import-linter == 2.16",
 ]
 docs = [
     "jinja2 == 3.1.6",
@@ -100,6 +102,48 @@ omit = ["*/tukuroi/tests/*"]
 concurrency = ["thread", "multiprocessing"]
 patch = ["subprocess"]
 parallel = true
+
+# The boundary of the engine (#169): tukuroi.core imports nothing else of
+# tukuroi, and the built-in rules import only the engine. A new module of
+# tukuroi goes into the modules that they do not import. `make lint` and prek
+# check it with lint-imports.
+[tool.importlinter]
+root_package = "tukuroi"
+
+[[tool.importlinter.contracts]]
+name = "The engine imports nothing else of tukuroi"
+type = "forbidden"
+source_modules = ["tukuroi.core"]
+forbidden_modules = [
+    "tukuroi.api",
+    "tukuroi.cli",
+    "tukuroi.config",
+    "tukuroi.ftypes",
+    "tukuroi.lsp",
+    "tukuroi.pool",
+    "tukuroi.template",
+    "tukuroi.testing",
+    "tukuroi.tests",
+    "tukuroi.util",
+    "tukuroi.rules",
+]
+
+[[tool.importlinter.contracts]]
+name = "The built-in rules import only the engine"
+type = "forbidden"
+source_modules = ["tukuroi.rules"]
+forbidden_modules = [
+    "tukuroi.api",
+    "tukuroi.cli",
+    "tukuroi.config",
+    "tukuroi.ftypes",
+    "tukuroi.lsp",
+    "tukuroi.pool",
+    "tukuroi.template",
+    "tukuroi.testing",
+    "tukuroi.tests",
+    "tukuroi.util",
+]
 
 [tool.coverage.report]
 # Every line and branch (#116): a new one needs a test, or else the code that

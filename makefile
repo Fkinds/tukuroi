@@ -46,6 +46,7 @@ lint:
 	$(RUN) python -m tukuroi lint $(SRC)
 	$(RUN) python scripts/check_copyright.py
 	$(RUN) zizmor --offline .github/workflows
+	$(RUN) lint-imports
 
 html: docs/*
 	$(RUN) python scripts/document_rules.py
