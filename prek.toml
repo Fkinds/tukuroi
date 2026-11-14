@@ -15,7 +15,7 @@ name = "ruff check --fix"
 entry = "uv run --locked ruff check --fix"
 language = "system"
 types = ["python"]
-files = "^(src/fixit|scripts)/"
+files = "^(src/tukuroi|scripts)/"
 
 [[repos.hooks]]
 id = "ruff-format"
@@ -23,15 +23,15 @@ name = "ruff format"
 entry = "uv run --locked ruff format"
 language = "system"
 types = ["python"]
-files = "^(src/fixit|scripts)/"
+files = "^(src/tukuroi|scripts)/"
 
 [[repos.hooks]]
-id = "fixit-lint"
-name = "fixit lint"
-entry = "uv run --locked fixit lint"
+id = "tukuroi-lint"
+name = "tukuroi lint"
+entry = "uv run --locked tukuroi lint"
 language = "system"
 types = ["python"]
-files = "^(src/fixit|scripts)/"
+files = "^(src/tukuroi|scripts)/"
 
 [[repos.hooks]]
 id = "copyright"

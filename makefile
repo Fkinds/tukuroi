@@ -1,5 +1,5 @@
-SRC:=src/fixit/ scripts/
-PKG:=fixit
+SRC:=src/tukuroi/ scripts/
+PKG:=tukuroi
 
 # What uv installs from uv.lock before it runs a command: every extra and group
 # by default. A CI job narrows it to what it needs (#8).
@@ -43,7 +43,7 @@ coverage:
 lint:
 	$(RUN) ruff check $(SRC)
 	$(RUN) ruff format --check $(SRC)
-	$(RUN) python -m fixit lint $(SRC)
+	$(RUN) python -m tukuroi lint $(SRC)
 	$(RUN) python scripts/check_copyright.py
 	$(RUN) zizmor --offline .github/workflows
 

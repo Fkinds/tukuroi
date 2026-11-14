@@ -3,7 +3,7 @@
 API Reference
 =============
 
-.. module:: fixit
+.. module:: tukuroi
 
 
 Lint Rules
@@ -38,10 +38,10 @@ Simple API
 Advanced API
 ^^^^^^^^^^^^
 
-.. autoclass:: fixit.FileContent
+.. autoclass:: tukuroi.FileContent
 
 .. autofunction:: fixit_bytes
-.. autoclass:: fixit.util.capture
+.. autoclass:: tukuroi.util.capture
 
 .. autoclass:: Config
 .. autoclass:: Options
