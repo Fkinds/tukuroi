@@ -132,11 +132,11 @@ extend-select = ["S"]
 # sys.executable.
 "src/tukuroi/tests/*" = ["S101", "S603"]
 
-[tool.fixit]
+[tool.tukuroi]
 root = true
 enable = ["tukuroi.rules"]
 
-[[tool.fixit.overrides]]
+[[tool.tukuroi.overrides]]
 path = "examples"
 enable = [".examples.noop"]
 

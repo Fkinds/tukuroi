@@ -29,7 +29,7 @@ The following options are available for all commands:
     such as local rules in the repo. Fixit loads them by default. See
     :ref:`security` for when to turn them off, and what Fixit does then.
 
-    The environment variable ``FIXIT_CUSTOM_RULES`` sets the default, and the
+    The environment variable ``TUKUROI_CUSTOM_RULES`` sets the default, and the
     option wins over it. Fixit reads the variable as
     `Click <https://click.palletsprojects.com/>`_ reads a boolean, ignoring
     letter case:
@@ -206,7 +206,7 @@ Fixit reads the file as ``lint`` does, and stops at the first value that it
 cannot use. Then it loads every rule that the file names, in :attr:`enable`,
 :attr:`disable` and all the :ref:`overrides`, with its
 :attr:`enable-root-import`, and reports each one that cannot be loaded. A file
-without ``[tool.fixit]`` has nothing to check. As the file is checked alone, an
+without ``[tool.tukuroi]`` has nothing to check. As the file is checked alone, an
 :attr:`enable-root-import` that is only wrong under a parent configuration is
 not found: ``lint`` finds it.
 

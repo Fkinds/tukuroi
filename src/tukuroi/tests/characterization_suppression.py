@@ -79,7 +79,7 @@ class SuppressionCharacterizationTest(TestCase):
             # `enable` alone adds to the default "tukuroi.rules"; disabling it
             # leaves only the named rule.
             (root / "pyproject.toml").write_text(
-                "[tool.fixit]\n"
+                "[tool.tukuroi]\n"
                 "root = true\n"
                 'disable = ["tukuroi.rules"]\n'
                 f'enable = ["tukuroi.rules:{rule}"]\n'

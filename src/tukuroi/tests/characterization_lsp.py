@@ -543,8 +543,8 @@ class LspCharacterizationTest(CharacterizationTestCase):
         # for another (#96). The libcst engine published no diagnostic, and
         # showed an error of the config in a message, with its traceback in
         # the error of the formatting.
-        nope = '[tool.fixit]\nroot = true\nenable = ["tukuroi.rules:Nope"]\n'
-        one = "[tool.fixit]\nroot = true\nenable = 1\n"
+        nope = '[tool.tukuroi]\nroot = true\nenable = ["tukuroi.rules:Nope"]\n'
+        one = "[tool.tukuroi]\nroot = true\nenable = 1\n"
         cases = (
             # (label, config, text, diagnostic)
             ("syntax error", config(UI), f"{CALL}\nprint)\n", error("1:5", "Syntax Error @ 2:5: unmatched ')'")),
@@ -568,7 +568,7 @@ class LspCharacterizationTest(CharacterizationTestCase):
             "        raise RuntimeError('boom')\n"
         )
         files = {
-            "pyproject.toml": '[tool.fixit]\nroot = true\nenable = [".rules"]\n',
+            "pyproject.toml": '[tool.tukuroi]\nroot = true\nenable = [".rules"]\n',
             "rules.py": boom,
         }
         served = serve(files, session(did_open("x\n")))

@@ -43,23 +43,23 @@ class ConfigTest(TestCase):
         (self.tdp / "pyproject.toml").write_text(
             dedent(
                 """
-                [tool.fixit]
+                [tool.tukuroi]
                 root = true
                 enable-root-import = true
                 enable = ["more.rules"]
                 disable = ["tukuroi.rules.SomethingSpecific"]
 
-                [[tool.fixit.overrides]]
+                [[tool.tukuroi.overrides]]
                 path = "other"
                 enable = ["other.stuff", ".globalrules"]
                 disable = ["tukuroi.rules"]
                 """
             )
         )
-        (self.outer / ".fixit.toml").write_text(
+        (self.outer / ".tukuroi.toml").write_text(
             dedent(
                 """
-                [tool.fixit]
+                [tool.tukuroi]
                 enable = [".localrules"]
                 disable = ["tukuroi.rules"]
                 """
@@ -73,10 +73,10 @@ class ConfigTest(TestCase):
                 """
             )
         )
-        (self.inner / "fixit.toml").write_text(
+        (self.inner / "tukuroi.toml").write_text(
             dedent(
                 """
-                [tool.fixit]
+                [tool.tukuroi]
                 root = true
                 enable = ["fake8", "make8"]
                 disable = ["foo.bar"]
@@ -95,22 +95,22 @@ class ConfigTest(TestCase):
                 "outer",
                 self.outer,
                 None,
-                [self.outer / ".fixit.toml", self.tdp / "pyproject.toml"],
+                [self.outer / ".tukuroi.toml", self.tdp / "pyproject.toml"],
             ),
             (
                 "outer file",
                 self.outer / "frob.py",
                 None,
-                [self.outer / ".fixit.toml", self.tdp / "pyproject.toml"],
+                [self.outer / ".tukuroi.toml", self.tdp / "pyproject.toml"],
             ),
             (
                 "inner",
                 self.inner,
                 None,
                 [
-                    self.inner / "fixit.toml",
+                    self.inner / "tukuroi.toml",
                     self.inner / "pyproject.toml",
-                    self.outer / ".fixit.toml",
+                    self.outer / ".tukuroi.toml",
                     self.tdp / "pyproject.toml",
                 ],
             ),
@@ -119,28 +119,33 @@ class ConfigTest(TestCase):
                 self.inner / "test.py",
                 None,
                 [
-                    self.inner / "fixit.toml",
+                    self.inner / "tukuroi.toml",
                     self.inner / "pyproject.toml",
-                    self.outer / ".fixit.toml",
+                    self.outer / ".tukuroi.toml",
                     self.tdp / "pyproject.toml",
                 ],
             ),
-            ("outer from outer", self.outer, self.outer, [self.outer / ".fixit.toml"]),
+            (
+                "outer from outer",
+                self.outer,
+                self.outer,
+                [self.outer / ".tukuroi.toml"],
+            ),
             (
                 "inner from outer",
                 self.inner,
                 self.outer,
                 [
-                    self.inner / "fixit.toml",
+                    self.inner / "tukuroi.toml",
                     self.inner / "pyproject.toml",
-                    self.outer / ".fixit.toml",
+                    self.outer / ".tukuroi.toml",
                 ],
             ),
             (
                 "inner from inner",
                 self.inner,
                 self.inner,
-                [self.inner / "fixit.toml", self.inner / "pyproject.toml"],
+                [self.inner / "tukuroi.toml", self.inner / "pyproject.toml"],
             ),
         ):
             with self.subTest(name):
@@ -178,16 +183,16 @@ class ConfigTest(TestCase):
             (top / "repo/sub").mkdir(parents=True)
             (top / "repo/.git").mkdir()
             for config_dir in (top, top / "repo", top / "repo/sub"):
-                (config_dir / "pyproject.toml").write_text("[tool.fixit]\n")
+                (config_dir / "pyproject.toml").write_text("[tool.tukuroi]\n")
             found = config.locate_configs(top / "repo/sub/t.py")
             expected = [top / "repo/sub/pyproject.toml", top / "repo/pyproject.toml"]
             self.assertEqual(found, expected)
 
     def test_read_configs(self) -> None:
         # in-out priority order
-        innerA = self.inner / "fixit.toml"
+        innerA = self.inner / "tukuroi.toml"
         innerB = self.inner / "pyproject.toml"
-        outer = self.outer / ".fixit.toml"
+        outer = self.outer / ".tukuroi.toml"
         top = self.tdp / "pyproject.toml"
 
         for name, paths, expected in (
@@ -300,7 +305,7 @@ class ConfigTest(TestCase):
                 "single",
                 [
                     RawConfig(
-                        (root / "fixit.toml"),
+                        (root / "tukuroi.toml"),
                         {
                             "enable": ["foo", "bar"],
                             "disable": ["bar"],
@@ -318,15 +323,15 @@ class ConfigTest(TestCase):
                 "without root",
                 [
                     RawConfig(
-                        (root / "a/b/c/fixit.toml"),
+                        (root / "a/b/c/tukuroi.toml"),
                         {"enable": ["foo"], "python-version": "3.10"},
                     ),
                     RawConfig(
-                        (root / "a/b/fixit.toml"),
+                        (root / "a/b/tukuroi.toml"),
                         {"enable": ["bar"], "disable": ["foo"]},
                     ),
                     RawConfig(
-                        (root / "a/fixit.toml"),
+                        (root / "a/tukuroi.toml"),
                         {"enable": ["foo"], "python-version": "3.8"},
                     ),
                 ],
@@ -344,15 +349,15 @@ class ConfigTest(TestCase):
                 "with root",
                 [
                     RawConfig(
-                        (root / "a/b/c/fixit.toml"),
+                        (root / "a/b/c/tukuroi.toml"),
                         {"enable": ["foo"], "root": True},
                     ),
                     RawConfig(
-                        (root / "a/b/fixit.toml"),
+                        (root / "a/b/tukuroi.toml"),
                         {},
                     ),
                     RawConfig(
-                        (root / "a/fixit.toml"),
+                        (root / "a/tukuroi.toml"),
                         {},
                     ),
                 ],
@@ -366,11 +371,11 @@ class ConfigTest(TestCase):
                 "nearer level wins",
                 [
                     RawConfig(
-                        (root / "a/b/fixit.toml"),
+                        (root / "a/b/tukuroi.toml"),
                         {"disable": ["tukuroi.rules"], "enable": ["foo.bar"]},
                     ),
                     RawConfig(
-                        (root / "a/fixit.toml"),
+                        (root / "a/tukuroi.toml"),
                         {
                             "enable": ["tukuroi.rules:X", "foo"],
                             "disable": ["foo.bar:Y"],
@@ -532,18 +537,18 @@ class ConfigTest(TestCase):
 
     def test_invalid_config(self) -> None:
         with self.subTest("inner enable-root-import"):
-            (self.tdp / "pyproject.toml").write_text("[tool.fixit]\nroot = true\n")
+            (self.tdp / "pyproject.toml").write_text("[tool.tukuroi]\nroot = true\n")
             (self.tdp / "outer" / "pyproject.toml").write_text(
-                "[tool.fixit]\nenable-root-import = true\n"
+                "[tool.tukuroi]\nenable-root-import = true\n"
             )
 
             with self.assertRaisesRegex(config.ConfigError, "enable-root-import"):
                 config.generate_config(self.tdp / "outer" / "foo.py")
 
         with self.subTest("inner output-format"):
-            (self.tdp / "pyproject.toml").write_text("[tool.fixit]\nroot = true\n")
+            (self.tdp / "pyproject.toml").write_text("[tool.tukuroi]\nroot = true\n")
             (self.tdp / "outer" / "pyproject.toml").write_text(
-                "[tool.fixit]\noutput-format = 'this is some weird format'\n"
+                "[tool.tukuroi]\noutput-format = 'this is some weird format'\n"
             )
 
             with self.assertRaisesRegex(config.ConfigError, "output-format"):
@@ -563,11 +568,11 @@ class ConfigTest(TestCase):
     def test_every_message(self) -> None:
         # The checks give every message, though a config is wrong at the first
         # (#116).
-        tables = "must be an array of tables ([[tool.fixit.overrides]]), got"
+        tables = "must be an array of tables ([[tool.tukuroi.overrides]]), got"
         cases = (
             (
-                config.outside_errors({"a": 1, "tool": {"black": {}, "fixit": {}}}),
-                ["a: must be under [tool.fixit]", "tool.black: must be under [tool.fixit]"],
+                config.outside_errors({"a": 1, "tool": {"black": {}, "tukuroi": {}}}),
+                ["a: must be under [tool.tukuroi]", "tool.black: must be under [tool.tukuroi]"],
             ),
             (
                 config.rule_errors("enable", ["a b", "c d"]),
@@ -614,11 +619,11 @@ class ConfigTest(TestCase):
             ("python-version = '3.10'", "python-version"),
             ("formatter = 'ufmt'", "formatter"),
             ("tags = 'x'", "tags"),
-            ("[tool.fixit.options]\nX = {a = 1}", "options"),
+            ("[tool.tukuroi.options]\nX = {a = 1}", "options"),
         )
         for value, key in cases:
             with self.subTest(key):
-                text = f"[tool.fixit]\nroot = true\n{value}\n"
+                text = f"[tool.tukuroi]\nroot = true\n{value}\n"
                 (self.tdp / "pyproject.toml").write_text(text)
                 with self.assertRaises(config.ConfigError) as caught:
                     config.generate_config(self.tdp / "foo.py")
@@ -629,7 +634,7 @@ class ConfigTest(TestCase):
             (self.tdp / "pyproject.toml").write_text(
                 dedent(
                     """
-                    [tool.fixit]
+                    [tool.tukuroi]
                     output-format = "vscode"
                     """
                 )
@@ -661,7 +666,7 @@ class ConfigTest(TestCase):
             (self.tdp / "pyproject.toml").write_text(
                 dedent(
                     f"""
-                    [tool.fixit]
+                    [tool.tukuroi]
                     output-format = 'custom'
                     output-template = '{custom_output_format}'
                     """
@@ -714,24 +719,24 @@ class ConfigTest(TestCase):
             "src/plum/rules.py": rules,
         }
         sub = 'overrides (path = "sub"):'
-        override = '[[tool.fixit.overrides]]\npath = "sub"\nenable = {}\n'
+        override = '[[tool.tukuroi.overrides]]\npath = "sub"\nenable = {}\n'
         cases = (
             # (label, file, text, errors)
-            ("valid", "pyproject.toml", '[tool.fixit]\ndisable = ["tukuroi.rules"]\n', []),
-            ("local rules in an override", ".fixit.toml", "[tool.fixit]\nroot = true\n" + override.format('[".rules"]'), []),
+            ("valid", "pyproject.toml", '[tool.tukuroi]\ndisable = ["tukuroi.rules"]\n', []),
+            ("local rules in an override", ".tukuroi.toml", "[tool.tukuroi]\nroot = true\n" + override.format('[".rules"]'), []),
             # The libcst engine did not put the path on sys.path.
-            ("enable-root-import", "fixit.toml", '[tool.fixit]\nenable-root-import = "src"\nenable = ["plum.rules"]\n', []),
-            ("no [tool.fixit]", "pyproject.toml", "[tool.black]\nx = 1\n", []),
-            ("empty", "fixit.toml", "", []),
+            ("enable-root-import", "tukuroi.toml", '[tool.tukuroi]\nenable-root-import = "src"\nenable = ["plum.rules"]\n', []),
+            ("no [tool.tukuroi]", "pyproject.toml", "[tool.black]\nx = 1\n", []),
+            ("empty", "tukuroi.toml", "", []),
             # The first value only: tukuroi.rules:Nope is not loaded (#40).
-            ("invalid value", "pyproject.toml", '[tool.fixit]\nenable = ["tukuroi.rules:Nope"]\n' + override.format('"tukuroi.rules"'), [f"pyproject.toml: {sub} enable: must be an array of strings, got a string"]),
-            ("invalid name", "pyproject.toml", '[tool.fixit]\nenable = ["tukuroi/rules:X"]\n', ["pyproject.toml: enable: invalid rule name 'tukuroi/rules:X'"]),
+            ("invalid value", "pyproject.toml", '[tool.tukuroi]\nenable = ["tukuroi.rules:Nope"]\n' + override.format('"tukuroi.rules"'), [f"pyproject.toml: {sub} enable: must be an array of strings, got a string"]),
+            ("invalid name", "pyproject.toml", '[tool.tukuroi]\nenable = ["tukuroi/rules:X"]\n', ["pyproject.toml: enable: invalid rule name 'tukuroi/rules:X'"]),
             # Each rule that cannot be loaded, in the order of the file. The
             # libcst engine did not see a module without rules.
             (
                 "rules",
                 "pyproject.toml",
-                '[tool.fixit]\nenable = ["tukuroi.rules:Nope", ".empty"]\n' + override.format('[".nope"]'),
+                '[tool.tukuroi]\nenable = ["tukuroi.rules:Nope", ".empty"]\n' + override.format('[".nope"]'),
                 [
                     "pyproject.toml: enable: could not find rule tukuroi.rules:Nope",
                     "pyproject.toml: enable: no rules in .empty from ROOT",

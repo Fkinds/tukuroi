@@ -5,7 +5,7 @@
 
 """
 Characterization tests for the config: ``enable`` and ``disable`` with the
-built-in rules, ``[[tool.fixit.overrides]]``, the config file names, and the
+built-in rules, ``[[tool.tukuroi.overrides]]``, the config file names, and the
 configs of the parent directories.
 
 They run the CLI only, so that the engine rewrite (#21) can be checked against
@@ -46,11 +46,11 @@ SI_MODULE = '"tukuroi.rules.no_static_if_condition"'
 
 
 def toml(*lines: str) -> str:
-    return "[tool.fixit]\n" + "".join(f"{x}\n" for x in lines)
+    return "[tool.tukuroi]\n" + "".join(f"{x}\n" for x in lines)
 
 
 def override(path: str, *lines: str) -> str:
-    return f'[[tool.fixit.overrides]]\npath = "{path}"\n' + "".join(
+    return f'[[tool.tukuroi.overrides]]\npath = "{path}"\n' + "".join(
         f"{x}\n" for x in lines
     )
 
@@ -326,7 +326,7 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         # ("got <class 'str'>"), took `root = "no"` as true, and printed a
         # traceback for `enable = [1]`, `output-template = 1` and `path = 1`.
         rules = "must be an array of strings, got"
-        tables = "must be an array of tables ([[tool.fixit.overrides]]), got"
+        tables = "must be an array of tables ([[tool.tukuroi.overrides]]), got"
         sub = 'overrides (path = "sub"):'
         # (one invalid value, the message)
         cases = (
@@ -371,19 +371,19 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 "output-template = '{'",
                 "output-template: Single '{' encountered in format string",
             ),
-            # [tool.fixit.overrides], not [[tool.fixit.overrides]].
-            ('[tool.fixit.overrides]\npath = "sub"', f"overrides: {tables} a table"),
+            # [tool.tukuroi.overrides], not [[tool.tukuroi.overrides]].
+            ('[tool.tukuroi.overrides]\npath = "sub"', f"overrides: {tables} a table"),
             ('overrides = ["sub"]', f"overrides: {tables} an array with a string"),
             (
-                f"[[tool.fixit.overrides]]\nenable = [{NA_}]",
+                f"[[tool.tukuroi.overrides]]\nenable = [{NA_}]",
                 "overrides: a table has no path",
             ),
             (
-                "[[tool.fixit.overrides]]\npath = 1",
+                "[[tool.tukuroi.overrides]]\npath = 1",
                 "overrides: path: must be a string, got an integer",
             ),
             (
-                '[[tool.fixit.overrides]]\npath = ""',
+                '[[tool.tukuroi.overrides]]\npath = ""',
                 "overrides: path: must not be an empty string",
             ),
             # The override shows its path. It does not apply to t.py, but it
@@ -405,9 +405,9 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         # (the whole file, the message): without `root = true` above.
         whole = (
             (toml('root = "no"'), "root: must be a boolean, got a string"),
-            # The tables above [tool.fixit].
+            # The tables above [tool.tukuroi].
             ("tool = 1\n", "tool: must be a table, got an integer"),
-            ("[tool]\nfixit = 1\n", "tool.fixit: must be a table, got an integer"),
+            ("[tool]\ntukuroi = 1\n", "tool.tukuroi: must be a table, got an integer"),
         )
         for text, message in (*((toml(ROOT, v), m) for v, m in cases), *whole):
             with self.subTest(text):
@@ -448,10 +448,10 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         keys = "'disable', 'enable', 'enable-root-import', 'output-format',"
         keys += " 'output-template', 'overrides', 'root'"
         where = 'overrides (path = "."):'
-        override = '[[tool.fixit.overrides]]\npath = "."\n'
+        override = '[[tool.tukuroi.overrides]]\npath = "."\n'
         cases = (
             # (label, lines, error)
-            ("in [tool.fixit]", "bogus = 1\n", f"bogus: unknown key, not one of {keys}"),
+            ("in [tool.tukuroi]", "bogus = 1\n", f"bogus: unknown key, not one of {keys}"),
             ("removed by #21", "tags = ['x']\n", "tags: no longer supported"),
             ("in overrides", f"{override}bogus = 1\n", f"{where} bogus: unknown key, not one of 'disable', 'enable', 'path'"),
             ("not in an override", f"{override}output-format = 'vscode'\n", f"{where} output-format: not allowed in an override"),
@@ -466,15 +466,15 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
                 self.assertEqual(result.exit_code, 2)
 
     def test_keys_outside_the_table(self) -> None:
-        # fixit.toml and .fixit.toml are read under [tool.fixit] only: a key or
+        # tukuroi.toml and .tukuroi.toml are read under [tool.tukuroi] only: a key or
         # a table outside it is a config error (#40). The libcst engine skipped
         # them without a message. A pyproject.toml has the keys of other tools.
-        no_table = ONLY_NA.removeprefix("[tool.fixit]\n")
+        no_table = ONLY_NA.removeprefix("[tool.tukuroi]\n")
         cases = (
             # (label, file, text, error)
-            ("fixit.toml, no table", "fixit.toml", no_table, "root: must be under [tool.fixit]"),
-            (".fixit.toml, no table", ".fixit.toml", no_table, "root: must be under [tool.fixit]"),
-            ("another tool", "fixit.toml", ONLY_NA + "[tool.black]\nline-length = 80\n", "tool.black: must be under [tool.fixit]"),
+            ("tukuroi.toml, no table", "tukuroi.toml", no_table, "root: must be under [tool.tukuroi]"),
+            (".tukuroi.toml, no table", ".tukuroi.toml", no_table, "root: must be under [tool.tukuroi]"),
+            ("another tool", "tukuroi.toml", ONLY_NA + "[tool.black]\nline-length = 80\n", "tool.black: must be under [tool.tukuroi]"),
         )  # fmt: skip
         for label, name, text, error in cases:
             with self.subTest(label):
@@ -493,17 +493,17 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
 
     def test_config_file_names(self) -> None:
         cases = (
-            ("fixit.toml", {"sub/fixit.toml": ONLY_NA}, (NA,)),
-            (".fixit.toml", {"sub/.fixit.toml": ONLY_NA}, (NA,)),
+            ("tukuroi.toml", {"sub/tukuroi.toml": ONLY_NA}, (NA,)),
+            (".tukuroi.toml", {"sub/.tukuroi.toml": ONLY_NA}, (NA,)),
             ("pyproject.toml", {"sub/pyproject.toml": ONLY_NA}, (NA,)),
             ("other name", {"sub/tukuroi.cfg.toml": ONLY_NA}, (SI,)),
-            # These have no [tool.fixit]; the parent's config is used.
+            # These have no [tool.tukuroi]; the parent's config is used.
             (
-                "no tool.fixit",
+                "no tool.tukuroi",
                 {"sub/pyproject.toml": "[tool.black]\nline-length = 80\n"},
                 (SI,),
             ),
-            ("empty tool.fixit", {"sub/pyproject.toml": "[tool.fixit]\n"}, (SI,)),
+            ("empty tool.tukuroi", {"sub/pyproject.toml": "[tool.tukuroi]\n"}, (SI,)),
         )
         self.assert_reported(
             tuple(
@@ -515,36 +515,36 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
     def test_config_files_in_one_directory(self) -> None:
         cases = (
             (
-                "fixit.toml over pyproject.toml",
-                {"fixit.toml": ONLY_NA, "pyproject.toml": ONLY_SI},
+                "tukuroi.toml over pyproject.toml",
+                {"tukuroi.toml": ONLY_NA, "pyproject.toml": ONLY_SI},
                 (NA,),
             ),
             (
-                ".fixit.toml over pyproject.toml",
-                {".fixit.toml": ONLY_NA, "pyproject.toml": ONLY_SI},
+                ".tukuroi.toml over pyproject.toml",
+                {".tukuroi.toml": ONLY_NA, "pyproject.toml": ONLY_SI},
                 (NA,),
             ),
             (
-                "fixit.toml over .fixit.toml",
-                {"fixit.toml": ONLY_NA, ".fixit.toml": ONLY_SI},
+                "tukuroi.toml over .tukuroi.toml",
+                {"tukuroi.toml": ONLY_NA, ".tukuroi.toml": ONLY_SI},
                 (NA,),
             ),
             # Without `root = true`, the next file is read and merged too.
             (
                 "merged",
-                {"fixit.toml": toml(f"enable = [{NA_}]"), "pyproject.toml": ONLY_SI},
+                {"tukuroi.toml": toml(f"enable = [{NA_}]"), "pyproject.toml": ONLY_SI},
                 (NA, SI),
             ),
             (
                 "disable over enable",
-                {"fixit.toml": toml(f"disable = [{SI_}]"), "pyproject.toml": ONLY_SI},
+                {"tukuroi.toml": toml(f"disable = [{SI_}]"), "pyproject.toml": ONLY_SI},
                 (),
             ),
             (
                 "3 files",
                 {
-                    "fixit.toml": toml(f"enable = [{NA_}]"),
-                    ".fixit.toml": toml(f"disable = [{SI_}]"),
+                    "tukuroi.toml": toml(f"enable = [{NA_}]"),
+                    ".tukuroi.toml": toml(f"disable = [{SI_}]"),
                     "pyproject.toml": ONLY_SI,
                 },
                 (NA,),

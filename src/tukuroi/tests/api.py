@@ -57,7 +57,7 @@ from .core_loader import HEAD, files
 UI = "UseAssertIn"
 SI = "NoStaticIfCondition"
 NT = "NoNamedTuple"
-NOPE = '[tool.fixit]\nroot = true\nenable = ["tukuroi.rules:Nope"]\n'
+NOPE = '[tool.tukuroi]\nroot = true\nenable = ["tukuroi.rules:Nope"]\n'
 
 SOURCE = "x = 1\nself.assertTrue(a in b)\nif True:\n    pass\n"
 FIXED = "x = 1\nself.assertIn(a, b)\nif True:\n    pass\n"
@@ -338,13 +338,13 @@ class CommandTest(TestCase):
         stderr, and the exit code.
         """
         enable = ", ".join(f'"tukuroi.rules:{rule}"' for rule in rules)
-        pyproject = f'[tool.fixit]\nroot = true\ndisable = ["tukuroi.rules"]\nenable = [{enable}]\n'
+        pyproject = f'[tool.tukuroi]\nroot = true\ndisable = ["tukuroi.rules"]\nenable = [{enable}]\n'
         files_ = {"pyproject.toml": pyproject, "t.py": source}
         result = invoke(files_, ["fix", "--interactive", "t.py"], stdin=answers)
         return result.files["t.py"], result.stderr.splitlines()[-1], result.exit_code
 
     def test_syntax_error_is_one_line(self) -> None:
-        files_ = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "b.py": "print)\n"}
+        files_ = {"pyproject.toml": "[tool.tukuroi]\nroot = true\n", "b.py": "print)\n"}
         result = invoke(files_, ["lint", "b.py"])
         self.assertEqual(
             result.stdout, "b.py: EXCEPTION: Syntax Error @ 1:5: unmatched ')'\n"
@@ -354,7 +354,7 @@ class CommandTest(TestCase):
     def test_exceptions_from_the_process_pool(self) -> None:
         # Two files or more are linted in a process pool, which pickles the
         # result of each file (#64).
-        pyproject = '[tool.fixit]\nroot = true\nenable = [".rules"]\n'
+        pyproject = '[tool.tukuroi]\nroot = true\nenable = [".rules"]\n'
         files_ = {"pyproject.toml": pyproject, "rules.py": UNPICKLABLE}
         files_ |= {f"{name}.py": "x = 1\n" for name in ("local", "lock", "odd")}
         result = run_cli(files_, ["lint", "local.py", "lock.py", "odd.py"])
@@ -375,7 +375,7 @@ class CommandTest(TestCase):
 
     def test_a_process_of_the_pool_ends(self) -> None:
         # The pool breaks: the other files are linted again (#94).
-        pyproject = '[tool.fixit]\nroot = true\nenable = [".rules"]\n'
+        pyproject = '[tool.tukuroi]\nroot = true\nenable = [".rules"]\n'
         files_ = {"pyproject.toml": pyproject, "rules.py": EXIT}
         files_ |= {f"{name}.py": "x = 1\n" for name in ("a", "b", "exit")}
         result = run_cli(files_, ["lint", "a.py", "b.py", "exit.py"])
@@ -387,7 +387,7 @@ class CommandTest(TestCase):
 
     def test_validate_config(self) -> None:
         pyproject = (
-            '[tool.fixit]\nroot = true\nenable = [".rules:Bad", ".rules:Nope"]\n'
+            '[tool.tukuroi]\nroot = true\nenable = [".rules:Bad", ".rules:Nope"]\n'
         )
         rules = HEAD + "\n\nclass Bad(Rule):\n    MESSAGE = 'm'\n"
         files_ = {"pyproject.toml": pyproject, "rules.py": rules}
@@ -412,7 +412,7 @@ class CommandTest(TestCase):
             self.assertEqual(result.exit_code, 2)
 
     def test_debug(self) -> None:
-        files_ = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "t.py": "x = 1\n"}
+        files_ = {"pyproject.toml": "[tool.tukuroi]\nroot = true\n", "t.py": "x = 1\n"}
         # rich prints when it is installed; None makes its import fail.
         for label, modules in (("as installed", {}), ("without rich", {"rich": None})):
             with self.subTest(label), patch.dict(sys.modules, modules):
@@ -456,7 +456,7 @@ class CommandTest(TestCase):
         # The level of the log (#116): --quiet hides a warning, and --debug
         # shows the debug lines.
         files_ = {
-            "pyproject.toml": '[tool.fixit]\nroot = true\nenable = [".rules"]\n',
+            "pyproject.toml": '[tool.tukuroi]\nroot = true\nenable = [".rules"]\n',
             "t.py": "x = 1\n",
         }
         warning = "Skipped rules '.rules': custom rules are turned off"
@@ -465,7 +465,7 @@ class CommandTest(TestCase):
                 loader._WARNED.clear()  # Each warning is given once in a process.
                 result = invoke(files_, [*options, "--no-custom-rules", "lint", "t.py"])
                 self.assertEqual(warning in result.stderr, shown)
-        files_["pyproject.toml"] = "[tool.fixit]\nroot = true\n"
+        files_["pyproject.toml"] = "[tool.tukuroi]\nroot = true\n"
         result = invoke(files_, ["--debug", "lint", "t.py"])
         self.assertIn("DEBUG:tukuroi.api:t.py: clean", result.stderr)
 
@@ -493,7 +493,7 @@ class FixitStdinAndFileTest(TestCase):
     """The errors of a file, when the API calls these alone (#116)."""
 
     def test_config_error_of_stdin(self) -> None:
-        pyproject = "[tool.fixit]\nroot = true\nenable = 1\n"
+        pyproject = "[tool.tukuroi]\nroot = true\nenable = 1\n"
         stdin = io.TextIOWrapper(io.BytesIO(b"x = 1\n"))
         with (
             files({"pyproject.toml": pyproject}) as root,
@@ -530,12 +530,12 @@ class FixitPathsTest(TestCase):
         # The config is wrong, not tukuroi: no traceback (#40).
         cases = (
             ('enable = ["tukuroi rules"]', "enable: invalid rule name 'tukuroi rules'"),
-            ("enable = [", toml_error("[tool.fixit]\nenable = [\n")),
+            ("enable = [", toml_error("[tool.tukuroi]\nenable = [\n")),
         )
         for value, message in cases:
             tree = {
-                "pyproject.toml": "[tool.fixit]\nroot = true\n",
-                "sub/pyproject.toml": f"[tool.fixit]\n{value}\n",
+                "pyproject.toml": "[tool.tukuroi]\nroot = true\n",
+                "sub/pyproject.toml": f"[tool.tukuroi]\n{value}\n",
                 "sub/t.py": "",
                 "t.py": "",
             }
@@ -563,7 +563,7 @@ class FixitPathsTest(TestCase):
         # name is linted though .gitignore has it, and a file given twice is
         # linted once, where it comes first.
         tree = {
-            "pyproject.toml": "[tool.fixit]\nroot = true\n",
+            "pyproject.toml": "[tool.tukuroi]\nroot = true\n",
             ".gitignore": "ign.py\n",
             "a/t.py": SOURCE,
             "a/u.py": SOURCE,
@@ -589,7 +589,7 @@ class FixitPathsTest(TestCase):
 
     def test_configs_read_once_for_each_directory(self) -> None:
         tree = {
-            "pyproject.toml": "[tool.fixit]\nroot = true\n",
+            "pyproject.toml": "[tool.tukuroi]\nroot = true\n",
             "a/t.py": "",
             "a/u.py": "",
             "b/t.py": "",
@@ -625,7 +625,7 @@ class FixitPathsTest(TestCase):
             self.assertEqual(results, [Result(root / "t.py", None, error)])
 
     def test_rule_of_the_rules_option_that_cannot_be_loaded(self) -> None:
-        tree = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "t.py": ""}
+        tree = {"pyproject.toml": "[tool.tukuroi]\nroot = true\n", "t.py": ""}
         options = Options(rules=[QualifiedRule("tukuroi.rules", "Nope")])
         with files(tree) as root, chdir(root):
             with self.assertRaises(RulesOptionError) as caught:
@@ -639,7 +639,7 @@ class FixitPathsTest(TestCase):
             self.assertEqual(results, [Result(root / "t.py", None, error)])
 
     def test_rules_of_a_config_loaded_once(self) -> None:
-        enable = f'[tool.fixit]\nroot = true\nenable = ["tukuroi.rules:{SI}"]\n'
+        enable = f'[tool.tukuroi]\nroot = true\nenable = ["tukuroi.rules:{SI}"]\n'
         tree = {"pyproject.toml": enable, "a/t.py": "", "a/u.py": "", "b/t.py": ""}
         with (
             files(tree) as root,
@@ -653,7 +653,7 @@ class FixitPathsTest(TestCase):
     def test_custom_rules_turned_off(self) -> None:
         # The rules skipped are not loaded: no error.
         tree = {
-            "pyproject.toml": '[tool.fixit]\nroot = true\nenable = [".nope"]\n',
+            "pyproject.toml": '[tool.tukuroi]\nroot = true\nenable = [".nope"]\n',
             "t.py": "",
         }
         with (
@@ -672,7 +672,7 @@ class FixitPathsTest(TestCase):
     def test_stdin_paths(self) -> None:
         # The CLI refuses these as usage errors (#40). The API warns about "-"
         # after a path, and raises for 2 paths after "-".
-        tree = {"pyproject.toml": "[tool.fixit]\nroot = true\n", "t.py": ""}
+        tree = {"pyproject.toml": "[tool.tukuroi]\nroot = true\n", "t.py": ""}
         with files(tree) as root, chdir(root):
             with self.assertLogs("tukuroi.api", "WARNING") as logs:
                 results = list(fixit_paths([Path("t.py"), STDIN]))

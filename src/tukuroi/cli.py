@@ -161,7 +161,7 @@ class _FixitGroup(click.Group):
 @click.option(
     "--custom-rules/--no-custom-rules",
     default=True,
-    envvar="FIXIT_CUSTOM_RULES",
+    envvar="TUKUROI_CUSTOM_RULES",
     show_envvar=True,
     help="Load rules other than the built-in ones (default: load)",
 )

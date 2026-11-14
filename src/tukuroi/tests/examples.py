@@ -62,7 +62,7 @@ class ExamplesTest(TestCase):
         self.assertEqual(result.exit_code, 0)
 
     def test_basic_lint(self) -> None:
-        files = example("basic") | {"pyproject.toml": "[tool.fixit]\nroot = true\n"}
+        files = example("basic") | {"pyproject.toml": "[tool.tukuroi]\nroot = true\n"}
         result = run(files, ["lint", "custom_object.py"])
         reported = [
             ("12:8", "UseAssertIn"),

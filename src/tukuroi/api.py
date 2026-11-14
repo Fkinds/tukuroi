@@ -290,7 +290,7 @@ def fixit_stdin(
     The resulting fixed content will be printed to STDOUT.
 
     Requires passing a path that represents the filesystem location matching the
-    contents to be linted. This will be used to resolve the ``fixit.toml`` config
+    contents to be linted. This will be used to resolve the ``tukuroi.toml`` config
     file(s).
     """
     path = path.resolve()
@@ -390,7 +390,7 @@ def fixit_paths(
     from STDIN using :func:`fixit_stdin`. The fixed content will be written to STDOUT.
     A second path argument may be given, which represents the original content's true
     path name, and will be used:
-    - to resolve the ``fixit.toml`` configuration file(s)
+    - to resolve the ``tukuroi.toml`` configuration file(s)
     - when printing status messages, diffs, or errors.
     If no second path argument is given, it will default to "stdin" in the current
     working directory.

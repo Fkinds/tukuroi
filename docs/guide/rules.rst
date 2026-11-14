@@ -101,7 +101,7 @@ Enable the rules in the project's :ref:`configuration` file:
 
     # teambread/pyproject.toml
 
-    [tool.fixit]
+    [tool.tukuroi]
     enable = [
         ".rules.hollywood",  # enable just the rules in hollywood.py
         ".rules",  # enable rules from all files in the rules/ directory

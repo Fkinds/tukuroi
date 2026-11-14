@@ -1,4 +1,4 @@
-[tool.fixit]
+[tool.tukuroi]
 enable = [
     ".rules.hollywood",
 ]
