@@ -54,7 +54,7 @@ dev = [
     "coverage == 7.17.2",
     "prek == 0.5.10",
     "ruff == 0.17.4",
-    "pyrefly == 0.63.1",
+    "pyrefly ==1.4.1",
     # scripts/repository_settings.py reads .github/repository.yml.
     "pyyaml == 6.0.3",
     "zizmor == 1.32.0",
