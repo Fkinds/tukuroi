@@ -39,11 +39,9 @@ class capture[Yield, Send, Return]:
         try:
             while True:
                 value = self.generator.send(cast(Send, self._send))
-                # type: ignore # pyrefly todo
                 self._send = None
                 answer = yield value
                 if answer is not None:
-                    # type: ignore # pyrefly todo
                     self._send = answer
         except StopIteration as stop:
             self._result = cast(Return, stop.value)

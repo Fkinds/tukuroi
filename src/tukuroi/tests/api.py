@@ -711,6 +711,19 @@ class FixitPathsTest(TestCase):
         )
         self.assertEqual(logs.output, [skipped])
 
+    def test_fix_sent_back_in_parallel(self) -> None:
+        # The files are linted in a process pool: a fix cannot be applied there
+        # (#179). Sending nothing, or False, goes on.
+        tree = {"pyproject.toml": "[tool.tukuroi]\nroot = true\n"}
+        tree |= {"a.py": SOURCE, "b.py": SOURCE}
+        with files(tree) as root, chdir(root):
+            results = fixit_paths([Path("a.py"), Path("b.py")])
+            self.assertIsNotNone(next(results).violation)
+            self.assertIsNotNone(results.send(False).violation)
+            message = "^a fix cannot be sent back while linting in parallel"
+            with self.assertRaisesRegex(ValueError, message):
+                results.send(True)
+
     def test_stdin_paths(self) -> None:
         # The CLI refuses these as usage errors (#40). The API warns about "-"
         # after a path, and raises for 2 paths after "-".

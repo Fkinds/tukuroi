@@ -36,7 +36,12 @@ SI = "NoStaticIfCondition"
 SOURCE = "self.assertTrue(a, 3)\nif True:\n    pass\n"
 POSITION = {NA: "1:0", SI: "2:0"}
 # The summary line on stderr, by the rules that report the file.
-SUMMARY = {(): CLEAN, (SI,): DIRTY, (NA,): DIRTY_A, (NA, SI): DIRTY_A}
+SUMMARY: dict[tuple[str, ...], str] = {
+    (): CLEAN,
+    (SI,): DIRTY,
+    (NA,): DIRTY_A,
+    (NA, SI): DIRTY_A,
+}
 
 ROOT = "root = true"
 ALL = '"tukuroi.rules"'

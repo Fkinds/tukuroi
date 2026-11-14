@@ -370,6 +370,10 @@ def fixit_paths(
     another path is skipped with a warning. The CLI refuses both, as usage
     errors (#40).
 
+    Fixes can be sent back to the generator, as with :func:`fixit_bytes`, with
+    ``parallel=False`` only: in a process pool, sending ``True`` raises a
+    :class:`ValueError` (#179).
+
     A path that does not exist raises a :class:`FileNotFoundError` before the
     first result. A file given by name is linted though ``.gitignore`` has it,
     and a file given twice, by name or in a directory, is linted once (#40).
@@ -435,4 +439,11 @@ def fixit_paths(
             metrics_hook=metrics_hook,
         )
         for _, results in pool.run(expanded_paths, fn):
-            yield from results
+            for result in results:
+                # A process of the pool linted the file: a fix sent back cannot
+                # be applied there (#179).
+                if (yield result):
+                    raise ValueError(
+                        "a fix cannot be sent back while linting in parallel:"
+                        " pass parallel=False"
+                    )

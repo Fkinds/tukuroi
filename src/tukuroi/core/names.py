@@ -242,7 +242,9 @@ class _Scopes:
         for generator in rest:
             self.walk(generator.iter, inner, inside)
         if isinstance(node, ast.DictComp):
-            self._each([node.key, node.value], inner, inside)
+            # With unpacking (PEP 798, Python 3.15), as {**d for d in ds}, the
+            # value is None (#179).
+            self._each(filter(None, [node.key, node.value]), inner, inside)
         else:
             self.walk(node.elt, inner, inside)
 

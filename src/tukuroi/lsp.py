@@ -155,8 +155,7 @@ class LSP:
         an exception goes to the log of the client (#96).
         """
         doc = self.lsp.workspace.text_documents.get(uri)
-        path = doc and self.path_of(doc)
-        if not doc or not path:
+        if not doc or not (path := self.path_of(doc)):
             return
         diagnostics = []
         for result in self.lint(doc, path):

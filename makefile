@@ -29,7 +29,13 @@ audit:
 
 test:
 	$(RUN) python -m $(PKG).tests
+	$(MAKE) typecheck
+
+# The types of all the code (#179), on the oldest and the newest Python that
+# tukuroi supports: pyproject.toml has the files, and the oldest.
+typecheck:
 	$(RUN) pyrefly check -c pyproject.toml
+	$(RUN) pyrefly check -c pyproject.toml --python-version 3.15
 
 # The tests change the current directory, and so do the processes that they
 # start: the data goes to one place, by its absolute path (#10).
