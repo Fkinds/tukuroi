@@ -11,6 +11,9 @@ authors = [
     {name="Jimmy Lai"},
     {name="Zsolt Dollenstein"},
 ]
+maintainers = [
+    {name="Fkinds"},
+]
 license = {file="LICENSE"}
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -19,6 +22,9 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Programming Language :: Python :: Free Threading :: 2 - Beta",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Quality Assurance",
 ]
@@ -49,7 +55,6 @@ pretty = [
 # installs dev by default; `make install` installs docs too.
 [dependency-groups]
 dev = [
-    "attribution == 1.8.0",
     "commitizen == 4.19.3",
     "coverage ==7.17.3",
     "prek == 0.5.10",
@@ -82,15 +87,9 @@ vscode = "tukuroi.output:VscodeFormat"
 
 [project.urls]
 Home = "https://github.com/Fkinds/tukuroi"
+Documentation = "https://fkinds.github.io/tukuroi/"
 Github = "https://github.com/Fkinds/tukuroi"
 Changelog = "https://github.com/Fkinds/tukuroi/blob/main/CHANGELOG.md"
-
-[tool.attribution]
-name = "tukuroi"
-package = "tukuroi"
-signed_tags = true
-version_file = false
-ignored_authors = ["dependabot"]
 
 # The uv to develop with (#18): CI uses the one of UV_VERSION in its workflows.
 [tool.uv]
@@ -177,11 +176,31 @@ exclude_also = ["raise AssertionError", "assert_never\\("]
 # message_length_limit.
 [tool.commitizen]
 name = "cz_customize"
+# The version is that of the tag v* (hatch-vcs). The tags of upstream, before
+# tukuroi, are not its versions.
+version_provider = "scm"
+tag_format = "v$version"
+ignored_tag_formats = ["v0.*", "v2.*"]
+# `cz changelog` adds the section of the next version to CHANGELOG.md: see
+# "Releasing" in CONTRIBUTING.md.
+changelog_incremental = true
 
 [tool.commitizen.customize]
 schema = "<type>(<scope>)!: <description>"
 schema_pattern = "(?m)^(?=.{1,100}$)(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([^()\\s]+\\))?!?: \\S"
 example = "fix(config): stop at the first value that tukuroi cannot use"
+# The changelog: the first line of the commits that change what the users of
+# tukuroi see, and the paragraphs of BREAKING CHANGE. Merge commits, and the
+# other types, are not in it.
+changelog_pattern = "^((feat|fix|perf|revert)(\\([^()\\s]+\\))?!?|\\w+(\\([^()\\s]+\\))?!):"
+commit_parser = "^(?P<change_type>feat|fix|perf|revert|BREAKING CHANGE)(\\((?P<scope>[^()\\s]+)\\))?!?:\\s(?P<message>.*)"
+change_type_order = ["BREAKING CHANGE", "Feat", "Fix", "Perf", "Revert"]
+
+[tool.commitizen.customize.change_type_map]
+feat = "Feat"
+fix = "Fix"
+perf = "Perf"
+revert = "Revert"
 
 # ruff's default rules, and the checks of bandit that ruff has (#130): its
 # stable rules, not those of preview.

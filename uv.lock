@@ -21,21 +21,6 @@ wheels = [
 ]
 
 [[package]]
-name = "attribution"
-version = "1.8.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "jinja2" },
-    { name = "packaging" },
-    { name = "tomlkit" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6a/b8/9ff991cad9f1443d043d25cb862857b281d7d149622cfd0edefad7db8857/attribution-1.8.0.tar.gz", hash = "sha256:826897e6674abf48a4b1693081e1c14492ae8e7902767a203dd3accb336d0634", size = 24624, upload-time = "2024-06-16T01:34:34.828Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2a/77/8bb550c954f57b027e77e4fed9843cfcc7c04473ab2f2a2f1b523ae8b5de/attribution-1.8.0-py3-none-any.whl", hash = "sha256:7ddb7748c4bd2f23cdf8848b81b0d1deeb98d6dbc978b580b9f47f9983e4e0ac", size = 19782, upload-time = "2024-06-16T01:34:31.858Z" },
-]
-
-[[package]]
 name = "attrs"
 version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -892,7 +877,6 @@ ruff = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "attribution" },
     { name = "commitizen" },
     { name = "coverage" },
     { name = "import-linter" },
@@ -921,7 +905,6 @@ provides-extras = ["lsp", "pretty", "ruff"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "attribution", specifier = "==1.8.0" },
     { name = "commitizen", specifier = "==4.19.3" },
     { name = "coverage", specifier = "==7.17.3" },
     { name = "import-linter", specifier = "==2.16" },
