@@ -92,9 +92,12 @@ class LSP:
         read each time, so that a change to it is seen without a restart (#96);
         one that tukuroi cannot use, or a rule that it names that cannot be loaded,
         is the error of the document, as with :func:`~tukuroi.api.tukuroi_file`.
+        A config of Fixit that tukuroi does not read is a warning, once (#202).
         """
+        reader = ConfigReader(self.tukuroi_options)
         try:
-            config = ConfigReader(self.tukuroi_options).config(path, check=True)
+            reader.warn_of_fixit(path)
+            config = reader.config(path, check=True)
         except ConfigError as error:
             yield Result(path, violation=None, error=_error(error))
             return None
