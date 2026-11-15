@@ -279,7 +279,7 @@ class OutputFormatPluginsTest(TestCase):
         cases = (
             # (name, custom, the format, the warnings)
             ("shout", True, Shout, []),
-            ("shout", False, TukuroiFormat, [call(warning)]),
+            ("shout", False, TukuroiFormat, [call(warning, extra={loader.ONCE: True})]),
             ("ours", False, Shout, []),
             ("vscode", False, VscodeFormat, []),
         )

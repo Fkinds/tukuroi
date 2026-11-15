@@ -40,6 +40,7 @@ import logging
 import pkgutil
 import re
 import sys
+import threading
 import types
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -188,22 +189,44 @@ BUILTIN_PACKAGES = ("tukuroi.rules",)
 
 log = logging.getLogger("tukuroi.config")
 
+# The attribute that marks a record of :class:`OnceLog`: a process of a pool
+# sends it to the process that runs the pool, which gives it once too (#209).
+ONCE = "tukuroi_once"
+
 
 @dataclass
 class OnceLog:
     """
     Warnings given once (#21), on the logger ``tukuroi.config``: the rules and
-    the plugins (#169) skipped with custom rules turned off. :data:`WARNINGS`
-    are those of the process.
+    the plugins (#169) skipped with custom rules turned off, and the configs of
+    Fixit (#202). :data:`WARNINGS` are those of the process. A warning that a
+    process of a pool gives comes to the process that runs the pool, which
+    gives it once with its own (:meth:`handle`, #209).
     """
 
     given: set[str] = field(default_factory=set)
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False, compare=False
+    )
 
     def warn(self, message: str) -> None:
         """Log ``message`` as a warning, unless it was given."""
-        if message not in self.given:
+        if self._first(message):
+            log.warning(message, extra={ONCE: True})
+
+    def handle(self, record: logging.LogRecord) -> None:
+        """Log ``record``, a warning of another process, unless it was given."""
+        if self._first(record.getMessage()) and log.isEnabledFor(record.levelno):
+            log.handle(record)
+
+    def _first(self, message: str) -> bool:
+        """Whether ``message`` was not given, which it is from now on."""
+        # The threads that take the records of a pool call it too.
+        with self._lock:
+            if message in self.given:
+                return False
             self.given.add(message)
-            log.warning(message)
+            return True
 
 
 def is_builtin(name: RuleName) -> bool:
