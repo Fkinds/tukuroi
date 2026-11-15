@@ -467,11 +467,13 @@ def run_rule_tests(
 ) -> None:
     """
     Run the tests of ``rules`` on the new engine (#21). The config of the current
-    directory applies (``enable-root-import``, the switch for custom rules).
-    Exits with 5 when no test ran, as unittest and pytest do: no standard
-    defines it.
+    directory applies (``enable-root-import``, the switch for custom rules), and
+    a config of Fixit that it does not read is a warning (#202). Exits with 5
+    when no test ran, as unittest and pytest do: no standard defines it.
     """
-    config = ConfigReader(options).config()
+    reader = ConfigReader(options)
+    reader.warn_of_fixit()
+    config = reader.config()
     config.enable, config.disable = list(rules), []
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()

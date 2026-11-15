@@ -41,6 +41,14 @@ TUKUROI_CONFIG_FILENAMES = ("tukuroi.toml", ".tukuroi.toml", "pyproject.toml")
 log = logging.getLogger(__name__)
 
 
+def shown(path: Path) -> Path:
+    """``path``, relative to the current directory if it is under it (#40)."""
+    try:
+        return path.relative_to(Path.cwd())
+    except ValueError:
+        return path
+
+
 class ConfigError(ValueError):
     """
     A config that tukuroi cannot use. ``path`` is the file, when the error is in
@@ -65,11 +73,7 @@ class ConfigError(ValueError):
         """
         if self.path is None:
             return str(self)
-        try:
-            shown = self.path.relative_to(Path.cwd())
-        except ValueError:
-            shown = self.path
-        return f"{shown}: {self}"
+        return f"{shown(self.path)}: {self}"
 
 
 class RulesOptionError(ConfigError):
@@ -241,8 +245,20 @@ def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
 
     Returns a list of config paths in priority order, from highest priority to lowest.
     """
-    results: list[Path] = []
+    return [
+        candidate
+        for directory in config_directories(path, root)
+        for candidate in (directory / name for name in TUKUROI_CONFIG_FILENAMES)
+        if candidate.is_file()
+    ]
 
+
+def config_directories(path: Path, root: Path | None = None) -> list[Path]:
+    """
+    The directories that :func:`locate_configs` looks in for the configs of
+    ``path``, nearest first: from the directory of ``path`` up to ``root``, or
+    to :func:`search_root` without it.
+    """
     if not path.is_dir():
         path = path.parent
 
@@ -250,18 +266,94 @@ def locate_configs(path: Path, root: Path | None = None) -> list[Path]:
     path = path.resolve()
     path.relative_to(root)  # enforce path being inside root
 
-    while True:
-        candidates = (path / filename for filename in TUKUROI_CONFIG_FILENAMES)
-        for candidate in candidates:
-            if candidate.is_file():
-                results.append(candidate)
-
-        if path == root or path == path.parent:
-            break
-
+    directories = [path]
+    while path not in (root, path.parent):
         path = path.parent
+        directories.append(path)
+    return directories
 
-    return results
+
+# The configs of Fixit, which tukuroi does not read (#202): by the name of each
+# file, what tukuroi reads in its place.
+FIXIT_CONFIG_FILENAMES = {
+    "fixit.toml": "tukuroi.toml",
+    ".fixit.toml": ".tukuroi.toml",
+    "pyproject.toml": "[tool.tukuroi]",
+}
+
+
+def fixit_warning(path: Path, instead: str) -> str:
+    """The warning of ``path``, a config of Fixit, that tukuroi reads ``instead``."""
+    what = "[tool.fixit] is not read" if instead == "[tool.tukuroi]" else "not read"
+    return (
+        f"{shown(path)}: {what}: tukuroi reads {instead} "
+        '(see "Coming from Fixit" in the README)'
+    )
+
+
+def _tool(path: Path) -> dict[str, Any]:
+    """
+    The table ``tool`` of the TOML file ``path``: empty if it has none, or if the
+    file is not there or is not TOML, which only :func:`read_configs` tells.
+    """
+    try:
+        with path.open("rb") as file:
+            tool = tomllib.load(file).get("tool", {})
+    except OSError, UnicodeDecodeError, tomllib.TOMLDecodeError:
+        return {}
+    return tool if isinstance(tool, dict) else {}
+
+
+@dataclass
+class FixitCheck:
+    """
+    Warns of the configs of Fixit that tukuroi does not read (#202): a
+    ``fixit.toml``, a ``.fixit.toml``, or a ``[tool.fixit]`` of a
+    ``pyproject.toml``, that is not empty, in a directory with no config of
+    tukuroi (a ``[tool.tukuroi]``, a ``tukuroi.toml`` or a ``.tukuroi.toml``,
+    even empty). A file that is not TOML is not one. The warnings are those of
+    the loader (:data:`~tukuroi.core.loader.WARNINGS`), given once in a
+    process. ``looked`` has the directories looked in, and whether each has a
+    root config. :data:`FIXIT_CHECK` is the check of the process.
+    """
+
+    looked: dict[Path, bool] = field(default_factory=dict)
+
+    def directories(self, directories: Sequence[Path]) -> None:
+        """
+        Warn of the configs of Fixit in ``directories``, nearest first, up to
+        the one with a root config, where the search for configs stops.
+        """
+        for directory in directories:
+            if directory not in self.looked:
+                self.looked[directory] = self._look(directory)
+            if self.looked[directory]:
+                break
+
+    def file(self, path: Path) -> None:
+        """
+        Warn of ``path``, a config named on the command line, if it has a
+        ``[tool.fixit]`` that is not empty, and no ``[tool.tukuroi]``.
+        """
+        tool = _tool(path)
+        if "tukuroi" not in tool and tool.get("fixit"):
+            loader.WARNINGS.warn(fixit_warning(path, "[tool.tukuroi]"))
+
+    def _look(self, directory: Path) -> bool:
+        """Warn of the configs of Fixit in ``directory``: whether it has a root config."""
+        tools = {name: _tool(directory / name) for name in TUKUROI_CONFIG_FILENAMES}
+        tables = [tool["tukuroi"] for tool in tools.values() if "tukuroi" in tool]
+        outside = ("tukuroi.toml", ".tukuroi.toml")
+        if not (tables or any((directory / name).is_file() for name in outside)):
+            for name, instead in FIXIT_CONFIG_FILENAMES.items():
+                tool = tools[name] if name in tools else _tool(directory / name)
+                if tool.get("fixit"):
+                    loader.WARNINGS.warn(fixit_warning(directory / name, instead))
+        return any(isinstance(t, dict) and t.get("root") is True for t in tables)
+
+
+# The check of this process.
+FIXIT_CHECK = FixitCheck()
 
 
 def read_configs(paths: list[Path]) -> list[RawConfig]:
@@ -558,7 +650,22 @@ class ConfigReader:
             directory = path.resolve().parent
             if directory not in seen:
                 seen.add(directory)
+                self.warn_of_fixit(directory)
                 self.config(directory, check=True)
+
+    def warn_of_fixit(self, path: Path | None = None) -> None:
+        """
+        Warn of the configs of Fixit that tukuroi does not read for ``path`` (by
+        default, the current directory), in the directories that :meth:`config`
+        looks in, or of the config of ``--config-file`` (#202): see
+        :class:`FixitCheck`. Called by the process that reads the configs before
+        it lints, not by each process of a pool, which would warn again.
+        """
+        if self.options and self.options.config_file:
+            FIXIT_CHECK.file(self.options.config_file.resolve())
+            return
+        path = (path or Path.cwd()).resolve()
+        FIXIT_CHECK.directories(config_directories(path, self.root))
 
 
 def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
@@ -572,8 +679,10 @@ def validate_config(path: Path, *, custom_rules: bool = True) -> list[str]:
     the message. A file without ``[tool.tukuroi]`` has nothing to check.
 
     With ``custom_rules`` false, only the names of custom rules are checked: they
-    are not imported, and each one logs a warning.
+    are not imported, and each one logs a warning. A ``[tool.fixit]`` without
+    ``[tool.tukuroi]`` is a warning too (#202).
     """
+    FIXIT_CHECK.file(path.resolve())
     try:
         raw_configs = read_configs([path])
         if not raw_configs:

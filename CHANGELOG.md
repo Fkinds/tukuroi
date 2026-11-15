@@ -48,6 +48,8 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
   `tukuroi.rules`: `NoValueObjectDefault` reports the defaults of the fields of
   value objects, those of dataclasses and of attrs.
 - **cli**: `validate-config` loads the rules and the plugins that a config names.
+- **config**: a config of Fixit (`[tool.fixit]`, `fixit.toml`, `.fixit.toml`) in
+  a directory with no config of tukuroi is a warning: tukuroi does not read it.
 
 ### Fix
 

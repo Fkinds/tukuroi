@@ -63,6 +63,12 @@ tukuroi reads none of the names of Fixit. Rename them:
 
 .. __: https://fkinds.github.io/tukuroi/guide.html#ruff-rules
 
+A config of Fixit that tukuroi does not read is a warning: a ``fixit.toml``, a
+``.fixit.toml``, or a ``[tool.fixit]`` in ``pyproject.toml``, in a directory
+with no config of tukuroi. To keep one for Fixit and run tukuroi with its
+defaults, put an empty ``[tool.tukuroi]`` (or an empty ``tukuroi.toml``) next to
+it.
+
 The settings of Fixit that tukuroi does not support (``python-version``,
 ``options``, ``tags``) are configuration errors that say so. ``formatter`` takes
 ``"ruff"`` or ``"none"`` only, not ``"black"`` or ``"ufmt"``.
