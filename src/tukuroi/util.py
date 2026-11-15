@@ -22,7 +22,7 @@ class capture[Yield, Send, Return]:
 
     .. code:: python
 
-        generator = capture( fixit_bytes(...) )
+        generator = capture( tukuroi_bytes(...) )
         for result in generator:  # Result
             ...
             generator.respond(...)  # optional

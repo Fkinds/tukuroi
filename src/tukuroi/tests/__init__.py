@@ -10,11 +10,11 @@ from tukuroi.core.testing import generate_test_cases
 
 from .api import (
     CommandTest,
-    FixitBytesTest,
-    FixitPathsTest,
-    FixitStdinAndFileTest,
     PrintResultTest,
     PublicNamesTest,
+    TukuroiBytesTest,
+    TukuroiPathsTest,
+    TukuroiStdinAndFileTest,
 )
 from .characterization_cli import CliCharacterizationTest
 from .characterization_config import ConfigCharacterizationTest

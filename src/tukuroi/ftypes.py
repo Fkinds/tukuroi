@@ -130,7 +130,7 @@ class Config:
     formatter: str = "none"
 
     # output formatting options: the name of an output format plugin (#169)
-    output_format: str = "fixit"
+    output_format: str = "tukuroi"
     output_template: str = ""
 
     def __post_init__(self) -> None:

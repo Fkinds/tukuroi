@@ -34,7 +34,7 @@ from pygls.lsp.server import LanguageServer
 from pygls.workspace.text_document import TextDocument
 
 from .__version__ import __version__
-from .api import _error, fixit_bytes
+from .api import _error, tukuroi_bytes
 from .config import ConfigError, ConfigReader
 from .ftypes import FileContent, LSPOptions, Options, Result
 from .util import capture
@@ -67,7 +67,7 @@ class LSP:
         # Whether the client asked to shut down before "exit" (LSP 3.17).
         self.shut_down = False
 
-        self.lsp = LanguageServer("fixit-lsp", __version__)
+        self.lsp = LanguageServer("tukuroi-lsp", __version__)
         # `partial` since `pygls` can register functions but not methods
         self.lsp.feature(TEXT_DOCUMENT_DID_OPEN)(partial(self.on_did_open))
         self.lsp.feature(TEXT_DOCUMENT_DID_CHANGE)(partial(self.on_did_change))
@@ -88,10 +88,10 @@ class LSP:
         self, doc: TextDocument, path: Path, *, autofix: bool = False
     ) -> Generator[Result, bool, FileContent | None]:
         """
-        :func:`~tukuroi.api.fixit_bytes` on the text of ``doc``. The config is
+        :func:`~tukuroi.api.tukuroi_bytes` on the text of ``doc``. The config is
         read each time, so that a change to it is seen without a restart (#96);
         one that tukuroi cannot use, or a rule that it names that cannot be loaded,
-        is the error of the document, as with :func:`~tukuroi.api.fixit_file`.
+        is the error of the document, as with :func:`~tukuroi.api.tukuroi_file`.
         """
         try:
             config = ConfigReader(self.tukuroi_options).config(path, check=True)
@@ -99,7 +99,7 @@ class LSP:
             yield Result(path, violation=None, error=_error(error))
             return None
         content = doc.source.encode()
-        return (yield from fixit_bytes(path, content, autofix=autofix, config=config))
+        return (yield from tukuroi_bytes(path, content, autofix=autofix, config=config))
 
     def position(self, text: str, line: int, column: int) -> Position:
         """
@@ -131,7 +131,7 @@ class LSP:
                 violation.message,
                 severity=DiagnosticSeverity.Warning,
                 code=violation.rule_name,
-                source="fixit",
+                source="tukuroi",
             )
         if error := result.error:
             where = error.position
@@ -145,7 +145,7 @@ class LSP:
                 Range(at, at),
                 message,
                 severity=DiagnosticSeverity.Error,
-                source="fixit",
+                source="tukuroi",
             )
         return None
 

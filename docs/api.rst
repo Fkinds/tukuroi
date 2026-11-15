@@ -40,8 +40,8 @@ Frontends
 Simple API
 ^^^^^^^^^^
 
-.. autofunction:: fixit_paths
-.. autofunction:: fixit_file
+.. autofunction:: tukuroi_paths
+.. autofunction:: tukuroi_file
 .. autofunction:: print_result
 
 .. autoclass:: Violation
@@ -54,7 +54,7 @@ Advanced API
 
 .. autoclass:: tukuroi.FileContent
 
-.. autofunction:: fixit_bytes
+.. autofunction:: tukuroi_bytes
 .. autoclass:: tukuroi.util.capture
 
 .. autoclass:: Config

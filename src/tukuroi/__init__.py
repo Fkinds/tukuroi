@@ -8,7 +8,7 @@ Linting framework built on ``ast``, with automatic fixes
 """
 
 from .__version__ import __version__
-from .api import fixit_bytes, fixit_file, fixit_paths, print_result
+from .api import print_result, tukuroi_bytes, tukuroi_file, tukuroi_paths
 from .core.edits import Edit
 from .core.format import FormatterPlugin
 from .core.names import ImportTable
@@ -46,8 +46,8 @@ __all__ = [
     "Valid",
     "Violation",
     "__version__",
-    "fixit_bytes",
-    "fixit_file",
-    "fixit_paths",
     "print_result",
+    "tukuroi_bytes",
+    "tukuroi_file",
+    "tukuroi_paths",
 ]

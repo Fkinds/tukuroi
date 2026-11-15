@@ -33,7 +33,7 @@ from .ftypes import (
     Result,
     Violation,
 )
-from .output import FixitFormat, OutputFormatPlugin, machine_readable
+from .output import OutputFormatPlugin, TukuroiFormat, machine_readable
 from .output import shown as _shown
 from .plugins import formatter_of
 from .pool import LintPool
@@ -76,7 +76,7 @@ def print_result(
 ) -> int:
     """
     Print ``result``: what ``output``, an output format plugin (#169), gives for
-    it (by default, that of ``fixit``), and an exception with its traceback.
+    it (by default, that of ``tukuroi``), and an exception with its traceback.
     With a format for programs to read (``MACHINE_READABLE``), what it gives is
     printed without colors, and the rest on stderr (#178).
 
@@ -87,7 +87,7 @@ def print_result(
     """
     path = _shown(result.path)
     machine = machine_readable(output)
-    line = (output or FixitFormat(Config())).result(result)
+    line = (output or TukuroiFormat(Config())).result(result)
     if line is not None:
         if machine:
             # Not even the reset of a style.
@@ -138,7 +138,7 @@ def _echo_diff(diff: str, *, err: bool = False) -> None:
         click.secho(line, nl=False, err=err, fg=fg, bold=bold)
 
 
-def fixit_bytes(
+def tukuroi_bytes(
     path: Path,
     content: FileContent,
     *,
@@ -258,7 +258,7 @@ def _metrics(
     return metrics
 
 
-def fixit_stdin(
+def tukuroi_stdin(
     path: Path,
     *,
     autofix: bool = False,
@@ -266,7 +266,7 @@ def fixit_stdin(
     metrics_hook: MetricsHook | None = None,
 ) -> Generator[Result, bool]:
     """
-    Wrapper around :func:`fixit_bytes` for formatting content from STDIN.
+    Wrapper around :func:`tukuroi_bytes` for formatting content from STDIN.
 
     The resulting fixed content will be printed to STDOUT.
 
@@ -280,7 +280,7 @@ def fixit_stdin(
         content: FileContent = sys.stdin.buffer.read()
         config = ConfigReader(options).config(path, check=True)
 
-        updated = yield from fixit_bytes(
+        updated = yield from tukuroi_bytes(
             path, content, config=config, autofix=autofix, metrics_hook=metrics_hook
         )
         if autofix:
@@ -290,11 +290,11 @@ def fixit_stdin(
         # The config is wrong, not tukuroi: no traceback (#40).
         yield Result(path, violation=None, error=_error(error))
     except Exception as error:
-        LOG.debug("Exception while fixit_stdin", exc_info=error)
+        LOG.debug("Exception while tukuroi_stdin", exc_info=error)
         yield Result(path, violation=None, error=_error(error, traceback.format_exc()))
 
 
-def fixit_file(
+def tukuroi_file(
     path: Path,
     *,
     autofix: bool = False,
@@ -305,12 +305,12 @@ def fixit_file(
     Lint a single file on disk, detecting and generating appropriate configuration.
 
     Generates a merged :ref:`configuration` based on all applicable config files.
-    Reads file from disk as raw bytes, and uses :func:`fixit_bytes` to lint and apply
+    Reads file from disk as raw bytes, and uses :func:`tukuroi_bytes` to lint and apply
     any fixes to the content. Writes content back to disk if changes are detected.
 
     Yields :class:`Result` objects for each lint error or exception found, or a single
     empty result if the file is clean.
-    See :func:`fixit_bytes` for semantics.
+    See :func:`tukuroi_bytes` for semantics.
     """
     path = path.resolve()
 
@@ -318,7 +318,7 @@ def fixit_file(
         content: FileContent = path.read_bytes()
         config = ConfigReader(options).config(path, check=True)
 
-        updated = yield from fixit_bytes(
+        updated = yield from tukuroi_bytes(
             path, content, config=config, autofix=autofix, metrics_hook=metrics_hook
         )
         if updated and updated != content:
@@ -329,11 +329,11 @@ def fixit_file(
         # The config is wrong, not tukuroi: no traceback (#40).
         yield Result(path, violation=None, error=_error(error))
     except Exception as error:
-        LOG.debug("Exception while fixit_file", exc_info=error)
+        LOG.debug("Exception while tukuroi_file", exc_info=error)
         yield Result(path, violation=None, error=_error(error, traceback.format_exc()))
 
 
-def _fixit_file_wrapper(
+def _tukuroi_file_wrapper(
     path: Path,
     *,
     autofix: bool = False,
@@ -345,11 +345,11 @@ def _fixit_file_wrapper(
     TODO: replace this with some sort of queue or whatever
     """
     return list(
-        fixit_file(path, autofix=autofix, options=options, metrics_hook=metrics_hook)
+        tukuroi_file(path, autofix=autofix, options=options, metrics_hook=metrics_hook)
     )
 
 
-def fixit_paths(
+def tukuroi_paths(
     paths: Iterable[Path],
     *,
     autofix: bool = False,
@@ -361,14 +361,14 @@ def fixit_paths(
     Lint multiple files or directories, recursively expanding each path.
 
     Walks all paths given, obeying any ``.gitignore`` exclusions, finding Python source
-    files. Lints each file found using :func:`fixit_file`, using a process pool when
+    files. Lints each file found using :func:`tukuroi_file`, using a process pool when
     more than one file is being linted.
 
     Yields :class:`Result` objects for each path, lint error, or exception found.
-    See :func:`fixit_bytes` for semantics.
+    See :func:`tukuroi_bytes` for semantics.
 
     If the first given path is STDIN (``Path("-")``), then content will be linted
-    from STDIN using :func:`fixit_stdin`. The fixed content will be written to STDOUT.
+    from STDIN using :func:`tukuroi_stdin`. The fixed content will be written to STDOUT.
     A second path argument may be given, which represents the original content's true
     path name, and will be used:
     - to resolve the ``tukuroi.toml`` configuration file(s)
@@ -379,7 +379,7 @@ def fixit_paths(
     another path is skipped with a warning. The CLI refuses both, as usage
     errors (#40).
 
-    Fixes can be sent back to the generator, as with :func:`fixit_bytes`, with
+    Fixes can be sent back to the generator, as with :func:`tukuroi_bytes`, with
     ``parallel=False`` only: in a process pool, sending ``True`` raises a
     :class:`ValueError` (#179).
 
@@ -400,7 +400,7 @@ def fixit_paths(
     Before the first result, the config of the directory of each file is read
     (:meth:`~tukuroi.config.ConfigReader.check`): a config that tukuroi cannot
     use raises a :class:`~tukuroi.config.ConfigError`, and no file is linted
-    (#40). A file linted alone (:func:`fixit_file`) gets such an error as its
+    (#40). A file linted alone (:func:`tukuroi_file`) gets such an error as its
     result.
     """
     expanded_paths: list[Path] = []
@@ -433,17 +433,17 @@ def fixit_paths(
     ConfigReader(options).check([stdin_path] if is_stdin else expanded_paths)
 
     if is_stdin:
-        yield from fixit_stdin(
+        yield from tukuroi_stdin(
             stdin_path, autofix=autofix, options=options, metrics_hook=metrics_hook
         )
     elif len(expanded_paths) == 1 or not parallel:
         for path in expanded_paths:
-            yield from fixit_file(
+            yield from tukuroi_file(
                 path, autofix=autofix, options=options, metrics_hook=metrics_hook
             )
     else:
         fn = partial(
-            _fixit_file_wrapper,
+            _tukuroi_file_wrapper,
             autofix=autofix,
             options=options,
             metrics_hook=metrics_hook,

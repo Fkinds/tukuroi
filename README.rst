@@ -53,6 +53,13 @@ tukuroi reads none of the names of Fixit. Rename them:
         `ruff guide`__)
     * - the pre-commit hooks ``fixit-lint`` and ``fixit-fix``
       - ``tukuroi-lint`` and ``tukuroi-fix``
+    * - ``fixit_paths``, ``fixit_file``, ``fixit_bytes``
+      - ``tukuroi_paths``, ``tukuroi_file``, ``tukuroi_bytes``
+    * - ``output-format = "fixit"``, ``--output-format fixit``
+      - ``output-format = "tukuroi"``, ``--output-format tukuroi``
+    * - the LSP server ``fixit-lsp``, and the source ``fixit`` of its
+        diagnostics
+      - ``tukuroi-lsp``, and the source ``tukuroi``
 
 .. __: https://fkinds.github.io/tukuroi/guide.html#ruff-rules
 

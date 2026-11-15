@@ -198,7 +198,7 @@ Fixit that tukuroi does not support (``python-version``, ``options``,
 
     - ``custom``: Specify your own format using the :attr:`output-template`
       option below.
-    - ``fixit``: the default output format.
+    - ``tukuroi``: the default output format.
     - ``json``: one JSON document of the results, for programs to read (see
       :ref:`machine_readable_output`).
     - ``sarif``: a log of SARIF 2.1.0, which GitHub code scanning reads (see

@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-Tests of ``tukuroi.api.fixit_bytes``, which runs the new engine (#21), for what the
+Tests of ``tukuroi.api.tukuroi_bytes``, which runs the new engine (#21), for what the
 characterization tests do not pin: the results it yields and what it returns,
 the fixes sent back to it, the warning when the fixes do not converge, the
 metrics, and the errors; and through the CLI, ``fix --interactive``, a syntax
@@ -28,11 +28,11 @@ from moreorless.click import echo_color_precomputed_diff
 
 from ..api import (
     _echo_diff,
-    fixit_bytes,
-    fixit_file,
-    fixit_paths,
-    fixit_stdin,
     print_result,
+    tukuroi_bytes,
+    tukuroi_file,
+    tukuroi_paths,
+    tukuroi_stdin,
 )
 from ..config import ConfigError, ConfigReader, RulesOptionError
 from ..core.text import Position, Range
@@ -46,7 +46,7 @@ from ..ftypes import (
     Result,
     Violation,
 )
-from ..output import FixitFormat, VscodeFormat
+from ..output import TukuroiFormat, VscodeFormat
 from ..util import capture, chdir
 from .characterization_cli import invoke, toml_error
 from .characterization_custom_rules import run as run_cli
@@ -157,11 +157,11 @@ def run(
     metrics: list[Metrics] | None = None,
 ) -> tuple[list[Result], bytes | None]:
     """
-    The results of ``fixit_bytes`` on ``source``, with ``answers`` sent back for
+    The results of ``tukuroi_bytes`` on ``source``, with ``answers`` sent back for
     its violations, and what it returns.
     """
     generator = capture(
-        fixit_bytes(
+        tukuroi_bytes(
             config.path,
             source.encode(),
             config=config,
@@ -177,7 +177,7 @@ def run(
     return results, generator.result
 
 
-class FixitBytesTest(TestCase):
+class TukuroiBytesTest(TestCase):
     maxDiff = None
 
     def setUp(self) -> None:
@@ -500,7 +500,7 @@ class CommandTest(TestCase):
 
 class PrintResultTest(TestCase):
     def test_output(self) -> None:
-        # The output format that it is given (#169), or else that of fixit.
+        # The output format that it is given (#169), or else that of tukuroi.
         where = Range(Position(1, 0), Position(1, 1))
         result = Result(Path.cwd() / "t.py", Violation("X", where, "m", False))
         cases = (
@@ -515,7 +515,7 @@ class PrintResultTest(TestCase):
 
     def test_output_of_nothing(self) -> None:
         # A format that gives nothing for a violation: the diff is still shown.
-        class Quiet(FixitFormat):
+        class Quiet(TukuroiFormat):
             def result(self, result: Result) -> str | None:
                 return None
 
@@ -530,7 +530,7 @@ class PrintResultTest(TestCase):
     def test_output_for_programs(self) -> None:
         # A format for programs to read (#178): what it gives, without colors,
         # alone on stdout; the diff and the exception on stderr.
-        class Lines(FixitFormat):
+        class Lines(TukuroiFormat):
             MACHINE_READABLE = True
 
         where = Range(Position(1, 0), Position(1, 1))
@@ -540,7 +540,7 @@ class PrintResultTest(TestCase):
         line = b"t.py@1:0 X: m (has autofix)\n"
         for output, machine in (
             (Lines(Config()), True),
-            (FixitFormat(Config()), False),
+            (TukuroiFormat(Config()), False),
         ):
             with (
                 self.subTest(type(output).__name__),
@@ -560,7 +560,7 @@ class PrintResultTest(TestCase):
                     self.assertEqual(stderr, b"")
 
 
-class FixitStdinAndFileTest(TestCase):
+class TukuroiStdinAndFileTest(TestCase):
     """The errors of a file, when the API calls these alone (#116)."""
 
     def test_config_error_of_stdin(self) -> None:
@@ -571,7 +571,7 @@ class FixitStdinAndFileTest(TestCase):
             chdir(root),
             patch("sys.stdin", stdin),
         ):
-            [result] = fixit_stdin(Path("t.py"))
+            [result] = tukuroi_stdin(Path("t.py"))
         message = "pyproject.toml: enable: must be an array of strings, got an integer"
         self.assertEqual(result.error, Error("tukuroi.config.ConfigError", message))
 
@@ -580,22 +580,22 @@ class FixitStdinAndFileTest(TestCase):
             buffer=SimpleNamespace(read=Mock(side_effect=OSError("boom")))
         )
         with files({}) as root, chdir(root), patch("sys.stdin", stdin):
-            [result] = fixit_stdin(Path("t.py"))
+            [result] = tukuroi_stdin(Path("t.py"))
         assert result.error is not None
         self.assertEqual((result.error.type, result.error.message), ("OSError", "boom"))
         self.assertIn("Traceback", result.error.traceback)
 
     def test_file_that_cannot_be_read(self) -> None:
         with files({"sub/t.py": ""}) as root, chdir(root):
-            [result] = fixit_file(Path("sub"))
+            [result] = tukuroi_file(Path("sub"))
         assert result.error is not None
         self.assertEqual(result.error.type, "IsADirectoryError")
         self.assertIn("Traceback", result.error.traceback)
 
 
-class FixitPathsTest(TestCase):
+class TukuroiPathsTest(TestCase):
     def test_no_paths(self) -> None:
-        self.assertEqual(list(fixit_paths([])), [])
+        self.assertEqual(list(tukuroi_paths([])), [])
 
     def test_invalid_config(self) -> None:
         # The config is wrong, not tukuroi: no traceback (#40).
@@ -618,14 +618,14 @@ class FixitPathsTest(TestCase):
                     chdir(root),
                     patch("sys.stdin", io.TextIOWrapper(io.BytesIO(b"x = 1\n"))),
                 ):
-                    results = fixit_paths(map(Path, paths))
+                    results = tukuroi_paths(map(Path, paths))
                     # Before any file is linted, t.py too.
                     with self.assertRaises(ConfigError) as caught:
                         next(results)
                     self.assertEqual(caught.exception.describe(), shown)
             # A file linted alone: the error is its result.
             with self.subTest(value, alone=True), files(tree) as root, chdir(root):
-                results = list(fixit_file(Path("sub/t.py")))
+                results = list(tukuroi_file(Path("sub/t.py")))
                 error = Error("tukuroi.config.ConfigError", shown)
                 self.assertEqual(results, [Result(root / "sub/t.py", None, error)])
 
@@ -641,13 +641,13 @@ class FixitPathsTest(TestCase):
             "ign.py": SOURCE,
         }
         with files(tree) as root, chdir(root):
-            results = fixit_paths([Path("a/t.py"), Path("nope.py")], parallel=False)
+            results = tukuroi_paths([Path("a/t.py"), Path("nope.py")], parallel=False)
             with self.assertRaises(FileNotFoundError) as caught:
                 next(results)
             self.assertEqual(caught.exception.filename, "nope.py")
 
             def linted(*paths: str) -> list[Path]:
-                results = fixit_paths(map(Path, paths), parallel=False)
+                results = tukuroi_paths(map(Path, paths), parallel=False)
                 return list(dict.fromkeys(r.path for r in results))
 
             self.assertEqual(linted("ign.py"), [root / "ign.py"])
@@ -677,7 +677,7 @@ class FixitPathsTest(TestCase):
             def read_paths() -> list[Path]:
                 return [call.args[1].resolve() for call in read.call_args_list]
 
-            list(fixit_paths([Path("a"), Path("b/t.py")], parallel=False))
+            list(tukuroi_paths([Path("a"), Path("b/t.py")], parallel=False))
             # The directories first, and then each file, as it is linted: the
             # files of a directory in the order of the file system.
             files_ = [root / "a/t.py", root / "a/u.py", root / "b/t.py"]
@@ -687,7 +687,7 @@ class FixitPathsTest(TestCase):
             # With --config-file, that config is read once.
             read.reset_mock()
             options = Options(config_file=root / "pyproject.toml")
-            list(fixit_paths([Path("a"), Path("b")], options=options, parallel=False))
+            list(tukuroi_paths([Path("a"), Path("b")], options=options, parallel=False))
             paths = read_paths()
             self.assertEqual(paths[:1], [root / "a"])
             self.assertCountEqual(paths[1:], files_)
@@ -698,11 +698,11 @@ class FixitPathsTest(TestCase):
         shown = "pyproject.toml: enable: could not find rule tukuroi.rules:Nope"
         with files(tree) as root, chdir(root):
             with self.assertRaises(ConfigError) as caught:
-                next(fixit_paths([Path("t.py")]))
+                next(tukuroi_paths([Path("t.py")]))
             self.assertEqual(caught.exception.describe(), shown)
             # A file linted alone: the error is its result, and no rule runs.
             error = Error("tukuroi.config.ConfigError", shown)
-            results = list(fixit_file(Path("t.py")))
+            results = list(tukuroi_file(Path("t.py")))
             self.assertEqual(results, [Result(root / "t.py", None, error)])
 
     def test_rule_of_the_rules_option_that_cannot_be_loaded(self) -> None:
@@ -710,13 +710,13 @@ class FixitPathsTest(TestCase):
         options = Options(rules=[QualifiedRule("tukuroi.rules", "Nope")])
         with files(tree) as root, chdir(root):
             with self.assertRaises(RulesOptionError) as caught:
-                next(fixit_paths([Path("t.py")], options=options))
+                next(tukuroi_paths([Path("t.py")], options=options))
             self.assertEqual(
                 str(caught.exception), "could not find rule tukuroi.rules:Nope"
             )
             shown = "--rules: could not find rule tukuroi.rules:Nope"
             error = Error("tukuroi.config.RulesOptionError", shown)
-            results = list(fixit_file(Path("t.py"), options=options))
+            results = list(tukuroi_file(Path("t.py"), options=options))
             self.assertEqual(results, [Result(root / "t.py", None, error)])
 
     def test_rules_of_a_config_loaded_once(self) -> None:
@@ -728,7 +728,7 @@ class FixitPathsTest(TestCase):
             new_process() as rules,
             patch.object(rules, "load", wraps=rules.load) as loaded,
         ):
-            list(fixit_paths([Path("a"), Path("b")], parallel=False))
+            list(tukuroi_paths([Path("a"), Path("b")], parallel=False))
         # Before any file, and not again for each file in the process.
         self.assertEqual(loaded.call_count, 1)
 
@@ -744,7 +744,7 @@ class FixitPathsTest(TestCase):
             self.assertLogs("tukuroi.config") as logs,
         ):
             options = Options(custom_rules=False)
-            results = list(fixit_paths([Path("t.py")], options=options))
+            results = list(tukuroi_paths([Path("t.py")], options=options))
         self.assertEqual(results, [Result(root / "t.py", None)])
         skipped = (
             "WARNING:tukuroi.config:Skipped rules '.nope': custom rules are turned off"
@@ -757,7 +757,7 @@ class FixitPathsTest(TestCase):
         tree = {"pyproject.toml": "[tool.tukuroi]\nroot = true\n"}
         tree |= {"a.py": SOURCE, "b.py": SOURCE}
         with files(tree) as root, chdir(root):
-            results = fixit_paths([Path("a.py"), Path("b.py")])
+            results = tukuroi_paths([Path("a.py"), Path("b.py")])
             self.assertIsNotNone(next(results).violation)
             self.assertIsNotNone(results.send(False).violation)
             message = "^a fix cannot be sent back while linting in parallel"
@@ -770,14 +770,14 @@ class FixitPathsTest(TestCase):
         tree = {"pyproject.toml": "[tool.tukuroi]\nroot = true\n", "t.py": ""}
         with files(tree) as root, chdir(root):
             with self.assertLogs("tukuroi.api", "WARNING") as logs:
-                results = list(fixit_paths([Path("t.py"), STDIN]))
+                results = list(tukuroi_paths([Path("t.py"), STDIN]))
             mix = (
                 "WARNING:tukuroi.api:Cannot mix stdin ('-') with normal paths, ignoring"
             )
             self.assertEqual(logs.output, [mix])
             self.assertEqual(results, [Result(root / "t.py", None)])
             with self.assertRaisesRegex(ValueError, "^too many stdin paths$"):
-                list(fixit_paths([STDIN, Path("t.py"), Path("u.py")]))
+                list(tukuroi_paths([STDIN, Path("t.py"), Path("u.py")]))
 
 
 class PublicNamesTest(TestCase):

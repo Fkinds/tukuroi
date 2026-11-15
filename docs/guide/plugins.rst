@@ -106,9 +106,9 @@ gives for each :class:`~tukuroi.Result`, and what ``end`` gives after them;
 ``None`` prints nothing. tukuroi itself still prints an error with its
 traceback, and the diff of a fix with ``--diff``. ``tukuroi fix -`` prints the
 fixed source alone on the standard output, and all of this on the standard
-error. The names are in any letter case. ``fixit``, ``vscode``, ``custom``,
+error. The names are in any letter case. ``tukuroi``, ``vscode``, ``custom``,
 ``json`` and ``sarif`` come with tukuroi, registered the same way. With custom
-rules turned off, tukuroi prints ``fixit`` in place of another, with a warning.
+rules turned off, tukuroi prints ``tukuroi`` in place of another, with a warning.
 
 A format for programs to read sets the class attribute
 ``MACHINE_READABLE = True``, as ``json`` and ``sarif`` do. tukuroi then prints

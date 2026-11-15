@@ -9,8 +9,10 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
 
 - **names**: the package, the command, the configuration (`[tool.tukuroi]`,
   `tukuroi.toml`, `.tukuroi.toml`), the environment variable
-  `TUKUROI_CUSTOM_RULES`, the built-in rules (`tukuroi.rules`) and the
-  pre-commit hooks are named tukuroi. The names of Fixit are not read.
+  `TUKUROI_CUSTOM_RULES`, the built-in rules (`tukuroi.rules`), the pre-commit
+  hooks, the functions (`tukuroi_paths`, `tukuroi_file`, `tukuroi_bytes`), the
+  default output format (`tukuroi`), and the LSP server (`tukuroi-lsp`, with the
+  source `tukuroi`) are named tukuroi. The names of Fixit are not read.
 - **engine**: the rules run on `tukuroi.core`, built on Python's `ast`, in place
   of LibCST. A rule is a subclass of `tukuroi.Rule`: the rules of Fixit need to
   be ported.

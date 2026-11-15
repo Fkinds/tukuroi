@@ -7,7 +7,7 @@
 The output formats of ``lint`` and ``fix`` (#169): plugins registered in the
 entry points ``tukuroi.output_formats``, by the name that ``output-format`` of
 a config, or ``--output-format``, gives. tukuroi registers its own the same
-way: ``fixit``, ``vscode`` and ``custom``, and ``json`` and ``sarif`` of
+way: ``tukuroi``, ``vscode`` and ``custom``, and ``json`` and ``sarif`` of
 :mod:`tukuroi.documents` (#178).
 """
 
@@ -101,7 +101,7 @@ class _Lines:
         return self.TEMPLATE
 
 
-class FixitFormat(_Lines):
+class TukuroiFormat(_Lines):
     """``path@line:column rule: message``: the default."""
 
     TEMPLATE = "{path}@{start_line}:{start_col} {rule_name}: {message}"
