@@ -86,9 +86,9 @@ ruff = "tukuroi.core.format:RuffFormatter"
 
 [project.entry-points."tukuroi.output_formats"]
 custom = "tukuroi.output:CustomFormat"
-fixit = "tukuroi.output:FixitFormat"
 json = "tukuroi.documents:JsonFormat"
 sarif = "tukuroi.documents:SarifFormat"
+tukuroi = "tukuroi.output:TukuroiFormat"
 vscode = "tukuroi.output:VscodeFormat"
 
 [project.urls]

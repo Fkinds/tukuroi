@@ -14,7 +14,7 @@ import click
 
 from tukuroi import __version__
 
-from .api import fixit_paths, print_result
+from .api import print_result, tukuroi_paths
 from .config import (
     ConfigError,
     ConfigReader,
@@ -94,7 +94,7 @@ def check_paths(
 ) -> tuple[Path, ...]:
     """
     "-" (stdin) comes first, and then at most the name of its file: anything
-    else is a usage error. ``fixit_paths`` warns about the one, and raises a
+    else is a usage error. ``tukuroi_paths`` warns about the one, and raises a
     ValueError on the other (#40). A path that does not exist is a usage error
     too, as with ``debug`` (#40); the name of the file of stdin is a name only.
     """
@@ -301,7 +301,7 @@ def lint(
     autofixes = 0
     output = output_of(ConfigReader(options).config())
     echo(output.start())
-    for result in fixit_paths(
+    for result in tukuroi_paths(
         paths, options=options, metrics_hook=metrics_hook(options, output)
     ):
         visited.add(result.path)
@@ -374,7 +374,7 @@ def fix(
         )
     # TODO: make this parallel
     generator = capture(
-        fixit_paths(
+        tukuroi_paths(
             paths,
             autofix=autofix,
             options=options,

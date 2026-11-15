@@ -27,8 +27,8 @@ from ..documents import JsonFormat, SarifFormat
 from ..ftypes import Config, Result, Violation
 from ..output import (
     CustomFormat,
-    FixitFormat,
     OutputFormatPlugin,
+    TukuroiFormat,
     VscodeFormat,
     machine_readable,
 )
@@ -216,11 +216,11 @@ VIOLATION = Result(
 
 class OutputFormatPluginsTest(TestCase):
     def test_built_in(self) -> None:
-        names = ["custom", "fixit", "json", "sarif", "vscode"]
+        names = ["custom", "json", "sarif", "tukuroi", "vscode"]
         self.assertEqual(plugins.output_format_names(), names)
         for name, made, machine in (
             ("custom", CustomFormat, False),
-            ("fixit", FixitFormat, False),
+            ("tukuroi", TukuroiFormat, False),
             # One document at the end (#178).
             ("json", JsonFormat, True),
             ("sarif", SarifFormat, True),
@@ -258,7 +258,7 @@ class OutputFormatPluginsTest(TestCase):
     def test_output_formats_that_cannot_be_used(self) -> None:
         cases = (
             # (label, the entry point, the message)
-            ("unknown", None, "unknown value 'shout', not one of 'custom', 'fixit', 'json', 'sarif', 'vscode'"),
+            ("unknown", None, "unknown value 'shout', not one of 'custom', 'json', 'sarif', 'tukuroi', 'vscode'"),
             ("not loaded", point("shout", raises), "could not load 'shout': ImportError: no module named 'upper'"),
             ("not an output format", point("shout", lambda: NotAnOutputFormat), "'shout' is not an output format: tukuroi_shout:Plugin"),
         )  # fmt: skip
@@ -279,7 +279,7 @@ class OutputFormatPluginsTest(TestCase):
         cases = (
             # (name, custom, the format, the warnings)
             ("shout", True, Shout, []),
-            ("shout", False, FixitFormat, [call(warning)]),
+            ("shout", False, TukuroiFormat, [call(warning)]),
             ("ours", False, Shout, []),
             ("vscode", False, VscodeFormat, []),
         )

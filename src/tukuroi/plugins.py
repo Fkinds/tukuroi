@@ -24,7 +24,7 @@ OUTPUT_FORMATS = "tukuroi.output_formats"
 NO_FORMATTER = "none"
 # The output format of a config that names none, and in place of one of
 # another distribution with custom rules turned off.
-DEFAULT_OUTPUT_FORMAT = "fixit"
+DEFAULT_OUTPUT_FORMAT = "tukuroi"
 # The distribution of tukuroi, whose plugins are built in.
 DISTRIBUTION = "tukuroi"
 

@@ -356,7 +356,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
     def test_stdin_paths_that_are_usage_errors(self) -> None:
         # Usage errors (#40). The libcst engine skipped a "-" after a path with
         # a warning, and printed the traceback of a ValueError for 2 paths
-        # after "-"; `fixit_paths` still does.
+        # after "-"; `tukuroi_paths` still does.
         first = "'-' (stdin) must be the first path"
         one = "only one path may follow '-' (stdin): the name of its file"
         cases = (
@@ -434,7 +434,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
         sub = {"sub/pyproject.toml": '[tool.tukuroi]\noutput-format = "vscode"\n'}
         # output-format in an override is an error (characterization_config).
         cases = (
-            ("fixit", ["--output-format", "fixit"], {}, ".", "t.py", "@"),
+            ("tukuroi", ["--output-format", "tukuroi"], {}, ".", "t.py", "@"),
             ("vscode", ["--output-format", "vscode"], {}, ".", "t.py", ":"),
             ("-o", ["-o", "vscode"], {}, ".", "t.py", ":"),
             ("any case", ["--output-format", "VSCode"], {}, ".", "t.py", ":"),
@@ -443,7 +443,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
             ("config, any case", [], upper, ".", "t.py", ":"),
             # An empty string is the default, not an error.
             ("config, empty", [], empty, ".", "t.py", "@"),
-            ("option over config", ["-o", "fixit"], vscode, ".", "t.py", "@"),
+            ("option over config", ["-o", "tukuroi"], vscode, ".", "t.py", "@"),
             # The config of the current directory is used, not of the file.
             ("config of the file", [], sub, ".", "sub/t.py", "@"),
             ("config of cwd", [], sub, "sub", "t.py", ":"),
@@ -514,7 +514,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
             # The usage lines above it come from click.
             error = (
                 "\nError: Invalid value for '--output-format' / '-o': 'xml' is not"
-                " one of 'custom', 'fixit', 'json', 'sarif', 'vscode'.\n"
+                " one of 'custom', 'json', 'sarif', 'tukuroi', 'vscode'.\n"
             )
             self.assertTrue(result.stderr.endswith(error))
             self.assertEqual(result.stdout, "")
@@ -525,8 +525,8 @@ class CliCharacterizationTest(CharacterizationTestCase):
             (
                 '"xml"',
                 (
-                    "unknown value 'xml', not one of 'custom', 'fixit', 'json',"
-                    " 'sarif', 'vscode'"
+                    "unknown value 'xml', not one of 'custom', 'json', 'sarif',"
+                    " 'tukuroi', 'vscode'"
                 ),
             ),
             # Not a string, as TOML names it (#40).

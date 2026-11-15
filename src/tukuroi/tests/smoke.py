@@ -160,7 +160,7 @@ class SmokeTest(TestCase):
                 self.assertEqual(result.exit_code, 0)
                 self.assertRegex(
                     result.stdout,
-                    r"file\.py\".+\"range\".+\"start\".+\"end\".+\"severity\": 2, \"code\": \"UseAssertIn\", \"source\": \"fixit\"",
+                    r"file\.py\".+\"range\".+\"start\".+\"end\".+\"severity\": 2, \"code\": \"UseAssertIn\", \"source\": \"tukuroi\"",
                 )
 
     def test_this_file_is_clean(self) -> None:

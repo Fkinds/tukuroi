@@ -26,7 +26,7 @@ from ..core.rule import Rule
 from ..core.text import Position, Range
 from ..documents import JsonFormat, SarifFormat
 from ..ftypes import Config, Error, Options, Result, Violation
-from ..output import FixitFormat, machine_readable
+from ..output import TukuroiFormat, machine_readable
 from ..util import chdir
 from .characterization_cli import (
     BROKEN,
@@ -256,7 +256,7 @@ class DocumentsTest(TestCase):
 
         cases = (
             (None, False),
-            (FixitFormat(Config()), False),
+            (TukuroiFormat(Config()), False),
             # True only, not a value that is true.
             (One(), False),
             (JsonFormat(Config()), True),
@@ -269,13 +269,13 @@ class DocumentsTest(TestCase):
     def test_metrics_hook(self) -> None:
         cases = (
             # (--print-metrics, the format, fix -, the hook)
-            (False, FixitFormat, False, None),
+            (False, TukuroiFormat, False, None),
             (False, JsonFormat, False, None),
-            (False, FixitFormat, True, None),
-            (True, FixitFormat, False, print),
+            (False, TukuroiFormat, True, None),
+            (True, TukuroiFormat, False, print),
             (True, JsonFormat, False, print_to_stderr),
             # stdout is the fixed source (#196).
-            (True, FixitFormat, True, print_to_stderr),
+            (True, TukuroiFormat, True, print_to_stderr),
         )
         for flag, kind, stdin, expected in cases:
             with self.subTest(flag=flag, kind=kind.__name__, stdin=stdin):

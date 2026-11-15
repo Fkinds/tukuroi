@@ -129,13 +129,18 @@ def diagnostic(rule: str, start: str, end: str) -> Json:
         "message": message,
         "severity": 2,
         "code": rule,
-        "source": "fixit",
+        "source": "tukuroi",
     }
 
 
 def error(at: str, message: str) -> Json:
     """An error of the document, as a diagnostic at ``at`` (#96)."""
-    return {"range": span(at, at), "message": message, "severity": 1, "source": "fixit"}
+    return {
+        "range": span(at, at),
+        "message": message,
+        "severity": 1,
+        "source": "tukuroi",
+    }
 
 
 def published(*found: tuple[str, str, str], uri: str = T, version: int = 1) -> Json:
@@ -344,7 +349,7 @@ class LspCharacterizationTest(CharacterizationTestCase):
                     "executeCommandProvider": {"commands": []},
                     "workspace": {"workspaceFolders": folders, "fileOperations": {}},
                 }
-                info = {"name": "fixit-lsp", "version": __version__}
+                info = {"name": "tukuroi-lsp", "version": __version__}
                 result = {"capabilities": capabilities, "serverInfo": info}
                 self.assertEqual(served.responses[1], {"result": result})
                 self.assertEqual(served.stderr, stderr)
