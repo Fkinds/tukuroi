@@ -39,7 +39,7 @@ FILES_PER_PROCESS = 4
 # The exception that a file of a broken pool gets.
 BROKEN = f"{BrokenProcessPool.__module__}.{BrokenProcessPool.__qualname__}"
 
-# As trailrunner: the same on Linux, macOS and Windows.
+# The same on Linux, macOS and Windows.
 _CONTEXT = multiprocessing.get_context("spawn")
 
 

@@ -50,6 +50,10 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
 
 - **lint**: a rule that ends its process (a crash, `os._exit`) gives that file
   an error, and the other files their results.
+- **lint**: a symbolic link to a directory out of the project no longer stops
+  `lint` and `fix`: a link to a directory is not walked, as git keeps the link.
+  The files of a directory are found by name, with `pathspec` alone, which reads
+  `.gitignore` as git does: `trailrunner` is no longer a dependency.
 - **lsp**: the server reads the configuration again for each change.
 - **fix**: with `fix -`, `--print-metrics` prints on stderr: stdout is the fixed
   source alone.

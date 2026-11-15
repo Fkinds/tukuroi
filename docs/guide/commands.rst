@@ -72,9 +72,14 @@ and error messages, and the input read from STDIN. No other path may follow,
 and "-" after another path is a usage error.
 
 A path that does not exist is a usage error, before any file is linted. A
-directory is walked for Python files, without the files that ``.gitignore``
-has. A file given by name is linted, though ``.gitignore`` has it. A file
-given twice, by name or in a directory, is linted once.
+directory is walked for Python files (``.py`` and ``.pyi``), by name, without
+those that the ``.gitignore`` at the root of the project has, as git reads it:
+the root is the nearest directory with ``pyproject.toml``, ``.git`` or ``.hg``,
+from the directory up. The ``.gitignore`` files of the directories under the
+root are not read. A symbolic link to a file is a file, and one to a directory
+is not walked, as git keeps the link. A file given by name is linted, though
+``.gitignore`` has it. A file given twice, by name or in a directory, is
+linted once.
 
 .. code:: console
 

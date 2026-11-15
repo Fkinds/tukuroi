@@ -14,7 +14,6 @@ from functools import partial
 from pathlib import Path
 
 import click
-import trailrunner
 from moreorless import unified_diff
 
 from .config import ConfigError, ConfigReader, load_rules
@@ -38,6 +37,7 @@ from .output import FixitFormat, OutputFormatPlugin, machine_readable
 from .output import shown as _shown
 from .plugins import formatter_of
 from .pool import LintPool
+from .walk import walk
 
 LOG = logging.getLogger(__name__)
 
@@ -422,7 +422,7 @@ def fixit_paths(
         elif path.is_file():
             expanded_paths.append(path)
         else:
-            expanded_paths.extend(trailrunner.walk(path))
+            expanded_paths.extend(walk(path))
 
     # Each file once, where it comes first.
     unique: dict[Path, Path] = {}

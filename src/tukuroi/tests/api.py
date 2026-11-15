@@ -651,9 +651,9 @@ class FixitPathsTest(TestCase):
                 return list(dict.fromkeys(r.path for r in results))
 
             self.assertEqual(linted("ign.py"), [root / "ign.py"])
-            # In a directory, .gitignore is used, and the order is that of the
-            # file system.
-            self.assertEqual(sorted(linted(".")), [root / "a/t.py", root / "a/u.py"])
+            # In a directory, .gitignore is used, and the files are by name
+            # (#197).
+            self.assertEqual(linted("."), [root / "a/t.py", root / "a/u.py"])
             t, u = root / "a/t.py", root / "a/u.py"
             self.assertEqual(linted("a/u.py", "a", "./a/t.py"), [u, t])
             self.assertEqual(linted("a/t.py", "a/u.py", "a/t.py"), [t, u])

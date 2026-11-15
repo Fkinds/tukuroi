@@ -65,6 +65,7 @@ from .rules_strict import StrictRulesTest
 from .smoke import SmokeTest
 from .template import TemplateTest
 from .util import CaptureTest
+from .walk import WalkTest
 
 # Expect the default of the switch for custom rules, even when the shell sets
 # TUKUROI_CUSTOM_RULES (see "Security" in the docs). custom_rules_switch sets it
