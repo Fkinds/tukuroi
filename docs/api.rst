@@ -20,6 +20,8 @@ Lint Rules
 .. autoclass:: Range
 .. autoclass:: Source
     :members: span, tokens_in
+.. autoclass:: Token
+.. autoclass:: Comment
 .. autoclass:: ImportTable
     :members: qualified_names
 

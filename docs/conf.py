@@ -112,3 +112,28 @@ html_sidebars = {
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
+
+
+# -- A builtin in a type, as Python's -----------------------------------------
+
+import builtins
+
+from docutils import nodes
+from sphinx import addnodes
+from sphinx.application import Sphinx
+
+
+def builtins_of_python(app: Sphinx, doctree: nodes.document) -> None:
+    """
+    A type in a signature or a field is looked for in the names that end with
+    it too: ``type`` in ``type[ast.AST]`` would link to ``tukuroi.Error.type``,
+    or to ``tukuroi.Token.type`` (#203). A builtin is looked for by its name
+    alone, which the Python docs have (intersphinx).
+    """
+    for node in doctree.findall(addnodes.pending_xref):
+        if node.get("refdomain") == "py" and hasattr(builtins, node["reftarget"]):
+            node.attributes.pop("refspecific", None)
+
+
+def setup(app: Sphinx) -> None:
+    app.connect("doctree-read", builtins_of_python)

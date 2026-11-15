@@ -75,6 +75,13 @@ class NoValueObjectDefault(Rule):
     annotations, and the annotations that attrs does not take as fields, those
     of ``attr.s`` without ``auto_attribs=True``, and those of a class with an
     ``attr.ib()`` that has no annotation.
+
+    Only ``eq=False`` tells an entity from a value object: give it to each
+    frozen entity. A frozen class that is neither, such as settings frozen so
+    that nothing changes them, is reported too: keep a default with
+    ``# lint-ignore: NoValueObjectDefault`` at the end of the last line of its
+    field or on the line above the field, or do not enable the rule for the
+    files of the class.
     """
 
     MESSAGE = (

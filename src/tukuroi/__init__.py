@@ -13,7 +13,7 @@ from .core.edits import Edit
 from .core.format import FormatterPlugin
 from .core.names import ImportTable
 from .core.rule import Invalid, Rule, Valid
-from .core.source import Source
+from .core.source import Comment, Source, Token
 from .core.text import Position, Range, Span
 from .ftypes import (
     Config,
@@ -27,6 +27,7 @@ from .ftypes import (
 from .output import OutputFormatPlugin
 
 __all__ = [
+    "Comment",
     "Config",
     "Edit",
     "Error",
@@ -43,6 +44,7 @@ __all__ = [
     "Rule",
     "Source",
     "Span",
+    "Token",
     "Valid",
     "Violation",
     "__version__",
