@@ -60,8 +60,10 @@ exclude_patterns = [
     "guide/*.rst"
 ]
 
+# Not "members": True, which would take the place of the members that a
+# directive names (#210). A directive names its members, or has ":members:" for
+# all of them.
 autodoc_default_options = {
-    "members": True,
     "undoc-members": True,
 }
 autodoc_member_order = "groupwise"
