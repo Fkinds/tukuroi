@@ -38,6 +38,9 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
   `add_import()` and `remove_import()`; the names of imports follow the scopes
   of Python.
 - **fix**: a fix that would break the code is not applied, with a warning.
+- **rules**: `tukuroi.rules.strict`, rules that are not enabled with
+  `tukuroi.rules`: `NoValueObjectDefault` reports the defaults of the fields of
+  value objects, those of dataclasses and of attrs.
 - **cli**: `validate-config` loads the rules and the plugins that a config names.
 
 ### Fix
