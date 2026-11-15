@@ -51,6 +51,8 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
 - **lint**: a rule that ends its process (a crash, `os._exit`) gives that file
   an error, and the other files their results.
 - **lsp**: the server reads the configuration again for each change.
+- **fix**: with `fix -`, `--print-metrics` prints on stderr: stdout is the fixed
+  source alone.
 
 [Coming from Fixit]: https://github.com/Fkinds/tukuroi#coming-from-fixit
 

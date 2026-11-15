@@ -97,8 +97,8 @@ configuration of the file that tukuroi cannot use); 3 for both.
 Lint one or more paths, and apply suggested fixes. If "-" is given as the
 first path, then the second given path will be used for configuration lookup,
 the input read from STDIN, and the fixed output printed to STDOUT (ignoring
-:attr:`--interactive`); the lint errors, and the diffs of ``--diff``, go to
-STDERR. As with ``lint``, no other path may follow, and the paths are found the
+:attr:`--interactive`); the lint errors, the diffs of ``--diff``, and the
+metrics of ``--print-metrics``, go to STDERR. As with ``lint``, no other path may follow, and the paths are found the
 same way. With an output format for programs to read, such as ``json``, "-" is
 a usage error: that format prints on STDOUT too (see
 :ref:`machine_readable_output`).
