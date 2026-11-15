@@ -24,6 +24,7 @@ import logging
 import multiprocessing
 import os
 import signal
+import socket
 import sys
 import threading
 from collections import deque
@@ -188,9 +189,16 @@ _PROCESS, _END = "process", "end"
 
 
 def _send_logs(logs: LogAddress) -> None:
-    """In a process of a pool: send its log records to the process that runs it."""
-    connection = Client(logs.address, authkey=logs.authkey)
-    connection.send(_PROCESS)
+    """
+    In a process of a pool: send its log records to the process that runs it.
+    If it cannot connect, it still lints, with a warning on its stderr.
+    """
+    try:
+        connection = Client(logs.address, authkey=logs.authkey)
+        connection.send(_PROCESS)
+    except OSError as error:
+        LOG.warning("The logs of this process cannot be sent: %r", error)
+        return
     root = logging.getLogger()
     root.handlers[:] = [QueueHandler(_Sender(connection))]
     root.setLevel(logs.level)
@@ -233,7 +241,9 @@ def _logs_here() -> Iterator[LogAddress]:
     that accepts the connections ends with the last one, which says so.
     """
     authkey = os.urandom(32)
-    listener = Listener(authkey=authkey)
+    # The processes of a pool connect at once, as it starts: with a backlog of
+    # 1, the default, macOS refuses those that come while one is accepted.
+    listener = Listener(backlog=socket.SOMAXCONN, authkey=authkey)
     logs = LogAddress(listener.address, authkey, _level())
     readers: list[threading.Thread] = []
 

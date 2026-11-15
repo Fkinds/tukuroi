@@ -21,6 +21,7 @@ from multiprocessing import AuthenticationError
 from multiprocessing.connection import Client
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Thread
 from unittest import TestCase, skipUnless
 
 from ..core import loader
@@ -29,10 +30,12 @@ from ..pool import (
     _PROCESS,
     BROKEN,
     LintPool,
+    LogAddress,
     _ended,
     _level,
     _logs_here,
     _receive,
+    _send_logs,
 )
 from .core_loader import new_process
 
@@ -286,6 +289,36 @@ class PoolLogsTest(TestCase):
                 connection.send(record)
         # The last one, right before the end: its record is not lost.
         self.assertEqual([r.getMessage() for r in caught.records], ["sent"])
+
+    def test_processes_connect_at_once(self) -> None:
+        # As those of a pool, as it starts: none is refused (#209).
+        refused: list[OSError] = []
+
+        def connect(here: LogAddress) -> None:
+            try:
+                with Client(here.address, authkey=here.authkey) as connection:
+                    connection.send(_PROCESS)
+            except OSError as error:
+                refused.append(error)
+
+        with _logs_here() as here:
+            threads = [Thread(target=connect, args=(here,)) for _ in range(32)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(refused, [])
+
+    def test_cannot_connect(self) -> None:
+        # The process still lints, with its logging as it was.
+        root = logging.getLogger()
+        handlers = root.handlers[:]
+        nowhere = LogAddress(str(Path(__file__).parent / "nowhere"), b"", logging.DEBUG)
+        with self.assertLogs("tukuroi.pool", logging.WARNING) as caught:
+            _send_logs(nowhere)
+        [message] = [r.getMessage() for r in caught.records]
+        self.assertTrue(message.startswith("The logs of this process cannot be sent:"))
+        self.assertEqual(root.handlers, handlers)
 
 
 class PoolCliTest(TestCase):
