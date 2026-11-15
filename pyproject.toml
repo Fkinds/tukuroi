@@ -86,6 +86,8 @@ ruff = "tukuroi.core.format:RuffFormatter"
 [project.entry-points."tukuroi.output_formats"]
 custom = "tukuroi.output:CustomFormat"
 fixit = "tukuroi.output:FixitFormat"
+json = "tukuroi.documents:JsonFormat"
+sarif = "tukuroi.documents:SarifFormat"
 vscode = "tukuroi.output:VscodeFormat"
 
 [project.urls]
@@ -136,6 +138,7 @@ forbidden_modules = [
     "tukuroi.cli",
     "tukuroi.config",
     "tukuroi.config_values",
+    "tukuroi.documents",
     "tukuroi.ftypes",
     "tukuroi.lsp",
     "tukuroi.output",
@@ -157,6 +160,7 @@ forbidden_modules = [
     "tukuroi.cli",
     "tukuroi.config",
     "tukuroi.config_values",
+    "tukuroi.documents",
     "tukuroi.ftypes",
     "tukuroi.lsp",
     "tukuroi.output",

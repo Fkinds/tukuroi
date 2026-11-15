@@ -33,6 +33,9 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
   configurations stops at the root of the repository.
 - **plugins**: other packages add formatters and output formats through entry
   points.
+- **output**: the output formats `json`, one JSON document of the results, and
+  `sarif`, a log of SARIF 2.1.0 for GitHub code scanning. They print nothing
+  else on stdout: the errors and the diffs go to stderr.
 - **rules**: `report()` takes the span to report (`span=`) and the imports that
   its fix leaves unused (`unused_imports=`), which tukuroi takes out;
   `add_import()` and `remove_import()`; the names of imports follow the scopes

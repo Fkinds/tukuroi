@@ -34,7 +34,7 @@ from .ftypes import (
     Result,
     Violation,
 )
-from .output import FixitFormat, OutputFormatPlugin
+from .output import FixitFormat, OutputFormatPlugin, machine_readable
 from .output import shown as _shown
 from .plugins import formatter_of
 from .pool import LintPool
@@ -77,6 +77,8 @@ def print_result(
     """
     Print ``result``: what ``output``, an output format plugin (#169), gives for
     it (by default, that of ``fixit``), and an exception with its traceback.
+    With a format for programs to read (``MACHINE_READABLE``), what it gives is
+    printed without colors, and the rest on stderr (#178).
 
     Setting ``show_diff=True`` will output autofixes or suggested changes in unified
     diff format, using ANSI colors when possible.
@@ -84,21 +86,28 @@ def print_result(
     Returns ``True`` if the result is "dirty" - either a lint error or exception.
     """
     path = _shown(result.path)
+    machine = machine_readable(output)
     line = (output or FixitFormat(Config())).result(result)
     if line is not None:
-        click.secho(line, fg="yellow", err=stderr)
+        if machine:
+            # Not even the reset of a style.
+            click.echo(line, err=stderr)
+        else:
+            click.secho(line, fg="yellow", err=stderr)
+    # What tukuroi prints itself.
+    err = stderr or machine
 
     if result.violation:
         if show_diff and result.violation.diff:
-            _echo_diff(result.violation.diff, err=stderr)
+            _echo_diff(result.violation.diff, err=err)
         return True
 
     elif result.error:
         # An exception occurred while processing a file
         error = result.error
-        click.secho(f"{path}: EXCEPTION: {error.message}", fg="red", err=stderr)
+        click.secho(f"{path}: EXCEPTION: {error.message}", fg="red", err=err)
         if error.traceback:
-            click.echo(error.traceback.strip(), err=stderr)
+            click.echo(error.traceback.strip(), err=err)
         return True
 
     elif result.applied:

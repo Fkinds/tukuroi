@@ -490,11 +490,11 @@ class CliCharacterizationTest(CharacterizationTestCase):
 
     def test_output_format_invalid(self) -> None:
         with self.subTest("option"):
-            result = invoke({"pyproject.toml": CONFIG}, ["-o", "json", "lint"])
+            result = invoke({"pyproject.toml": CONFIG}, ["-o", "xml", "lint"])
             # The usage lines above it come from click.
             error = (
-                "\nError: Invalid value for '--output-format' / '-o': 'json' is not"
-                " one of 'custom', 'fixit', 'vscode'.\n"
+                "\nError: Invalid value for '--output-format' / '-o': 'xml' is not"
+                " one of 'custom', 'fixit', 'json', 'sarif', 'vscode'.\n"
             )
             self.assertTrue(result.stderr.endswith(error))
             self.assertEqual(result.stdout, "")
@@ -503,8 +503,11 @@ class CliCharacterizationTest(CharacterizationTestCase):
         # printed a traceback, and "{value!r}" as is.
         cases = (
             (
-                '"json"',
-                "unknown value 'json', not one of 'custom', 'fixit', 'vscode'",
+                '"xml"',
+                (
+                    "unknown value 'xml', not one of 'custom', 'fixit', 'json',"
+                    " 'sarif', 'vscode'"
+                ),
             ),
             # Not a string, as TOML names it (#40).
             ("1", "must be a string, got an integer"),

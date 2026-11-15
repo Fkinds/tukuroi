@@ -527,6 +527,38 @@ class PrintResultTest(TestCase):
             print_result(result, show_diff=True, output=Quiet(Config()))
         self.assertEqual(out.getvalue(), diff.encode())
 
+    def test_output_for_programs(self) -> None:
+        # A format for programs to read (#178): what it gives, without colors,
+        # alone on stdout; the diff and the exception on stderr.
+        class Lines(FixitFormat):
+            MACHINE_READABLE = True
+
+        where = Range(Position(1, 0), Position(1, 1))
+        diff = "--- a\n+++ b\n"
+        violation = Result(Path.cwd() / "t.py", Violation("X", where, "m", True, diff))
+        error = Result(Path.cwd() / "t.py", None, error=Error("E", "bad", "Trace\n"))
+        line = b"t.py@1:0 X: m (has autofix)\n"
+        for output, machine in (
+            (Lines(Config()), True),
+            (FixitFormat(Config()), False),
+        ):
+            with (
+                self.subTest(type(output).__name__),
+                CliRunner().isolation(color=True) as (out, err, _),
+            ):
+                print_result(violation, show_diff=True, output=output)
+                print_result(error, output=output)
+                stdout, stderr = out.getvalue(), err.getvalue()
+                ours = stderr if machine else stdout
+                self.assertIn(b"+++ b", ours)
+                self.assertIn(b"t.py: EXCEPTION: bad", ours)
+                self.assertIn(b"Trace\n", ours)
+                if machine:
+                    self.assertEqual(stdout, line)
+                else:
+                    self.assertTrue(stdout.startswith(b"\x1b[33mt.py@1:0 X: m"))
+                    self.assertEqual(stderr, b"")
+
 
 class FixitStdinAndFileTest(TestCase):
     """The errors of a file, when the API calls these alone (#116)."""
