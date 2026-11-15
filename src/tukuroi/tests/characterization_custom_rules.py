@@ -28,6 +28,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from ..core.loader import ROOT_IMPORT_HINT
 from .characterization_cli import (
     CLEAN,
     DIRTY,
@@ -199,8 +200,15 @@ def failed(rule: str, error: str, where: str = "") -> str:
     return f"could not import rule(s) {rule}{where}: {error}"
 
 
-def no_import(rule: str, where: str = "") -> str:
-    return f"could not import rule(s) {rule}{where}"
+def no_import(rule: str, where: str = "", missing: str = "") -> str:
+    """No module ``missing`` (by default, the module of ``rule``) (#201)."""
+    error = f"ModuleNotFoundError: No module named {missing or rule!r}"
+    return failed(rule, error, where)
+
+
+def hinted(error: str) -> str:
+    """``error``, of a package not found at all, with no enable-root-import."""
+    return f"{error} ({ROOT_IMPORT_HINT})"
 
 
 def no_rule(rule: str, where: str = "") -> str:
@@ -466,7 +474,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
         cases = (
             ("cookie.rules", (BAD, UGLY), ""),
             (f"cookie.rules:{BAD}", (BAD,), ""),
-            ("nope.rules", (), stops(no_import("nope.rules"))),
+            ("nope.rules", (), stops(hinted(no_import("nope.rules", missing="nope")))),
             ("cookie.rules:Nope", (), stops(no_rule("cookie.rules:Nope"))),
         )
         for enable, rules, warning in cases:
@@ -481,13 +489,14 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
             "src/kettle/rules.py": importing("from kettle.wording import MESSAGE"),
         }
         absolute = WORDING | {"rules.py": importing("from wording import MESSAGE")}
-        no_kettle = stops(no_import("kettle.rules"))
+        no_kettle = no_import("kettle.rules", missing="kettle")
+        not_set, in_src = stops(hinted(no_kettle)), stops(no_kettle)
         cases = (
             # (label, value, files, enable, rules, warning)
-            ("not set", None, KETTLE, "kettle.rules", (), no_kettle),
+            ("not set", None, KETTLE, "kettle.rules", (), not_set),
             ("true", "true", KETTLE, "kettle.rules", (BAD,), ""),
             ("path", '"src"', src, "kettle.rules", (BAD,), ""),
-            ("true, package in src", "true", src, "kettle.rules", (), no_kettle),
+            ("true, package in src", "true", src, "kettle.rules", (), in_src),
             ("rule imports its package", '"src"', imports, "kettle.rules", (BAD,), ""),
             ("repo rule imports", "true", absolute, ".rules", (BAD,), ""),
         )
@@ -545,7 +554,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
     def test_enable_root_import_of_another_root(self) -> None:
         result = self.run_two_roots("spoon.rules")
         # a/ is not on sys.path for b/t.py. No file is fixed (#40).
-        error = no_import("spoon.rules")
+        error = hinted(no_import("spoon.rules", missing="spoon"))
         self.assert_lint(result, (), stops(error, config="b/pyproject.toml"))
         self.assertEqual(result.files["a/t.py"], SOURCE)
 
@@ -580,7 +589,7 @@ class CustomRulesCharacterizationTest(CharacterizationTestCase):
 
         def missing(module: str) -> str:
             error = f"ModuleNotFoundError: No module named {module!r}"
-            return stops(no_import(".rules", f"{FROM_ROOT}: {error}"))
+            return stops(failed(".rules", error, FROM_ROOT))
 
         no_rules = stops(f"no rules in .rules{FROM_ROOT}")
         # The libcst engine did not find the name that its output shows, gave

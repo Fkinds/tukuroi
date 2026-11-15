@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest import TestCase
 
 from ..config import ConfigError, load_rules, rule_name
-from ..core.loader import RuleName
+from ..core.loader import ROOT_IMPORT_HINT, RuleName
 from ..ftypes import Config, QualifiedRule
 from .core_loader import BOTH, HEAD, KETTLE, files, new_process, rule
 
@@ -92,10 +92,15 @@ class LoadRulesTest(TestCase):
                 config = Config(root=root, enable_root_import=value, enable=[kettle])
                 self.assertEqual(self.load(config), (rules, []))
         # Not found: an error without the config, which load_rules does not
-        # know (#40). It was a warning.
-        for label, tree, value in (
-            ("false", at_root, False),
-            ("true, package in src", KETTLE, True),
+        # know (#40). It was a warning. Without enable-root-import, a hint
+        # (#201).
+        no_kettle = (
+            "could not import rule(s) kettle.rules: "
+            "ModuleNotFoundError: No module named 'kettle'"
+        )
+        for label, tree, value, message in (
+            ("false", at_root, False, f"{no_kettle} ({ROOT_IMPORT_HINT})"),
+            ("true, package in src", KETTLE, True, no_kettle),
         ):
             with self.subTest(label), files(tree) as root:
                 self.setUp()
@@ -103,7 +108,7 @@ class LoadRulesTest(TestCase):
                 with self.assertRaises(ConfigError) as caught:
                     load_rules(config)
                 error = caught.exception
-                self.assertEqual(str(error), "could not import rule(s) kettle.rules")
+                self.assertEqual(str(error), message)
                 self.assertIsNone(error.path)
 
     def test_custom_rules_turned_off(self) -> None:
