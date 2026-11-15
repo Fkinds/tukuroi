@@ -376,6 +376,26 @@ class CliCharacterizationTest(CharacterizationTestCase):
                     self.assertEqual(result.exit_code, 2)
                     self.assertEqual(result.files, before)
 
+    def test_print_metrics(self) -> None:
+        # On stdout, but with `fix -`, whose stdout is the fixed source (#196).
+        files = {"pyproject.toml": CONFIG, "t.py": FIXABLE}
+        metrics = re.compile(r"\{'Count.Total': 1, .*\}\n")
+        cases = (
+            # (label, args, stdin, the stream of the metrics)
+            ("lint", ["lint", "t.py"], None, "stdout"),
+            ("fix", ["fix", "-a", "t.py"], None, "stdout"),
+            ("fix stdin", ["fix", "-", "t.py"], FIXABLE, "stderr"),
+        )
+        for label, args, stdin, stream in cases:
+            with self.subTest(label):
+                result = invoke(files, ["--print-metrics", *args], stdin=stdin)
+                found = {"stdout": result.stdout, "stderr": result.stderr}
+                self.assertRegex(found[stream], metrics)
+                other = found["stderr" if stream == "stdout" else "stdout"]
+                self.assertNotRegex(other, metrics)
+        result = invoke(files, ["--print-metrics", "fix", "-", "t.py"], stdin=FIXABLE)
+        self.assertEqual(result.stdout, FIXED)
+
     def test_fix_stdin_paths(self) -> None:
         cases = (
             # Without --automatic: "-" does not ask.

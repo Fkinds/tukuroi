@@ -268,14 +268,19 @@ class DocumentsTest(TestCase):
 
     def test_metrics_hook(self) -> None:
         cases = (
-            (False, FixitFormat, None),
-            (False, JsonFormat, None),
-            (True, FixitFormat, print),
-            (True, JsonFormat, print_to_stderr),
+            # (--print-metrics, the format, fix -, the hook)
+            (False, FixitFormat, False, None),
+            (False, JsonFormat, False, None),
+            (False, FixitFormat, True, None),
+            (True, FixitFormat, False, print),
+            (True, JsonFormat, False, print_to_stderr),
+            # stdout is the fixed source (#196).
+            (True, FixitFormat, True, print_to_stderr),
         )
-        for flag, kind, expected in cases:
-            with self.subTest(flag=flag, kind=kind.__name__):
-                hook = metrics_hook(Options(print_metrics=flag), kind(Config()))
+        for flag, kind, stdin, expected in cases:
+            with self.subTest(flag=flag, kind=kind.__name__, stdin=stdin):
+                options = Options(print_metrics=flag)
+                hook = metrics_hook(options, kind(Config()), stdin=stdin)
                 self.assertIs(hook, expected)
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):

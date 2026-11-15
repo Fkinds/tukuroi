@@ -160,14 +160,17 @@ def print_to_stderr(metrics: Metrics) -> None:
     print(metrics, file=sys.stderr)
 
 
-def metrics_hook(options: Options, output: OutputFormatPlugin) -> MetricsHook | None:
+def metrics_hook(
+    options: Options, output: OutputFormatPlugin, *, stdin: bool = False
+) -> MetricsHook | None:
     """
     What prints the metrics with ``--print-metrics``: stdout, or stderr with a
-    format for programs to read (#178).
+    format for programs to read (#178), and with ``fix -``, whose stdout is the
+    fixed source (``stdin``, #196).
     """
     if not options.print_metrics:
         return None
-    return print_to_stderr if machine_readable(output) else print
+    return print_to_stderr if stdin or machine_readable(output) else print
 
 
 def echo(text: str | None, *, err: bool = False) -> None:
@@ -376,7 +379,7 @@ def fix(
             autofix=autofix,
             options=options,
             parallel=False,
-            metrics_hook=metrics_hook(options, output),
+            metrics_hook=metrics_hook(options, output, stdin=is_stdin),
         )
     )
     echo(output.start(), err=is_stdin)
