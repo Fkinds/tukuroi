@@ -55,13 +55,16 @@ pretty = [
 # installs dev by default; `make install` installs docs too.
 [dependency-groups]
 dev = [
-    "commitizen == 4.19.3",
+    # PyYAML has no wheels for Python 3.15 yet, and uv builds nothing from
+    # source (#136): commitizen, which needs PyYAML, and PyYAML stay out of
+    # 3.15. Drop the markers once PyYAML has wheels for 3.15.
+    "commitizen == 4.19.3; python_version < '3.15'",
     "coverage ==7.17.3",
     "prek == 0.5.10",
     "ruff ==0.17.5",
     "pyrefly ==1.4.1",
     # scripts/repository_settings.py reads .github/repository.yml.
-    "pyyaml == 6.0.3",
+    "pyyaml == 6.0.3; python_version < '3.15'",
     "zizmor == 1.32.0",
     # lint-imports checks the boundary of the engine (#169).
     "import-linter == 2.16",
@@ -94,6 +97,11 @@ Changelog = "https://github.com/Fkinds/tukuroi/blob/main/CHANGELOG.md"
 # The uv to develop with (#18): CI uses the one of UV_VERSION in its workflows.
 [tool.uv]
 required-version = ">=0.13.5"
+# Each dependency is installed from a wheel, and none is built from its source
+# distribution, whose build dependencies no lock pins (#136): a dependency
+# without a wheel for a version of Python fails `uv sync` there. tukuroi itself
+# is built still, as the release builds it (#18).
+no-build = true
 
 # The vulnerabilities that `make audit` leaves out (#25): each with its reason
 # and its issue, in a comment. `ignore-until-fixed` only while no release fixes

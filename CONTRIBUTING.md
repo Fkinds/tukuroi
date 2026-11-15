@@ -17,6 +17,12 @@ when needed. To use another version, set `UV_PYTHON`:
 $ UV_PYTHON=3.15 make install
 ```
 
+uv installs each dependency from a wheel, and builds none from source (#136).
+PyYAML has no wheels for 3.15 yet, so on 3.15 the environment has neither
+PyYAML nor commitizen, which needs it: the commit hook (`cz check`) and
+`scripts/repository_settings.py` run on 3.14, and the tests of the script skip
+on 3.15.
+
 ## Developing
 
 `make` runs each command with `uv run`, in the environment of `uv.lock`, so the

@@ -20,8 +20,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
-from unittest import TestCase
+from unittest import SkipTest, TestCase
 from unittest.mock import patch
+
+if sys.version_info >= (3, 15):
+    # The dev group has no PyYAML on 3.15 (#136): the script, and its tests,
+    # run on 3.14.
+    raise SkipTest("no PyYAML on Python 3.15 (#136)")
 
 import repository_settings
 import yaml
