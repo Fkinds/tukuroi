@@ -41,7 +41,8 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
 - **rules**: `report()` takes the span to report (`span=`) and the imports that
   its fix leaves unused (`unused_imports=`), which tukuroi takes out;
   `add_import()` and `remove_import()`; the names of imports follow the scopes
-  of Python.
+  of Python. The types that a rule uses (`Source`, `ImportTable`, `Token`,
+  `Comment`) come from `tukuroi`.
 - **fix**: a fix that would break the code is not applied, with a warning.
 - **rules**: `tukuroi.rules.strict`, rules that are not enabled with
   `tukuroi.rules`: `NoValueObjectDefault` reports the defaults of the fields of

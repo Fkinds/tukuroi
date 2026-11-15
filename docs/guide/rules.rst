@@ -124,12 +124,13 @@ of the text, and an empty span inserts. Build them from the original text, so
 that quotes, comments and spacing stay as they are:
 
 - ``self.source.text`` is the text of the file, and ``self.source.span(node)``
-  the span of a node in it. ``self.source.comments`` and ``self.source.tokens``
-  come from :mod:`tokenize`: each token has its ``type`` (such as
-  ``tokenize.OP``), its ``string``, its ``span``, and the positions ``start``
-  and ``end`` of the span. ``self.source.tokens_in(span)`` gives the tokens in a
-  span, such as that of a node: the operators, ``@`` or parentheses that the
-  tree has no node for.
+  the span of a node in it. ``self.source.comments`` (each a
+  :class:`tukuroi.Comment`) and ``self.source.tokens`` (each a
+  :class:`tukuroi.Token`) come from :mod:`tokenize`: each token has its
+  ``type`` (such as ``tokenize.OP``), its ``string``, its ``span``, and the
+  positions ``start`` and ``end`` of the span. ``self.source.tokens_in(span)``
+  gives the tokens in a span, such as that of a node: the operators, ``@`` or
+  parentheses that the tree has no node for.
 - ``self.imports.qualified_names(node)`` tells what a name or an attribute
   refers to through the imports of the module: with ``import typing as t``,
   ``t.Callable`` is ``typing.Callable``. It follows the scopes of Python: an

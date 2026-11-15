@@ -795,6 +795,9 @@ class PublicNamesTest(TestCase):
             # The types of Rule.__init__, for a rule that keeps a state (#145).
             tukuroi.Source,
             tukuroi.ImportTable,
+            # The types of Source.tokens and Source.comments (#203).
+            tukuroi.Token,
+            tukuroi.Comment,
         )
         expected = (
             rule.Rule,
@@ -804,6 +807,8 @@ class PublicNamesTest(TestCase):
             text.Position,
             source.Source,
             names.ImportTable,
+            source.Token,
+            source.Comment,
         )
         self.assertEqual(found, expected)
         self.assertTrue(all(hasattr(tukuroi, name) for name in tukuroi.__all__))
