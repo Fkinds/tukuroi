@@ -39,7 +39,8 @@ Apply suggested changes on those same files automatically:
     $ tukuroi fix <path>
 
 If given directories, tukuroi will automatically recurse them, finding any files
-with the ``.py`` extension, while obeying your repo's global ``.gitignore``.
+with the ``.py`` or ``.pyi`` extension, while obeying the ``.gitignore`` at the
+root of your repo.
 
 See the :ref:`Command Reference <commands>` for more details.
 
