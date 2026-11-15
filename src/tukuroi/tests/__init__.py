@@ -61,7 +61,7 @@ from .examples import ExamplesTest
 from .ftypes import TypesTest
 from .lsp import DebounceTest
 from .plugins import OutputFormatPluginsTest, PluginsTest
-from .pool import PoolTest
+from .pool import PoolCliTest, PoolLogsTest, PoolTest
 from .rules_strict import StrictRulesTest
 from .smoke import SmokeTest
 from .template import TemplateTest

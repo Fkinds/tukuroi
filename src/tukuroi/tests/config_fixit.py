@@ -224,8 +224,8 @@ class FixitConfigTest(TestCase):
                 text=True,
                 check=False,
             )
-        # Under coverage, its processes may print warnings of their own. One
-        # of the pool would have no "WARNING:", as it does not set logging up.
+        # Under coverage, its processes may print warnings of their own. A
+        # warning of the pool would come here (#209), and be counted.
         lines = result.stderr.splitlines()
         warnings = [line for line in lines if "is not read" in line]
         self.assertEqual(warnings, [f"WARNING:tukuroi.config:{table()}"])

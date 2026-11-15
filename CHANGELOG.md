@@ -62,6 +62,9 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
 - **lsp**: the server reads the configuration again for each change.
 - **config**: a module of rules that cannot be imported says why, and a package
   that is not found at all, with no `enable-root-import`, hints at it.
+- **lint**: the logs of the processes that lint files in parallel follow those
+  of tukuroi (`--debug`, `--quiet`, their format), and a warning given once is
+  given once, not once in each process.
 - **fix**: with `fix -`, `--print-metrics` prints on stderr: stdout is the fixed
   source alone.
 
