@@ -404,11 +404,16 @@ Built-in Rules
     has a default, which the caller would get without writing it. Explicit is
     better than implicit.
 
-    A value object is a class of ``@dataclass(frozen=True)`` without
-    ``eq=False``. A frozen dataclass with ``eq=False`` is an entity, equal to
+    A value object is a frozen class that is equal to the objects of the same
+    values: one of ``@dataclass(frozen=True)``, or of attrs, ``@attrs.frozen``,
+    ``@attrs.define(frozen=True)`` or ``@attr.s(frozen=True)``. A frozen class
+    with ``eq=False`` (or ``cmp=False`` of ``attr.s``) is an entity, equal to
     the objects of its identity only, and may give its ``id`` a default. The
-    fields that the caller does not pass keep theirs: ``field(init=False)``,
-    and the ``ClassVar`` annotations, which are not fields.
+    fields that the caller does not pass keep theirs: ``field(init=False)``
+    (``attr.ib(init=False)``), and what is not a field: the ``ClassVar``
+    annotations, and the annotations that attrs does not take as fields, those
+    of ``attr.s`` without ``auto_attribs=True``, and those of a class with an
+    ``attr.ib()`` that has no annotation.
 
     .. attribute:: MESSAGE
         :no-index:

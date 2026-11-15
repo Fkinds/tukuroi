@@ -38,6 +38,22 @@ CODE = dedent(
     """
 )
 
+# The old style of attrs: the fields are the calls of attr.ib.
+ATTRS = dedent(
+    """\
+    import attr
+
+    @attr.s(frozen=True)
+    class Money:
+        LIMIT: int = 100
+        amount = attr.ib(0)
+        currency: str = attr.ib(default="JPY")
+        cents = attr.ib(init=False, default=0)
+        tags = attr.ib(factory=tuple)
+        rate = attr.ib()
+    """
+)
+
 
 class StrictRulesTest(TestCase):
     def test_every_default(self) -> None:
@@ -47,6 +63,13 @@ class StrictRulesTest(TestCase):
         expected = [Position(8, 18), Position(9, 34), Position(11, 50)]
         # A call that is not field() is a default too.
         expected.append(Position(12, 21))
+        self.assertEqual(positions, expected)
+
+    def test_every_default_of_attrs(self) -> None:
+        """Each field of attrs with a default: not the annotation, which is no field."""
+        reports = lint(Source.from_text(ATTRS), [NoValueObjectDefault]).reports
+        positions = [report.position for report in reports]
+        expected = [Position(6, 21), Position(7, 36), Position(9, 27)]
         self.assertEqual(positions, expected)
 
     def test_not_in_tukuroi_rules(self) -> None:
