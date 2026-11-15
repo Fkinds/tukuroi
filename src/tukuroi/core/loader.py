@@ -18,9 +18,6 @@ above the directory. Every module is imported once in a process, so a rule is
 one class however it is named; a change to a module needs a new process (a
 restart of ``tukuroi lsp``).
 
-The errors keep the name and the words of the libcst engine
-(``CollectionError: could not import rule(s) .rules from <dir>``).
-
 :meth:`RuleLoader.collect` turns the ``enable`` and ``disable`` of a config
 into rules. A name whose rules cannot be loaded is a :class:`CollectionError`
 (#40): the module cannot be imported, its code raises, it has no rules, or the
@@ -28,6 +25,11 @@ rule is not in it. A package imported through ``enable-root-import`` cannot be
 used for a file of another root: its module is the one of the root that
 imported it first. The rules skipped with custom rules turned off are a warning
 (on the logger ``tukuroi.config``), given once in a process (:class:`OnceLog`).
+
+A :class:`CollectionError` says why (#201): ``could not import rule(s) .rules
+from <dir>: ModuleNotFoundError: No module named '.rules'``, with a module in
+the repo named as the config names it. A package that cannot be found at all,
+with no ``enable-root-import``, gets a hint at the end: it may be in the repo.
 """
 
 import hashlib
@@ -98,16 +100,11 @@ def import_rules(name: RuleName) -> tuple[type[Rule], ...]:
     package, not of its packages), sorted by name, or the one rule named, with
     or without "Rule" at the end of its name. Raises ``CollectionError``.
     """
-    where = f" from {name.root}" if name.local else ""
     try:
         module = _import(name)
         rules = _rules_of(module)
     except ModuleNotFoundError as e:
-        missing = e.name or ""
-        if _is_part_of(missing, _absolute(name)):
-            raise CollectionError(f"could not import rule(s) {name}{where}") from e
-        message = f"could not import rule(s) {name}{where}: {type(e).__name__}: {e}"
-        raise CollectionError(message) from e
+        raise CollectionError(_could_not_import(name, e)) from e
     if name.name is None:
         return tuple(rules[key] for key in sorted(rules))
     for key in (name.name, f"{name.name}Rule"):
@@ -142,9 +139,29 @@ def _import(name: RuleName) -> types.ModuleType:
     return importlib.import_module(_absolute(name))
 
 
-def _is_part_of(missing: str, module: str) -> bool:
-    """Whether ``missing`` is ``module``, or a package it is in."""
-    return module == missing or module.startswith(f"{missing}.")
+def _could_not_import(name: RuleName, error: Exception) -> str:
+    """
+    Why the rules of ``name`` cannot be imported: ``error``, which names a module
+    in the repo as the config does (``.rules``), not by its package.
+    """
+    reason = str(error)
+    where = ""
+    if name.local and name.root is not None:
+        reason = reason.replace(_package(name.root), "")
+        where = f" from {name.root}"
+    return f"could not import rule(s) {name}{where}: {type(error).__name__}: {reason}"
+
+
+def _not_found(name: RuleName, error: BaseException | None) -> bool:
+    """
+    Whether ``error`` is that the top-level package of ``name``, not a module in
+    the repo, is not found at all.
+    """
+    return (
+        not name.local
+        and isinstance(error, ModuleNotFoundError)
+        and error.name == name.module.partition(".")[0]
+    )
 
 
 def _rules_of(module: types.ModuleType) -> dict[str, type[Rule]]:
@@ -161,6 +178,9 @@ def _rules_of(module: types.ModuleType) -> dict[str, type[Rule]]:
 def _is_rule(value: object) -> bool:
     return isinstance(value, type) and issubclass(value, Rule) and value is not Rule
 
+
+# The hint for a package that is not found, with no enable-root-import (#201).
+ROOT_IMPORT_HINT = "for a package in the repository, set enable-root-import"
 
 # The packages of the rules that come with tukuroi. With custom rules turned off
 # (#12), the engine imports no other rules.
@@ -274,16 +294,17 @@ class RuleLoader:
                 f"{imported}"
             )
             raise CollectionError(message)
-        where = f" from {name.root}" if name.local else ""
         try:
             rules = import_rules(name)
-        except CollectionError:
+        except CollectionError as e:
+            if root_import is None and _not_found(name, e.__cause__):
+                raise CollectionError(f"{e} ({ROOT_IMPORT_HINT})") from e.__cause__
             raise
         # Importing a rule runs its code, which can raise any exception.
         except Exception as e:
             log.debug("Exception while importing %s", name, exc_info=e)
-            message = f"could not import rule(s) {name}{where}: {type(e).__name__}: {e}"
-            raise CollectionError(message) from e
+            raise CollectionError(_could_not_import(name, e)) from e
+        where = f" from {name.root}" if name.local else ""
         if not rules:
             raise CollectionError(f"no rules in {name}{where}")
         if root_import is not None and not name.local and _is_under(top, root_import):

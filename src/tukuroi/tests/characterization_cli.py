@@ -595,7 +595,7 @@ class CliCharacterizationTest(CharacterizationTestCase):
         find = "could not find rule"
         cases = (
             ("tukuroi.rules:Nope", f"{find} tukuroi.rules:Nope"),
-            ("tukuroi.nope", "could not import rule(s) tukuroi.nope"),
+            ("tukuroi.nope", "could not import rule(s) tukuroi.nope: ModuleNotFoundError: No module named 'tukuroi.nope'"),
             ("tukuroi.rules:nostaticifcondition", f"{find} tukuroi.rules:nostaticifcondition"),
             ("tukuroi.rules:NoStaticIfConditionRule", f"{find} tukuroi.rules:NoStaticIfConditionRule"),
         )  # fmt: skip

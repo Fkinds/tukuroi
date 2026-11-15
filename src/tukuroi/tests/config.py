@@ -737,7 +737,7 @@ class ConfigTest(TestCase):
                 [
                     "pyproject.toml: enable: could not find rule tukuroi.rules:Nope",
                     "pyproject.toml: enable: no rules in .empty from ROOT",
-                    f"pyproject.toml: {sub} enable: could not import rule(s) .nope from ROOT",
+                    f"pyproject.toml: {sub} enable: could not import rule(s) .nope from ROOT: ModuleNotFoundError: No module named '.nope'",
                 ],
             ),
         )  # fmt: skip

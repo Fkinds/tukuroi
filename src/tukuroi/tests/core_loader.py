@@ -22,6 +22,7 @@ from unittest.mock import patch
 
 from ..core import loader
 from ..core.loader import (
+    ROOT_IMPORT_HINT,
     CollectionError,
     OnceLog,
     RuleLoader,
@@ -146,26 +147,23 @@ class ImportRulesTest(TestCase):
                 )
 
     def test_errors(self) -> None:
+        # Why, with a module in the repo named as the config names it (#201).
         dependency = "import nope_dependency\n" + BOTH
+        no_module = "could not import rule(s) {} from ROOT: ModuleNotFoundError: No module named {!r}"
         cases = (
-            # (label, files, name, message, with the directory at the end)
-            ("no module", {}, ".nope", "could not import rule(s) .nope from", True),
-            ("no module in a package", {"rules/__init__.py": ""}, ".rules.nope", "could not import rule(s) .rules.nope from", True),
-            ("no rule of the name", {"rules.py": BOTH}, ".rules:Nope", "could not find rule .rules:Nope in", True),
-            ("an import in it fails", {"rules.py": dependency}, ".rules", "could not import rule(s) .rules from", False),
+            # (label, files, name, message)
+            ("no module", {}, ".nope", no_module.format(".nope", ".nope")),
+            ("no module in a package", {"rules/__init__.py": ""}, ".rules.nope", no_module.format(".rules.nope", ".rules.nope")),
+            ("no rule of the name", {"rules.py": BOTH}, ".rules:Nope", "could not find rule .rules:Nope in ROOT"),
+            ("an import in it fails", {"rules.py": dependency}, ".rules", no_module.format(".rules", "nope_dependency")),
+            ("a relative import in it fails", {"rules/__init__.py": "from .helpers import x\n"}, ".rules", no_module.format(".rules", ".rules.helpers")),
         )  # fmt: skip
-        for label, tree, text, message, at_end in cases:
+        for label, tree, text, message in cases:
             with self.subTest(label), files(tree) as root:
                 with self.assertRaises(CollectionError) as caught:
                     import_rules(RuleName.parse(text, root))
-                error = str(caught.exception)
-                self.assertTrue(error.startswith(f"{message} {root}"), error)
-                if at_end:
-                    self.assertEqual(error, f"{message} {root}")
-                else:
-                    self.assertIn(
-                        "ModuleNotFoundError: No module named 'nope_dependency'", error
-                    )
+                error = str(caught.exception).replace(str(root), "ROOT")
+                self.assertEqual(error, message)
 
     def test_other_errors_are_not_caught(self) -> None:
         cases = (
@@ -210,8 +208,10 @@ class ImportRulesTest(TestCase):
                 names(import_rules(RuleName.parse("cookie.rules:NoBadName", root))),
                 ["NoBadName"],
             )
+            nope = "ModuleNotFoundError: No module named 'nope'"
             for text, message in (
-                ("nope.rules", "could not import rule(s) nope.rules"),
+                # The hint is the loader's, which knows enable-root-import.
+                ("nope.rules", f"could not import rule(s) nope.rules: {nope}"),
                 ("cookie.rules:Nope", "could not find rule cookie.rules:Nope"),
             ):
                 with self.subTest(text), self.assertRaises(CollectionError) as caught:
@@ -233,8 +233,8 @@ class ImportRulesTest(TestCase):
         errors = (
             # (name, message)
             ("tukuroi.rules:NoRedundantFString", "could not find rule tukuroi.rules:NoRedundantFString"),
-            ("tukuroi.rules.nope", "could not import rule(s) tukuroi.rules.nope"),
-            ("tukuroi.rulesx", "could not import rule(s) tukuroi.rulesx"),
+            ("tukuroi.rules.nope", "could not import rule(s) tukuroi.rules.nope: ModuleNotFoundError: No module named 'tukuroi.rules.nope'"),
+            ("tukuroi.rulesx", "could not import rule(s) tukuroi.rulesx: ModuleNotFoundError: No module named 'tukuroi.rulesx'"),
         )  # fmt: skip
         for text, message in errors:
             with self.subTest(text), self.assertRaises(CollectionError) as caught:
@@ -243,6 +243,7 @@ class ImportRulesTest(TestCase):
 
 
 KETTLE = {"src/kettle/__init__.py": "", "src/kettle/rules.py": HEAD + rule("NoBadName")}
+NO_NOPE = "ModuleNotFoundError: No module named '.nope'"
 
 
 class LoadTest(TestCase):
@@ -265,11 +266,15 @@ class LoadTest(TestCase):
     def test_errors(self) -> None:
         cases = (
             # (label, files, name, error)
-            ("no module", {}, ".nope", "could not import rule(s) .nope from ROOT"),
+            ("no module", {}, ".nope", "could not import rule(s) .nope from ROOT: ModuleNotFoundError: No module named '.nope'"),
             ("no rule of the name", {"rules.py": BOTH}, ".rules:X", "could not find rule .rules:X in ROOT"),
             ("raises", {"rules.py": 'raise RuntimeError("boom")\n'}, ".rules", "could not import rule(s) .rules from ROOT: RuntimeError: boom"),
+            # A module in the repo is named as the config names it (#201).
+            ("an import of a name fails", {"rules/__init__.py": "from .other import nope\n", "rules/other.py": ""}, ".rules", "could not import rule(s) .rules from ROOT: ImportError: cannot import name 'nope' from '.rules.other' (ROOT/rules/other.py)"),
             ("no rules in it", {"rules.py": "x = 1\n"}, ".rules", "no rules in .rules from ROOT"),
-            ("installed, no module", {}, "nope.rules", "could not import rule(s) nope.rules"),
+            # No package of the name at all: it may be in the repo (#201).
+            ("installed, no module", {}, "nope.rules", f"could not import rule(s) nope.rules: ModuleNotFoundError: No module named 'nope' ({ROOT_IMPORT_HINT})"),
+            ("installed, no module in the package", {}, "tukuroi.nope", "could not import rule(s) tukuroi.nope: ModuleNotFoundError: No module named 'tukuroi.nope'"),
         )  # fmt: skip
         for label, tree, text, error in cases:
             with self.subTest(label), files(tree) as root:
@@ -293,6 +298,9 @@ class LoadTest(TestCase):
             self.assertEqual(sys.path, path)
             other = "could not import rule(s) kettle.rules: imported from another root, ROOT/src"
             self.assertEqual(self.error(root, "kettle.rules", root / "b"), other)
+            # With enable-root-import, no hint (#201).
+            nope = "could not import rule(s) nope.rules: ModuleNotFoundError: No module named 'nope'"
+            self.assertEqual(self.error(root, "nope.rules", root / "src"), nope)
 
 
 class CollectRulesTest(TestCase):
@@ -379,11 +387,11 @@ class CollectRulesTest(TestCase):
         # Each was a warning, and the other rules were collected (#40).
         cases = (
             # (label, files, enable, disable, error)
-            ("no module", {"rules.py": BOTH}, [".nope", ".rules:NoBadName"], [], "could not import rule(s) .nope from ROOT"),
+            ("no module", {"rules.py": BOTH}, [".nope", ".rules:NoBadName"], [], f"could not import rule(s) .nope from ROOT: {NO_NOPE}"),
             ("raises", {"rules.py": 'raise RuntimeError("boom")\n'}, [".rules"], [], "could not import rule(s) .rules from ROOT: RuntimeError: boom"),
             ("no rules in it", {"rules.py": "x = 1\n"}, [".rules"], [], "no rules in .rules from ROOT"),
             ("no rules, 1 rule named", {"rules.py": "x = 1\n"}, [".rules:X"], [], "could not find rule .rules:X in ROOT"),
-            ("disable a module that fails", {"rules.py": BOTH}, [".rules"], [".nope"], "could not import rule(s) .nope from ROOT"),
+            ("disable a module that fails", {"rules.py": BOTH}, [".rules"], [".nope"], f"could not import rule(s) .nope from ROOT: {NO_NOPE}"),
             ("disable a module with no rules", {"rules.py": BOTH, "empty.py": ""}, [".rules"], [".empty"], "no rules in .empty from ROOT"),
         )  # fmt: skip
         for label, tree, enable, disable, error in cases:
@@ -458,7 +466,10 @@ class CollectRulesTest(TestCase):
             self.assertEqual(sys.path, path)
         with files(KETTLE) as root:
             self.setUp()
-            error = "could not import rule(s) kettle.rules"
+            error = (
+                "could not import rule(s) kettle.rules: ModuleNotFoundError: "
+                f"No module named 'kettle' ({ROOT_IMPORT_HINT})"
+            )
             self.assertEqual(self.error(root, ["kettle.rules"]), error)
 
     def test_package_of_another_root(self) -> None:

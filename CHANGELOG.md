@@ -58,6 +58,8 @@ version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
   The files of a directory are found by name, with `pathspec` alone, which reads
   `.gitignore` as git does: `trailrunner` is no longer a dependency.
 - **lsp**: the server reads the configuration again for each change.
+- **config**: a module of rules that cannot be imported says why, and a package
+  that is not found at all, with no `enable-root-import`, hints at it.
 - **fix**: with `fix -`, `--print-metrics` prints on stderr: stdout is the fixed
   source alone.
 

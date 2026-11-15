@@ -147,11 +147,11 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
             ("enable only it", (f"disable = [{ALL}]", 'enable = ["tukuroi.rules:Nope"]'), f"enable: {nope}"),
             ("disable", (f'disable = [{ALL}, "tukuroi.rules:Nope"]', f"enable = [{SI_}]"), f"disable: {nope}"),
             ("Rule suffix", (f'enable = ["tukuroi.rules:{NA}Rule"]',), f"enable: could not find rule tukuroi.rules:{NA}Rule"),
-            ("module", (f'enable = [{SI_}, "tukuroi.nope"]',), "enable: could not import rule(s) tukuroi.nope"),
+            ("module", (f'enable = [{SI_}, "tukuroi.nope"]',), "enable: could not import rule(s) tukuroi.nope: ModuleNotFoundError: No module named 'tukuroi.nope'"),
             # The override does not apply to t.py, but its rules are loaded.
             ("override", (override("sub", 'disable = ["tukuroi.rules:Nope"]'),), f"{sub} disable: {nope}"),
             # The first error, in the order of the file.
-            ("first", ('disable = ["tukuroi.nope"]', 'enable = ["tukuroi.rules:Nope"]'), "disable: could not import rule(s) tukuroi.nope"),
+            ("first", ('disable = ["tukuroi.nope"]', 'enable = ["tukuroi.rules:Nope"]'), "disable: could not import rule(s) tukuroi.nope: ModuleNotFoundError: No module named 'tukuroi.nope'"),
         )  # fmt: skip
         for label, lines, error in cases:
             with self.subTest(label):
@@ -168,7 +168,7 @@ class ConfigCharacterizationTest(CharacterizationTestCase):
         root = toml(ROOT, 'enable = ["tukuroi.rules:Nope"]')
         sub = toml('enable = ["tukuroi.nope"]')
         nope = "pyproject.toml: enable: could not find rule tukuroi.rules:Nope"
-        sub_nope = "sub/pyproject.toml: enable: could not import rule(s) tukuroi.nope"
+        sub_nope = "sub/pyproject.toml: enable: could not import rule(s) tukuroi.nope: ModuleNotFoundError: No module named 'tukuroi.nope'"
         cases = (
             # (label, configs, paths, error)
             ("root config, then sub", {"pyproject.toml": root, "sub/pyproject.toml": sub}, ["sub/t.py"], nope),
