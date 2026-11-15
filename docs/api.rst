@@ -10,18 +10,26 @@ Lint Rules
 ----------
 
 .. autoclass:: Rule
-    :members: report, name
+    :members: report, name, MESSAGE, VALID, INVALID
 
 .. autoclass:: Valid
+    :members:
 .. autoclass:: Invalid
+    :members:
 .. autoclass:: Edit
+    :members:
 .. autoclass:: Position
+    :members:
 .. autoclass:: Span
+    :members:
 .. autoclass:: Range
+    :members:
 .. autoclass:: Source
-    :members: span, tokens_in
+    :members: path, text, tree, tokens, comments, span, tokens_in
 .. autoclass:: Token
+    :members:
 .. autoclass:: Comment
+    :members:
 .. autoclass:: ImportTable
     :members: qualified_names
 
@@ -47,8 +55,11 @@ Simple API
 .. autofunction:: print_result
 
 .. autoclass:: Violation
+    :members:
 .. autoclass:: Result
+    :members:
 .. autoclass:: Error
+    :members:
 
 
 Advanced API
@@ -58,7 +69,11 @@ Advanced API
 
 .. autofunction:: tukuroi_bytes
 .. autoclass:: tukuroi.util.capture
+    :members:
 
 .. autoclass:: Config
+    :members:
 .. autoclass:: Options
+    :members:
 .. autoclass:: QualifiedRule
+    :members:
