@@ -10,6 +10,7 @@ plugins, registered in the entry points of ``tukuroi.formatters`` and
 made here, in place of those of the environment.
 """
 
+import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -22,8 +23,15 @@ from .. import plugins
 from ..core import loader
 from ..core.format import FormatterPlugin, RuffFormatter
 from ..core.text import Position, Range
+from ..documents import JsonFormat, SarifFormat
 from ..ftypes import Config, Result, Violation
-from ..output import CustomFormat, FixitFormat, OutputFormatPlugin, VscodeFormat
+from ..output import (
+    CustomFormat,
+    FixitFormat,
+    OutputFormatPlugin,
+    VscodeFormat,
+    machine_readable,
+)
 from .characterization_cli import (
     CONFIG,
     DIRTY_A,
@@ -208,11 +216,15 @@ VIOLATION = Result(
 
 class OutputFormatPluginsTest(TestCase):
     def test_built_in(self) -> None:
-        self.assertEqual(plugins.output_format_names(), ["custom", "fixit", "vscode"])
-        for name, made in (
-            ("custom", CustomFormat),
-            ("fixit", FixitFormat),
-            ("vscode", VscodeFormat),
+        names = ["custom", "fixit", "json", "sarif", "vscode"]
+        self.assertEqual(plugins.output_format_names(), names)
+        for name, made, machine in (
+            ("custom", CustomFormat, False),
+            ("fixit", FixitFormat, False),
+            # One document at the end (#178).
+            ("json", JsonFormat, True),
+            ("sarif", SarifFormat, True),
+            ("vscode", VscodeFormat, False),
         ):
             with self.subTest(name):
                 point = plugins.registered(OUTPUT)[name]
@@ -220,8 +232,14 @@ class OutputFormatPluginsTest(TestCase):
                 loaded = plugins.load_output_format(name, Config())
                 self.assertIs(type(loaded), made)
                 self.assertIsInstance(loaded, OutputFormatPlugin)
+                self.assertIs(machine_readable(loaded), machine)
                 self.assertIsNone(loaded.start())
-                self.assertIsNone(loaded.end())
+                end = loaded.end()
+                if machine:
+                    assert end is not None
+                    json.loads(end)
+                else:
+                    self.assertIsNone(end)
 
     def test_load_output_format(self) -> None:
         # Made with the config of the run; the names are in any case (#40).
@@ -240,7 +258,7 @@ class OutputFormatPluginsTest(TestCase):
     def test_output_formats_that_cannot_be_used(self) -> None:
         cases = (
             # (label, the entry point, the message)
-            ("unknown", None, "unknown value 'shout', not one of 'custom', 'fixit', 'vscode'"),
+            ("unknown", None, "unknown value 'shout', not one of 'custom', 'fixit', 'json', 'sarif', 'vscode'"),
             ("not loaded", point("shout", raises), "could not load 'shout': ImportError: no module named 'upper'"),
             ("not an output format", point("shout", lambda: NotAnOutputFormat), "'shout' is not an output format: tukuroi_shout:Plugin"),
         )  # fmt: skip

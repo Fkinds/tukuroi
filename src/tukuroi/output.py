@@ -7,7 +7,8 @@
 The output formats of ``lint`` and ``fix`` (#169): plugins registered in the
 entry points ``tukuroi.output_formats``, by the name that ``output-format`` of
 a config, or ``--output-format``, gives. tukuroi registers its own the same
-way: ``fixit``, ``vscode`` and ``custom``.
+way: ``fixit``, ``vscode`` and ``custom``, and ``json`` and ``sarif`` of
+:mod:`tukuroi.documents` (#178).
 """
 
 from pathlib import Path
@@ -24,6 +25,14 @@ class OutputFormatPlugin(Protocol):
     ``tukuroi.output_formats``. tukuroi makes one for a run, with the config of
     the run (such as its ``output_template``), and prints what it gives: at
     the start, for each result, and at the end. ``None`` prints nothing.
+
+    A format for programs to read, such as one JSON document, sets the class
+    attribute ``MACHINE_READABLE = True`` (#178). tukuroi then prints on the
+    standard output what the format gives, without colors, and nothing else:
+    an error with its traceback, the diff of a fix, the metrics and the prompt
+    of ``fix`` go to the standard error, and ``fix -``, whose standard output is
+    the fixed source, is a usage error. Without the attribute, the format is
+    for people to read.
     """
 
     def __init__(self, config: Config) -> None: ...
@@ -39,6 +48,11 @@ class OutputFormatPlugin(Protocol):
     def end(self) -> str | None:
         """What to print after the results, such as the end of a document."""
         ...
+
+
+def machine_readable(output: OutputFormatPlugin | None) -> bool:
+    """Whether ``output`` is a format for programs to read: ``MACHINE_READABLE``."""
+    return getattr(output, "MACHINE_READABLE", False) is True
 
 
 def shown(path: Path) -> Path:

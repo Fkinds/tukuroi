@@ -24,8 +24,16 @@ from .config import (
     validate_config,
 )
 from .core.testing import generate_test_cases
-from .ftypes import STDIN, Config, LSPOptions, Options, QualifiedRule
-from .output import OutputFormatPlugin
+from .ftypes import (
+    STDIN,
+    Config,
+    LSPOptions,
+    Metrics,
+    MetricsHook,
+    Options,
+    QualifiedRule,
+)
+from .output import OutputFormatPlugin, machine_readable
 from .plugins import PluginError, output_format_names, output_format_of
 from .template import template_error
 from .util import capture
@@ -145,6 +153,21 @@ def output_of(config: Config) -> OutputFormatPlugin:
         return output_format_of(config)
     except PluginError as error:
         raise ConfigFailure(f"output-format: {error}") from error
+
+
+def print_to_stderr(metrics: Metrics) -> None:
+    """Print ``metrics`` on stderr: a function of a module, for a process pool."""
+    print(metrics, file=sys.stderr)
+
+
+def metrics_hook(options: Options, output: OutputFormatPlugin) -> MetricsHook | None:
+    """
+    What prints the metrics with ``--print-metrics``: stdout, or stderr with a
+    format for programs to read (#178).
+    """
+    if not options.print_metrics:
+        return None
+    return print_to_stderr if machine_readable(output) else print
 
 
 def echo(text: str | None, *, err: bool = False) -> None:
@@ -276,7 +299,7 @@ def lint(
     output = output_of(ConfigReader(options).config())
     echo(output.start())
     for result in fixit_paths(
-        paths, options=options, metrics_hook=print if options.print_metrics else None
+        paths, options=options, metrics_hook=metrics_hook(options, output)
     ):
         visited.add(result.path)
         if print_result(result, show_diff=diff, output=output):
@@ -336,6 +359,16 @@ def fix(
     # fixes applied to it. 1 if any are left, as `ruff check --fix` (#40).
     left: dict[Path, int] = {}
 
+    config = ConfigReader(options).config()
+    output = output_of(config)
+    machine = machine_readable(output)
+    if machine and is_stdin:
+        # Its stdout is the fixed source (#178).
+        raise click.UsageError(
+            f"'fix -' prints the fixed source on stdout: output-format"
+            f" {config.output_format!r} cannot print there",
+            ctx=ctx,
+        )
     # TODO: make this parallel
     generator = capture(
         fixit_paths(
@@ -343,10 +376,9 @@ def fix(
             autofix=autofix,
             options=options,
             parallel=False,
-            metrics_hook=print if options.print_metrics else None,
+            metrics_hook=metrics_hook(options, output),
         )
     )
-    output = output_of(ConfigReader(options).config())
     echo(output.start(), err=is_stdin)
     for result in generator:
         visited.add(result.path)
@@ -369,7 +401,10 @@ def fix(
         if interactive and result.violation and result.violation.autofixable:
             autofixes += 1
             answer = click.prompt(
-                "Apply autofix?", default="y", type=click.Choice("ynq", False)
+                "Apply autofix?",
+                default="y",
+                type=click.Choice("ynq", False),
+                err=machine,
             )
             if answer == "y":
                 generator.respond(True)  # noqa: B038
