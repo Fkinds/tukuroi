@@ -103,10 +103,11 @@ jobs:
         run: make SYNC= install
       - name: Hooks
         # The checks of prek.toml, which has those of `make lint` too (#9), for
-        # the commits made without the hook. zizmor runs in the next step.
+        # the commits made without the hook. The stage manual: tukuroi reports,
+        # and does not fix. zizmor runs in the next step.
         env:
           SKIP: zizmor
-        run: uv run prek run --all-files
+        run: uv run prek run --all-files --hook-stage manual
       - name: Workflows
         # zizmor of prek.toml, with the checks that ask GitHub too: that each
         # action is pinned to a commit of its own repository, that the comment

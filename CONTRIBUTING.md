@@ -60,7 +60,7 @@ To format code and sort imports:
 $ make format
 ```
 
-[prek][] runs the checks of `prek.toml` before each commit: ruff, `tukuroi lint`
+[prek][] runs the checks of `prek.toml` before each commit: ruff, `tukuroi fix`
 and the copyright header on the files that `make lint` checks, [zizmor][] on the
 workflows of `.github/workflows`, and its built-in checks (whitespace, line
 endings, TOML and YAML syntax, large files, private keys) on every file. It
@@ -71,10 +71,17 @@ its Git hooks once:
 $ uv run prek install
 ```
 
-To run every check on every file, as CI does:
+To run every check on every file:
 
 ```shell-session
 $ uv run prek run --all-files
+```
+
+CI runs them with the stage `manual`, where `tukuroi lint` reports the
+violations in place of `tukuroi fix`, which fixes them:
+
+```shell-session
+$ uv run prek run --all-files --hook-stage manual
 ```
 
 zizmor runs offline here, with no token. CI runs it with the checks that ask
