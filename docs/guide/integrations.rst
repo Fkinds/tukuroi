@@ -72,7 +72,7 @@ your repository.
 
     repos:
       - repo: https://github.com/Fkinds/tukuroi
-        rev: <commit SHA>  # no release of this fork has a tag yet
+        rev: v3.0.0
         hooks:
           - id: tukuroi-lint
 
@@ -82,9 +82,33 @@ your repository.
 
     repos:
       - repo: https://github.com/Fkinds/tukuroi
-        rev: <commit SHA>  # no release of this fork has a tag yet
+        rev: v3.0.0
         hooks:
           - id: tukuroi-fix
+
+- To apply autofixes on commit, and only show the lints in CI, give each hook
+  a stage:
+
+.. code:: yaml
+
+    repos:
+      - repo: https://github.com/Fkinds/tukuroi
+        rev: v3.0.0
+        hooks:
+          - id: tukuroi-fix
+            stages: [pre-commit]
+          - id: tukuroi-lint
+            stages: [manual]
+
+In CI, run the hooks with the stage ``manual``:
+
+.. code:: console
+
+    $ pre-commit run --all-files --hook-stage manual
+
+``tukuroi-fix`` shows the lints that it cannot fix too: ``tukuroi-lint`` does
+not run on commit, where it would show them again. A hook without ``stages``
+runs in both, unless ``default_stages`` leaves ``manual`` out.
 
 The hooks install tukuroi without its extras. With ``formatter = "ruff"`` in
 the configuration (see :attr:`formatter`), add ruff to the hook:
