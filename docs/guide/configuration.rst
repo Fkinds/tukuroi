@@ -87,6 +87,13 @@ Fixit that tukuroi does not support (``python-version``, ``options``,
             ".rules:HollywoodName",  # single lint rule by name
         ]
 
+    A single rule of a package is imported from the modules of the package
+    whose source defines a class of its name: ``.rules:HollywoodName`` does not
+    import, nor run, the other modules of ``teambread/rules/``, such as one
+    that is not ready yet. When no module defines it in its source (a class
+    made by a call, or a module without a source), all of them are imported, as
+    for the whole package. An error of a module of a package names it.
+
     Wins over :attr:`disable` further up the hierarchy, for the rules that it
     names. See :ref:`rule-selection`.
 
