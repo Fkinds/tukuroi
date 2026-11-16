@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.0.1 (2026-11-16)
+
+### Fix
+
+- **config**: a rule named in a package (`myrules:NoPrint`) is imported from
+  the modules that define it, not from every module of the package: a module
+  that does not import yet no longer breaks it. When another module of the
+  package fails, the error says which.
+
 ## v3.0.0 (2026-11-16)
 
 The first release of tukuroi, an unofficial fork of `Instagram/Fixit` after its
