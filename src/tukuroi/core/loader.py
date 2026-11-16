@@ -30,8 +30,18 @@ A :class:`CollectionError` says why (#201): ``could not import rule(s) .rules
 from <dir>: ModuleNotFoundError: No module named '.rules'``, with a module in
 the repo named as the config names it. A package that cannot be found at all,
 with no ``enable-root-import``, gets a hint at the end: it may be in the repo.
+When another module of a package than the one named fails, the error says
+which (#213): ``could not import rule(s) .rules from <dir>: in .rules.wip:
+...``.
+
+One rule of a package (``.rules:NoBadName``) is imported from the modules of
+the package that define a class of its name, as their source says (#213): the
+other modules are not imported, nor run. When none does, all of them are, as
+for the rules of a whole package.
 """
 
+import ast
+import functools
 import hashlib
 import importlib
 import importlib.machinery
@@ -99,16 +109,23 @@ def import_rules(name: RuleName) -> tuple[type[Rule], ...]:
     """
     The rules of ``name``: all the rules of its module (and of the modules of a
     package, not of its packages), sorted by name, or the one rule named, with
-    or without "Rule" at the end of its name. Raises ``CollectionError``.
+    or without "Rule" at the end of its name. Raises ``CollectionError``, or
+    :class:`ModuleError` for another exception of a module of a package.
     """
+    wanted = () if name.name is None else (name.name, f"{name.name}Rule")
     try:
         module = _import(name)
-        rules = _rules_of(module)
+        rules = _rules_of(module, wanted)
     except ModuleNotFoundError as e:
         raise CollectionError(_could_not_import(name, e)) from e
-    if name.name is None:
+    except ModuleError as e:
+        if isinstance(e.__cause__, ModuleNotFoundError):
+            message = _could_not_import(name, e.__cause__, e.module)
+            raise CollectionError(message) from e.__cause__
+        raise
+    if not wanted:
         return tuple(rules[key] for key in sorted(rules))
-    for key in (name.name, f"{name.name}Rule"):
+    for key in wanted:
         if key in rules:
             return (rules[key],)
     where = f" in {name.root}" if name.local else ""
@@ -140,17 +157,22 @@ def _import(name: RuleName) -> types.ModuleType:
     return importlib.import_module(_absolute(name))
 
 
-def _could_not_import(name: RuleName, error: Exception) -> str:
+def _could_not_import(
+    name: RuleName, error: BaseException, module: str | None = None
+) -> str:
     """
-    Why the rules of ``name`` cannot be imported: ``error``, which names a module
-    in the repo as the config does (``.rules``), not by its package.
+    Why the rules of ``name`` cannot be imported: ``error``, in ``module`` when
+    another module of a package fails (#213). A module in the repo is named as
+    the config names it (``.rules``), not by its package.
     """
-    reason = str(error)
+    reason = f"{type(error).__name__}: {error}"
+    if module is not None:
+        reason = f"in {module}: {reason}"
     where = ""
     if name.local and name.root is not None:
         reason = reason.replace(_package(name.root), "")
         where = f" from {name.root}"
-    return f"could not import rule(s) {name}{where}: {type(error).__name__}: {reason}"
+    return f"could not import rule(s) {name}{where}: {reason}"
 
 
 def _not_found(name: RuleName, error: BaseException | None) -> bool:
@@ -165,15 +187,71 @@ def _not_found(name: RuleName, error: BaseException | None) -> bool:
     )
 
 
-def _rules_of(module: types.ModuleType) -> dict[str, type[Rule]]:
-    """The rules in ``module``, and in the modules of a package, by name."""
+class ModuleError(Exception):
+    """
+    An exception of ``module``, a module of a package that rules are imported
+    from, which is its cause (#213).
+    """
+
+    def __init__(self, module: str) -> None:
+        super().__init__(module)
+        self.module = module
+
+
+def _rules_of(
+    module: types.ModuleType, wanted: Sequence[str] = ()
+) -> dict[str, type[Rule]]:
+    """
+    The rules in ``module``, and in the modules of a package (not of its
+    packages), by name: the rule of a module later by name wins. With
+    ``wanted``, the names of one rule (#213), only the modules whose source
+    defines a class of one of them are imported; when none does, none if the
+    package has the rule, and all of them if it does not.
+    """
     rules = dict(inspect.getmembers(module, _is_rule))
-    if hasattr(module, "__path__"):
-        for info in pkgutil.iter_modules(module.__path__):
-            if not info.ispkg:
-                submodule = importlib.import_module(f"{module.__name__}.{info.name}")
-                rules.update(_rules_of(submodule))
+    if not hasattr(module, "__path__"):
+        return rules
+    infos = [info for info in pkgutil.iter_modules(module.__path__) if not info.ispkg]
+    if wanted:
+        defining = [info for info in infos if _defines(info, wanted)]
+        if defining or any(key in rules for key in wanted):
+            infos = defining
+    for info in infos:
+        name = f"{module.__name__}.{info.name}"
+        try:
+            submodule = importlib.import_module(name)
+        # Importing a module runs its code, which can raise any exception.
+        except Exception as e:
+            raise ModuleError(name) from e
+        rules.update(_rules_of(submodule))
     return rules
+
+
+def _defines(info: pkgutil.ModuleInfo, classes: Sequence[str]) -> bool:
+    """
+    Whether the source of the module of ``info`` defines one of ``classes`` at
+    its top level. Without a source that can be read and parsed (a module in a
+    zip, compiled, or with a syntax error), it does not say so.
+    """
+    directory = getattr(info.module_finder, "path", None)
+    if directory is None:
+        return False
+    return not _top_classes(Path(directory) / f"{info.name}.py").isdisjoint(classes)
+
+
+@functools.cache
+def _top_classes(path: Path) -> frozenset[str]:
+    """
+    The names of the classes that the source at ``path`` defines at its top
+    level: none without a source that can be read and parsed. It is read once
+    in a process, as its module is imported once: a config is read for each
+    file, and its rules loaded again.
+    """
+    try:
+        tree = ast.parse(path.read_bytes())
+    except OSError, SyntaxError:
+        return frozenset()
+    return frozenset(n.name for n in tree.body if isinstance(n, ast.ClassDef))
 
 
 def _is_rule(value: object) -> bool:
@@ -323,6 +401,11 @@ class RuleLoader:
             if root_import is None and _not_found(name, e.__cause__):
                 raise CollectionError(f"{e} ({ROOT_IMPORT_HINT})") from e.__cause__
             raise
+        except ModuleError as e:
+            cause = e.__cause__
+            log.debug("Exception while importing %s", name, exc_info=cause)
+            message = _could_not_import(name, cause or e, e.module)
+            raise CollectionError(message) from cause
         # Importing a rule runs its code, which can raise any exception.
         except Exception as e:
             log.debug("Exception while importing %s", name, exc_info=e)
