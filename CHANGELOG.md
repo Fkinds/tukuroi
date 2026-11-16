@@ -1,6 +1,6 @@
 # Changelog
 
-## v3.0.0 (unreleased)
+## v3.0.0 (2026-11-16)
 
 The first release of tukuroi, an unofficial fork of `Instagram/Fixit` after its
 version 2.2.1. To move from Fixit, see [Coming from Fixit] in the README.
