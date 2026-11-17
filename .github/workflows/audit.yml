@@ -18,7 +18,7 @@ concurrency:
 env:
   UV_LOCKED: "1"
   # The uv of CI, which builds the release too (#18).
-  UV_VERSION: "0.13.8"
+  UV_VERSION: "0.13.9"
 
 jobs:
   dependencies:
