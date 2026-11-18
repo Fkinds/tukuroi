@@ -68,7 +68,7 @@ dev = [
     "pyyaml == 6.0.3; python_version < '3.15'",
     "zizmor == 1.32.0",
     # lint-imports checks the boundary of the engine (#169).
-    "import-linter == 2.16",
+    "import-linter ==2.17",
 ]
 docs = [
     "jinja2 == 3.1.6",
