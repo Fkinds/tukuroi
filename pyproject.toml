@@ -59,13 +59,13 @@ dev = [
     # PyYAML has no wheels for Python 3.15 yet, and uv builds nothing from
     # source (#136): commitizen, which needs PyYAML, and PyYAML stay out of
     # 3.15. Drop the markers once PyYAML has wheels for 3.15.
-    "commitizen == 4.19.3; python_version < '3.15'",
-    "coverage ==7.17.3",
+    "commitizen ==4.19.4; python_version < '3.15'",
+    "coverage ==7.17.4",
     "prek ==0.5.11",
-    "ruff ==0.17.5",
-    "pyrefly ==1.4.1",
+    "ruff ==0.17.6",
+    "pyrefly ==1.5.0",
     # scripts/repository_settings.py reads .github/repository.yml.
-    "pyyaml == 6.0.3; python_version < '3.15'",
+    "pyyaml ==6.0.4; python_version < '3.15'",
     "zizmor == 1.32.0",
     # lint-imports checks the boundary of the engine (#169).
     "import-linter ==2.17",
