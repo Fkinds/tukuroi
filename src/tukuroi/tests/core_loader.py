@@ -389,7 +389,9 @@ class LoadTest(TestCase):
                 self.error(root, ".rules")
             [record] = logs.records
             self.assertEqual(record.getMessage(), "Exception while importing .rules")
-            assert record.exc_info is not None
+            # Not None, nor False: the record of a call with exc_info=False
+            # has False.
+            assert isinstance(record.exc_info, tuple)
             self.assertIsInstance(record.exc_info[1], RuntimeError)
 
     def test_installed_package_with_a_module_not_ready(self) -> None:
