@@ -18,7 +18,9 @@
   // major: see packageRules.
   minimumReleaseAge: "7 days",
   labels: ["dependencies"],
-  dependencyDashboard: true,
+  // An object, which the options of the Dependency Dashboard moved into
+  // (renovatebot/renovate#47732).
+  dependencyDashboard: { enabled: true },
   // Renovate merges the updates that packageRules allow (#164), itself: once
   // every check of the pull request passes, Audit and CodeQL too, and it is
   // up to date with main. The auto-merge of GitHub would wait for the checks
