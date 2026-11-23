@@ -66,7 +66,7 @@ dev = [
     "pyrefly ==1.5.0",
     # scripts/repository_settings.py reads .github/repository.yml.
     "pyyaml ==6.0.4; python_version < '3.15'",
-    "zizmor == 1.32.0",
+    "zizmor ==1.33.1",
     # lint-imports checks the boundary of the engine (#169).
     "import-linter ==2.17",
 ]
