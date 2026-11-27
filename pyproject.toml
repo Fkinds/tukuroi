@@ -61,7 +61,7 @@ dev = [
     # 3.15. Drop the markers once PyYAML has wheels for 3.15.
     "commitizen ==4.20.1; python_version < '3.15'",
     "coverage ==7.17.5",
-    "prek ==0.5.11",
+    "prek ==0.5.12",
     "ruff ==0.17.6",
     "pyrefly ==1.5.0",
     # scripts/repository_settings.py reads .github/repository.yml.
